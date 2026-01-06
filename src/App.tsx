@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
 import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, TournamentStage, GameMode } from './types';
 import { AppScreen, GameState } from './types';
@@ -24,6 +24,18 @@ import { generateWorldCupStructure, NATIONAL_TEAMS } from './international';
 import { getChampionsLeagueParticipants } from './europe';
 
 const INTERNATIONAL_BREAK_WEEKS = [10, 20];
+
+const convertNationalTeam = (nt: NationalTeam): Team => ({
+    name: nt.name,
+    league: 'International',
+    players: nt.players,
+    tactic: nt.tactic,
+    prestige: nt.prestige,
+    chairmanPersonality: 'Traditionalist',
+    group: nt.group,
+    balance: 0,
+    objectives: nt.objectives || []
+});
 
 export default function App() {
     const [appScreen, setAppScreen] = useState<AppScreen>(AppScreen.START_SCREEN);
@@ -54,17 +66,94 @@ export default function App() {
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
 
+    // --- SAVE / LOAD SYSTEM ---
+    useEffect(() => {
+        // Load on Mount
+        const savedData = localStorage.getItem('gfm_save_v1');
+        if (savedData && appScreen === AppScreen.START_SCREEN) {
+            // Optional: Auto-load or show "Continue" button. 
+            // For now, we will just log it exists.
+            console.log("Save game found.");
+        }
+    }, []);
+
+    useEffect(() => {
+        // Auto-Save on State Change (Debounced ideally, but simple here)
+        if (userTeamName && appScreen !== AppScreen.START_SCREEN) {
+            const stateToSave = {
+                userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason,
+                teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState
+            };
+            localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
+        }
+    }, [userTeamName, currentWeek, teams, fixtures, news, gameState, appScreen]);
+
+    const handleQuit = () => {
+        if (window.confirm("Are you sure you want to quit to the main menu? Unsaved progress in the current match will be lost.")) {
+            setAppScreen(AppScreen.START_SCREEN);
+            setGameState(GameState.PRE_MATCH);
+            setMatchState(null);
+            setUserTeamName(null);
+            // We don't clear localStorage so they can continue later if they want
+        }
+    };
+
+    const handleContinue = () => {
+        const savedData = localStorage.getItem('gfm_save_v1');
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                setUserTeamName(parsed.userTeamName);
+                setGameMode(parsed.gameMode);
+                setIsPrologue(parsed.isPrologue);
+                setCurrentWeek(parsed.currentWeek);
+                setWeeksInSeason(parsed.weeksInSeason);
+                setTeams(parsed.teams);
+                setLeagueTable(parsed.leagueTable);
+                setFixtures(parsed.fixtures);
+                setNews(parsed.news);
+                setWeeklyResults(parsed.weeklyResults);
+                setGameState(parsed.gameState);
+                
+                // Restore screen but ensure we don't get stuck in a transient state
+                if (parsed.appScreen === AppScreen.GAMEPLAY || parsed.appScreen === AppScreen.JOB_CENTRE) {
+                    setAppScreen(parsed.appScreen);
+                } else {
+                    setAppScreen(AppScreen.GAMEPLAY);
+                }
+
+                // Restore current fixture logic
+                const f = parsed.fixtures.find((fx: Fixture) => 
+                    (fx.homeTeam === parsed.userTeamName || fx.awayTeam === parsed.userTeamName) && fx.week === parsed.currentWeek
+                );
+                setCurrentFixture(f);
+
+            } catch (e) {
+                console.error("Failed to load save", e);
+                alert("Save file corrupted.");
+            }
+        }
+    };
+
     const startTutorial = () => { setTutorialStep(0); setShowTutorial(true); };
 
     // --- PROLOGUE: World Cup Initialization ---
     const initializeWorldCup = (selectedNationalTeamName: string) => {
         setGameMode('WorldCup');
         setIsPrologue(true);
-        setUserTeamName(selectedNationalTeamName);
         
         // Generate a 48-team World Cup Structure
+        // Crucial: The generator handles unique names (e.g. "France", "France (E)")
         const wcTeamsRecord = generateWorldCupStructure();
         setTeams(wcTeamsRecord);
+
+        // Find the actual key for the user's team. 
+        let actualTeamName = selectedNationalTeamName;
+        if (!wcTeamsRecord[actualTeamName]) {
+            const found = Object.keys(wcTeamsRecord).find(k => k.startsWith(selectedNationalTeamName));
+            if (found) actualTeamName = found;
+        }
+        setUserTeamName(actualTeamName);
 
         // Generate Group Stage Fixtures (Weeks 1-3)
         const allWcTeams = Object.values(wcTeamsRecord);
@@ -94,7 +183,7 @@ export default function App() {
         setFixtures(groupFixtures);
         
         const initialTable = allWcTeams.map((t: Team) => ({
-            teamName: t.name, league: t.league, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, group: t.group
+            teamName: t.name, league: 'International' as const, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, group: t.group
         }));
         setLeagueTable(initialTable);
 
@@ -103,8 +192,9 @@ export default function App() {
         setNews([{ id: Date.now(), week: 1, title: 'World Cup 2026 Begins', body: '48 teams. 12 Groups. 104 Matches. The road to glory starts now.', type: 'tournament-result' }]);
         setAppScreen(AppScreen.GAMEPLAY);
         
+        // Find first match for the ACTUAL team name
         const week1Fixtures = groupFixtures.filter(f => f.week === 1);
-        const userMatch = week1Fixtures.find(f => f.homeTeam === selectedNationalTeamName || f.awayTeam === selectedNationalTeamName);
+        const userMatch = week1Fixtures.find(f => f.homeTeam === actualTeamName || f.awayTeam === actualTeamName);
         setCurrentFixture(userMatch);
         setWeeklyResults([]);
         
@@ -114,47 +204,7 @@ export default function App() {
     // --- STANDARD: Club Initialization ---
     const initializeGame = useCallback((selectedTeamName: string) => {
         setGameMode('Club'); setIsPrologue(false);
-        let finalTeamsState: Record<string, Team> = { ...allTeams };
-        const initialNews: NewsItem[] = [];
-        
-        const startingTeam = finalTeamsState[selectedTeamName];
-        if (startingTeam) {
-            // NARRATIVE INJECTION: Identify Expiring Stars and Create Drama (Restored)
-            const expiringStars = startingTeam.players.filter(p => p.rating >= 85 && p.contractExpires <= 1);
-            
-            expiringStars.forEach(star => {
-                // 1. Force Board Objective
-                if (!startingTeam.objectives.includes(`Renew ${star.name}`)) {
-                    startingTeam.objectives = [`Renew ${star.name}`, ...startingTeam.objectives];
-                }
-                
-                // 2. Generate Crisis News
-                initialNews.push({
-                    id: Date.now() + Math.random(),
-                    week: 1,
-                    title: `Contract Crisis: ${star.name}`,
-                    body: `Sources close to ${star.name} say they are "considering their options". The board demands you resolve this immediately to avoid losing a club asset for free.`,
-                    type: 'contract-renewal'
-                });
-                
-                // 3. Add 'Disappointed' morale to star (simulating tension)
-                star.effects.push({ 
-                    type: 'PostTournamentMorale', 
-                    morale: 'Disappointed', 
-                    message: 'Uncertain Future', 
-                    until: 4 
-                });
-            });
-
-            // Inject random chemistry issues if squad is large enough
-            if (startingTeam.players.length > 5 && Math.random() > 0.3) {
-                const p1 = startingTeam.players[0];
-                const p2 = startingTeam.players[1];
-                p1.effects.push({ type: 'BadChemistry', with: p2.name, message: 'Dislikes playstyle', until: 5 });
-                p2.effects.push({ type: 'BadChemistry', with: p1.name, message: 'Dislikes playstyle', until: 5 });
-            }
-        }
-
+        let finalTeamsState = { ...allTeams };
         const domesticFixtures = generateFixtures(Object.values(allTeams));
         const { participants, newTeams } = getChampionsLeagueParticipants(allTeams);
         finalTeamsState = { ...finalTeamsState, ...newTeams };
@@ -165,7 +215,6 @@ export default function App() {
         const finalFixtures: Fixture[] = [];
         domesticFixtures.forEach(f => {
             let gameWeek = f.week;
-            // Shift domestic games to accommodate CL weeks
             if (f.week >= 5) gameWeek++;
             if (f.week >= 9) gameWeek++;
             if (f.week >= 13) gameWeek++;
@@ -191,18 +240,6 @@ export default function App() {
         setCurrentWeek(1);
         setTeams(finalTeamsState);
         setUserTeamName(selectedTeamName);
-        
-        if (participants.includes(selectedTeamName)) {
-            initialNews.push({
-                id: Date.now() + 1,
-                week: 1,
-                title: "UCL Draw",
-                body: "We have qualified for the Champions League League Phase. The lights are on.",
-                type: 'tournament-result'
-            });
-        }
-        
-        setNews(initialNews);
         setAppScreen(AppScreen.GAMEPLAY);
         setCurrentFixture(finalFixtures.find(f => (f.homeTeam === selectedTeamName || f.awayTeam === selectedTeamName) && f.week === 1));
         startTutorial();
@@ -216,17 +253,22 @@ export default function App() {
         if (experience.id === 'legend') {
              vacancies = shuffle(allTeamList.filter(t => t.prestige >= 85)).slice(0, 8);
         } else {
-            // STRICT filtering to prevent "London City" appearing for Semi-Pro
-            const feasible = allTeamList.filter(t => t.prestige <= experience.prestigeCap && t.prestige >= experience.prestigeMin);
-            // Reach is strictly capped at +5 over the cap, not unbounded
-            const reach = allTeamList.filter(t => t.prestige > experience.prestigeCap && t.prestige <= experience.prestigeCap + 5);
-            const safety = allTeamList.filter(t => t.prestige < experience.prestigeMin && t.prestige > experience.prestigeMin - 15);
+            // Relaxed filtering for Sunday League to ensure options appear
+            const prestigeMax = experience.prestigeCap;
+            const prestigeMin = experience.prestigeMin;
+            
+            const feasible = allTeamList.filter(t => t.prestige <= prestigeMax && t.prestige >= prestigeMin);
+            const reach = allTeamList.filter(t => t.prestige > prestigeMax && t.prestige <= prestigeMax + 10);
             
             vacancies = [
                 ...shuffle(feasible).slice(0, 4),
                 ...shuffle(reach).slice(0, 2),
-                ...shuffle(safety).slice(0, 2)
             ];
+            
+            // If still empty (edge case), force some low tier teams
+            if (vacancies.length === 0) {
+                vacancies = shuffle(allTeamList.filter(t => t.prestige < 65)).slice(0, 3);
+            }
         }
 
         const jobs: Job[] = vacancies.map(t => ({
@@ -280,23 +322,9 @@ export default function App() {
         if (!userTeamName) return;
         setIsLoading(true); setTalkResult(null); setPlayerTalk(null); setError(null);
         setAppScreen(AppScreen.PLAYER_TALK);
-        
-        // Pass context about other high-profile players to the prompt generator
-        const team = teams[userTeamName];
-        const keyTeammates = team.players
-            .filter(p => p.rating > 83 && p.name !== player.name)
-            .map(p => p.name);
-
         try {
-            const questions = await getPlayerTalkQuestions(player, team, context, keyTeammates);
-            setPlayerTalk({ 
-                player, 
-                questions, 
-                answers: [], 
-                currentQuestionIndex: 0, 
-                context,
-                teammates: keyTeammates 
-            });
+            const questions = await getPlayerTalkQuestions(player, teams[userTeamName], context);
+            setPlayerTalk({ player, questions, answers: [], currentQuestionIndex: 0, context });
         } catch (e) { setError("Negotiations failed."); setAppScreen(AppScreen.GAMEPLAY); } finally { setIsLoading(false); }
     };
 
@@ -324,30 +352,38 @@ export default function App() {
 
     const renderScreen = () => {
         switch (appScreen) {
-            case AppScreen.START_SCREEN: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
-            case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={gameMode === 'WorldCup' ? NATIONAL_TEAMS.map(nt => ({...nt, league: 'International' as const, chairmanPersonality: 'Traditionalist' as const, balance: 0, objectives: nt.objectives || []} as unknown as Team)) : Object.values(allTeams)} onTeamSelect={gameMode === 'WorldCup' ? initializeWorldCup : initializeGame} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
-            case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={NATIONAL_TEAMS.slice(0, 5).map(nt => ({ ...nt, league: 'International' as const, chairmanPersonality: 'Traditionalist' as const, balance: 0, objectives: nt.objectives || [] } as unknown as Team))} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
+            case AppScreen.START_SCREEN: return (
+                <div>
+                    <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />
+                    {localStorage.getItem('gfm_save_v1') && (
+                        <div className="text-center pb-8 -mt-8">
+                            <button onClick={handleContinue} className="text-sm font-bold text-blue-400 hover:text-blue-300 underline">Continue Saved Career</button>
+                        </div>
+                    )}
+                </div>
+            );
+            case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={gameMode === 'WorldCup' ? NATIONAL_TEAMS.map(convertNationalTeam) : Object.values(allTeams)} onTeamSelect={gameMode === 'WorldCup' ? initializeWorldCup : initializeGame} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
+            case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={NATIONAL_TEAMS.map(convertNationalTeam)} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.CREATE_MANAGER: return <CreateManagerScreen onCreate={(name, exp) => generateJobs(exp)} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_CENTRE: return <JobCentreScreen jobs={availableJobs} onApply={(n) => { setAppScreen(AppScreen.JOB_INTERVIEW); setInterview({ teamName: n, questions: ["Tactics?", "Chemistry?"], answers:[], currentQuestionIndex:0, chairmanPersonality: allTeams[n].chairmanPersonality }); }} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen interview={interview} isLoading={isLoading} error={null} jobOffer={jobOffer} onAnswerSubmit={() => setJobOffer({ offer: true, reasoning: "Welcome." })} onFinish={(acc) => { if(acc && interview) initializeGame(interview.teamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
-            case AppScreen.TRANSFERS: return <TransfersScreen targets={TRANSFER_TARGETS} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.SCOUTING)} />;
+            case AppScreen.TRANSFERS: return <TransfersScreen targets={TRANSFER_TARGETS} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={handlePlayerTalkFinish} />;
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;
                 return (
                     <main className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
-                        <div className="lg:col-span-3"><TeamDetails team={userTeam} onTacticChange={handleTacticChange} onNavigateToTransfers={() => setAppScreen(AppScreen.SCOUTING)} onNavigateToNews={()=>setAppScreen(AppScreen.NEWS_FEED)} onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')} onToggleStarter={handleToggleStarter} gameState={gameState} subsUsed={0} onSubstitute={()=>{}} /></div>
+                        <div className="lg:col-span-3"><TeamDetails team={userTeam} onTacticChange={handleTacticChange} onNavigateToTransfers={() => setAppScreen(gameMode === 'WorldCup' ? AppScreen.SCOUTING : AppScreen.TRANSFERS)} onNavigateToNews={()=>setAppScreen(AppScreen.NEWS_FEED)} onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')} onToggleStarter={handleToggleStarter} gameState={gameState} subsUsed={0} onSubstitute={()=>{}} /></div>
                         <div className="lg:col-span-6"><MatchView fixture={currentFixture} weeklyResults={weeklyResults} matchState={matchState} gameState={gameState} onPlayFirstHalf={()=>{}} onPlaySecondHalf={()=>{}} onSimulateSegment={()=>{}} onNextMatch={handleAdvanceWeek} error={null} isSeasonOver={false} userTeamName={userTeamName} leagueTable={leagueTable} isLoading={isLoading} currentWeek={currentWeek} teams={teams} /></div>
                         <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} /></div>
                     </main>
                 );
-            case AppScreen.SCOUTING: return <ScoutingScreen onScout={async r=>{ setIsLoading(true); const res=await scoutPlayers(r); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
+            case AppScreen.SCOUTING: return <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async r=>{ setIsLoading(true); const res=await scoutPlayers(r); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} />;
             default: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
         }
     };
 
-    return <div className="min-h-screen bg-gray-900 text-gray-200 p-4"><Header />{renderScreen()}</div>;
+    return <div className="min-h-screen bg-gray-900 text-gray-200 p-4"><Header onQuit={appScreen !== AppScreen.START_SCREEN ? handleQuit : undefined} showQuit={appScreen !== AppScreen.START_SCREEN} />{renderScreen()}</div>;
 }
-    

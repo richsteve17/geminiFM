@@ -11,9 +11,10 @@ interface ScoutingScreenProps {
     onSignPlayer: (player: Player) => void;
     onBack: () => void;
     onGoToTransfers?: () => void;
+    isNationalTeam?: boolean; // Added prop to change UI context
 }
 
-const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, isLoading, onSignPlayer, onBack, onGoToTransfers }) => {
+const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, isLoading, onSignPlayer, onBack, onGoToTransfers, isNationalTeam }) => {
     const [request, setRequest] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -27,15 +28,21 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
         <div className="mt-8 max-w-4xl mx-auto px-4">
             <div className="flex justify-between items-start mb-8">
                 <div className="text-center flex-grow">
-                    <h2 className="text-3xl font-bold text-white mb-2">Global Scouting Network</h2>
-                    <p className="text-lg text-gray-400">Tell your scout exactly what you are looking for.</p>
+                    <h2 className="text-3xl font-bold text-white mb-2">
+                        {isNationalTeam ? "National Pool Selection" : "Global Scouting Network"}
+                    </h2>
+                    <p className="text-lg text-gray-400">
+                        {isNationalTeam 
+                            ? "Review the eligible player pool for your national squad." 
+                            : "Tell your scout exactly what you are looking for."}
+                    </p>
                 </div>
                 {onGoToTransfers && (
                     <button 
                         onClick={onGoToTransfers}
                         className="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-4 rounded border border-gray-500"
                     >
-                        View Transfer List
+                        {isNationalTeam ? "View All Eligible" : "View Transfer List"}
                     </button>
                 )}
             </div>
@@ -44,13 +51,15 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 mb-8 shadow-lg">
                 <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4">
                     <div className="flex-grow">
-                        <label htmlFor="scoutRequest" className="sr-only">Scouting Request</label>
+                        <label htmlFor="scoutRequest" className="sr-only">Search Request</label>
                         <input
                             type="text"
                             id="scoutRequest"
                             value={request}
                             onChange={(e) => setRequest(e.target.value)}
-                            placeholder="e.g. 'A tall, aggressive centre back from Italy under 25'"
+                            placeholder={isNationalTeam 
+                                ? "e.g. 'Find me fit strikers playing in Premier League'" 
+                                : "e.g. 'A tall, aggressive centre back from Italy under 25'"}
                             className="w-full p-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                     </div>
@@ -62,10 +71,10 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                         {isLoading ? (
                             <>
                                 <FootballIcon className="w-5 h-5 mr-2 animate-spin" />
-                                Scouting...
+                                {isNationalTeam ? "Searching..." : "Scouting..."}
                             </>
                         ) : (
-                            "Send Scout"
+                            isNationalTeam ? "Filter Pool" : "Send Scout"
                         )}
                     </button>
                 </form>
@@ -73,7 +82,7 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
 
             {/* Results Section */}
             <div className="space-y-4">
-                {scoutResults.length > 0 && <h3 className="text-xl font-bold text-gray-300 mb-4">Scouting Reports</h3>}
+                {scoutResults.length > 0 && <h3 className="text-xl font-bold text-gray-300 mb-4">{isNationalTeam ? "Eligible Players" : "Scouting Reports"}</h3>}
                 
                 {scoutResults.map((player, index) => (
                     <div key={index} className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col md:flex-row items-center gap-6 shadow-md hover:border-blue-500 transition-colors">
@@ -95,11 +104,11 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                                 <h4 className="text-xl font-bold text-white">{player.name}</h4>
                                 <span className="text-gray-400 text-sm">Age: {player.age}</span>
                             </div>
-                            <p className="text-sm text-gray-300 italic mb-2">"{player.scoutingReport}"</p>
+                            <p className="text-sm text-gray-300 italic mb-2">"{player.scoutingReport || 'Available for selection.'}"</p>
                             <div className="flex flex-wrap gap-2 justify-center md:justify-start text-xs">
                                 <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Rating: <span className="text-white font-bold">{player.rating}</span></span>
-                                <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Wage: <span className="text-white font-bold">£{player.wage.toLocaleString()}/wk</span></span>
-                                <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Value: <span className="text-white font-bold">£{(player.marketValue || player.wage * 100).toLocaleString()}</span></span>
+                                {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Wage: <span className="text-white font-bold">£{player.wage.toLocaleString()}/wk</span></span>}
+                                {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Value: <span className="text-white font-bold">£{(player.marketValue || player.wage * 100).toLocaleString()}</span></span>}
                             </div>
                         </div>
 
@@ -109,7 +118,7 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                                 onClick={() => onSignPlayer(player)}
                                 className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow transition-colors whitespace-nowrap"
                             >
-                                Approach
+                                {isNationalTeam ? "Call Up" : "Approach"}
                             </button>
                         </div>
                     </div>

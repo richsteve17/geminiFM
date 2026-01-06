@@ -69,7 +69,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                         </span>
-                        <h4 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Build Status: Alpha v0.9 (Content Update)</h4>
+                        <h4 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Build Status: Alpha v0.9.6</h4>
                     </div>
                     <button 
                         onClick={() => setShowDevlog(!showDevlog)}
@@ -83,28 +83,25 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     <div className="space-y-4 animate-in fade-in duration-500">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-3">
-                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Recent Patches</h5>
+                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Hotfix 0.9.6</h5>
                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">Content Injection:</span> Real rosters added for Liverpool and Chelsea. Morale and Chemistry simulation verified.
+                                    <span className="text-green-500 font-bold">Data Fidelity:</span> Overhauled UK name generation to respect regional naming conventions.
                                 </p>
                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">AI Upgrade:</span> Interviews and Negotiations now use stricter personas to prevent generic responses.
+                                    <span className="text-green-500 font-bold">Job Market:</span> Rebalanced lower league prestige to ensure Sunday League managers can find work.
+                                </p>
+                                 <p className="text-sm text-gray-400 leading-relaxed">
+                                    <span className="text-green-500 font-bold">System:</span> Added Auto-Save and Quit to Menu functionality.
                                 </p>
                             </div>
                             <div className="space-y-3">
-                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Alpha Roadmap</h5>
+                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Features</h5>
                                 <ul className="text-sm text-gray-400 space-y-2">
                                     <li className="flex items-start gap-2">
-                                        <span className="text-green-500">✓</span> <span>Swiss-Model UCL Integration</span>
+                                        <span className="text-green-500">✓</span> <span>World Cup: Real generated names & morale effects</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <span className="text-green-500">✓</span> <span>Natural Language Scouting</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-blue-400">○</span> <span>Reputation System (Press/Fan Sentiment)</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-blue-400">○</span> <span>Cloud Dynasties (Save/Load)</span>
+                                        <span className="text-green-500">✓</span> <span>National Pool Selection (Beta)</span>
                                     </li>
                                 </ul>
                             </div>
@@ -112,7 +109,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     </div>
                 ) : (
                     <p className="text-sm text-gray-500 italic">
-                        "The goal of GFM '27 is to prove that AI can handle the narrative weight of football management, turning spreadsheet data into tangible story arcs."
+                        "The simulation is live. Liverpool's board is panicking about renewals. The press is waiting."
                     </p>
                 )}
             </div>

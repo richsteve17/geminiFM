@@ -112,7 +112,6 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         <p className="text-xs font-bold truncate text-gray-200">{player.name}</p>
                         <div className="flex gap-1">{effects}</div>
                     </div>
-                    {/* Personality Badge - Re-added per user request for visual depth */}
                     <div className="flex items-center gap-2 mt-0.5">
                         <span className={`text-[9px] font-bold px-1.5 rounded border ${personalityColor} uppercase tracking-wider`}>
                             {player.personality}
@@ -153,7 +152,6 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         {CHAIRMAN_PERSONALITIES[team.chairmanPersonality]}
                     </div>
                 </div>
-                {/* Board Objectives List - Re-added */}
                 {team.objectives && team.objectives.length > 0 && (
                     <div className="mt-2 space-y-1">
                         {team.objectives.map((obj, i) => (
@@ -180,6 +178,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 </div>
             </div>
 
+            {/* View Content */}
             <div className="flex-grow overflow-y-auto pr-1">
                 {view === 'tactics' ? (
                     <TacticsBoard starters={starters} formation={team.tactic.formation} onPlayerClick={p => onToggleStarter(p.name)} />
@@ -191,7 +190,6 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                                 {isMatchLive && <span className="text-[10px] text-blue-400 font-bold uppercase">SUBS: {subsUsed}/5</span>}
                             </div>
                             
-                            {/* Contract Alert Button - Re-added */}
                             {!isNationalTeam && playersWithContractIssues.length > 0 && gameState === 'PRE_MATCH' && (
                                 <button 
                                     onClick={() => setShowContracts(!showContracts)}
@@ -227,7 +225,16 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-gray-700">
+            {/* Legend - Added per feedback */}
+            <div className="mt-2 py-2 px-3 bg-gray-900/50 rounded border border-gray-800 flex flex-wrap gap-3 justify-center text-[9px] text-gray-400">
+                <span className="flex items-center gap-1"><span className="text-xs">🔥</span> On Fire</span>
+                <span className="flex items-center gap-1"><span className="text-xs">🏆</span> Winner</span>
+                <span className="flex items-center gap-1"><span className="text-xs">😔</span> Sad</span>
+                <span className="flex items-center gap-1"><BrokenLinkIcon className="w-3 h-3 text-orange-500" /> Clash</span>
+                <span className="flex items-center gap-1"><span className="text-xs">🚑</span> Injured</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-700">
                 <button onClick={onNavigateToNews} className="p-2.5 bg-gray-700 hover:bg-gray-600 rounded text-[10px] font-black flex items-center justify-center gap-1.5"><NewspaperIcon className="w-3.5 h-3.5" /> NEWS</button>
                 <button onClick={onNavigateToTransfers} disabled={isNationalTeam} className={`p-2.5 rounded text-[10px] font-black flex items-center justify-center gap-1.5 uppercase tracking-tighter ${isNationalTeam ? 'bg-gray-700 opacity-50 cursor-not-allowed' : 'bg-blue-900 hover:bg-blue-800 text-blue-100'}`}>
                     <ArrowsRightLeftIcon className="w-3.5 h-3.5" /> {isNationalTeam ? 'Selection' : 'Scouting'}
