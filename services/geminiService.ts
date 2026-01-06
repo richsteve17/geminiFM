@@ -8,7 +8,8 @@ if (!API_KEY) throw new Error("API_KEY not set");
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 const model = 'gemini-3-flash-preview';
 
-const isPlayable = (status: Player["status"]) => {
+const isPlayable = (status: Player["status"], matchCard?: Player["matchCard"]) => {
+    if (matchCard === 'red') return false;
     if (status.type === 'Available') return true;
     if (status.type === 'On International Duty') return false;
     if (status.type === 'Injured') return false;
@@ -18,6 +19,14 @@ const isPlayable = (status: Player["status"]) => {
 };
 
 const cleanJson = (text?: string) => (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
+
+const parseJsonSafely = <T>(text?: string): T | null => {
+    try {
+        return JSON.parse(cleanJson(text));
+    } catch {
+        return null;
+    }
+};
 
 const validateSimulationResult = (
     simulation: any,
@@ -54,8 +63,8 @@ export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, curre
     const minuteStart = currentMatchState.currentMinute;
     const minuteEnd = targetMinute;
 
-    const homeOnPitch = homeTeam.players.filter(p => p.isStarter && isPlayable(p.status));
-    const awayOnPitch = awayTeam.players.filter(p => p.isStarter && isPlayable(p.status));
+    const homeOnPitch = homeTeam.players.filter(p => p.isStarter && isPlayable(p.status, p.matchCard));
+    const awayOnPitch = awayTeam.players.filter(p => p.isStarter && isPlayable(p.status, p.matchCard));
     const allowedPlayers = [...homeOnPitch, ...awayOnPitch].map(p => p.name);
 
     const prompt = `
@@ -132,14 +141,16 @@ export const getInterviewQuestions = async (teamName: string, personality: strin
     const prompt = `Board Interview for ${teamName} (Chairman: ${personality}).
 Return JSON: { "questions": [string,string,string] }`;
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text)).questions;
+    const parsed = parseJsonSafely<{ questions: string[] }>(response.text);
+    return parsed?.questions ?? ["What is your tactical vision?", "How will you handle the budget?", "What are your expectations this season?"];
 };
 
 export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], personality: string) => {
     const prompt = `Evaluate answers for ${teamName}. Chairman personality: ${personality}.
 Return JSON: { "offer": boolean, "reasoning": "string" }`;
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text));
+    const parsed = parseJsonSafely<{ offer: boolean; reasoning: string }>(response.text);
+    return parsed ?? { offer: false, reasoning: "Unable to evaluate answers." };
 };
 
 export const getPlayerTalkQuestions = async (p: Player, t: Team, context: string) => {
@@ -147,7 +158,8 @@ export const getPlayerTalkQuestions = async (p: Player, t: Team, context: string
 You are ${p.name}'s agent. Personality: ${p.personality}. Context: ${context}. Team: ${t.name} (prestige ${t.prestige}).
 Return JSON: { "questions": [string,string,string] }`;
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text)).questions;
+    const parsed = parseJsonSafely<{ questions: string[] }>(response.text);
+    return parsed?.questions ?? ["What role will I have?", "How competitive is the squad?", "What salary are you offering?"];
 };
 
 export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, context: string) => {
@@ -155,7 +167,8 @@ export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[],
 You are ${p.name}'s agent (Personality: ${p.personality}). Evaluate the manager's answers.
 Context: ${context}. Club prestige: ${t.prestige}. Return JSON: { "convinced": boolean, "reasoning": "string" }`;
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text));
+    const parsed = parseJsonSafely<{ convinced: boolean; reasoning: string }>(response.text);
+    return parsed ?? { convinced: false, reasoning: "Unable to evaluate negotiation." };
 };
 
 export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: string): Promise<string> => {
