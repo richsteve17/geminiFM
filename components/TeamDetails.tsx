@@ -9,6 +9,7 @@ import { FORMATIONS, MENTALITIES } from '../constants';
 import { BrokenLinkIcon } from './icons/BrokenLinkIcon';
 import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
 import { UserGroupIcon } from './icons/UserGroupIcon';
+import TacticsBoard from './TacticsBoard';
 
 interface TeamDetailsProps {
     team: Team;
@@ -45,7 +46,6 @@ const getPersonalityIcon = (personality: PlayerPersonality) => {
 const getEffectIndicators = (player: Player) => {
     const indicators = [];
     
-    // 1. HARD STATUS (Blocks playing)
     if (player.status.type === 'Injured') {
         indicators.push(
             <span key="inj" className="flex items-center bg-red-900/80 border border-red-500 px-1.5 py-0.5 rounded text-[10px] text-red-100 font-bold uppercase tracking-wider">
@@ -75,20 +75,16 @@ const getEffectIndicators = (player: Player) => {
         );
     }
 
-    // 2. IN-MATCH CARDS
     if (player.matchCard === 'yellow') {
         indicators.push(<span key="yc" title="Yellow Card" className="text-yellow-400 text-sm">🟨</span>);
     }
 
-    // 3. MORALE & CHEMISTRY (Effects)
-    // Default Morale if no specific effect
     const moraleEffect = player.effects.find(e => e.type === 'PostTournamentMorale');
     if (moraleEffect && moraleEffect.type === 'PostTournamentMorale') {
         if (moraleEffect.morale === 'Winner') indicators.push(<span key="m-win" title="Morale: High (Winner)" className="text-sm">🏆</span>);
         if (moraleEffect.morale === 'FiredUp') indicators.push(<span key="m-fire" title="Morale: High (Fired Up)" className="text-sm">🔥</span>);
         if (moraleEffect.morale === 'Disappointed') indicators.push(<span key="m-sad" title="Morale: Low (Disappointed)" className="text-sm">😞</span>);
     } else {
-        // Neutral/Good morale default
         indicators.push(<span key="m-ok" title="Morale: Okay" className="text-sm grayscale opacity-30">🙂</span>);
     }
 
@@ -108,6 +104,7 @@ const getEffectIndicators = (player: Player) => {
 const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onStartContractTalk, onToggleStarter, gameState, subsUsed, onSubstitute }) => {
     const [showContracts, setShowContracts] = useState(false);
     const [subSelection, setSubSelection] = useState<Player | null>(null);
+    const [viewMode, setViewMode] = useState<'squad' | 'tactics'>('squad');
 
     const isNationalTeam = team.league === 'International';
     const isMatchLive = gameState === 'PAUSED';
@@ -116,14 +113,12 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
         .filter(p => p.contractExpires < 2)
         .sort((a, b) => a.contractExpires - b.contractExpires) : [];
 
-    // Lineup Logic
     const starters = team.players.filter(p => p.isStarter);
     const bench = team.players.filter(p => !p.isStarter);
     
     const starterCount = starters.length;
     const starterColor = starterCount === 11 ? 'text-green-400' : 'text-red-400';
 
-    // Analysis Logic
     const activeChemistryRifts = useMemo(() => {
         const rifts: string[] = [];
         starters.forEach(p1 => {
@@ -143,11 +138,12 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     const injuredStarters = starters.filter(p => p.status.type === 'Injured');
     const sentOffStarters = starters.filter(p => p.status.type === 'SentOff');
 
-
-    const handlePlayerClick = (player: Player, isBench: boolean) => {
+    const handlePlayerClick = (player: Player) => {
         if (player.status.type === 'SentOff') return;
         if (player.status.type === 'Suspended') return;
         if (player.status.type === 'Injured' && gameState === 'PRE_MATCH') return;
+
+        const isBench = !player.isStarter;
 
         if (isMatchLive) {
             if (subsUsed >= 5) return;
@@ -169,10 +165,12 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
         const personality = getPersonalityIcon(player.personality);
         const isDisabled = player.status.type === 'SentOff' || player.status.type === 'Suspended' || (player.status.type === 'Injured' && gameState === 'PRE_MATCH');
         const isSelectedSub = isMatchLive && subSelection?.name === player.name;
+        
+        const condColor = player.condition > 75 ? 'bg-green-500' : player.condition > 50 ? 'bg-yellow-500' : 'bg-red-500';
 
         return (
             <li key={player.name} 
-                onClick={() => handlePlayerClick(player, isBench)}
+                onClick={() => handlePlayerClick(player)}
                 className={`relative flex items-center p-2 mb-1 border rounded-lg cursor-pointer transition-all duration-200 group ${
                     isDisabled ? 'bg-black/40 border-gray-800 opacity-60 cursor-not-allowed' :
                     isSelectedSub ? 'bg-green-900/40 border-green-400 ring-1 ring-green-400 translate-x-1' :
@@ -180,7 +178,6 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                     'bg-gray-800 border-gray-600 hover:bg-gray-700 hover:border-gray-500'
                 }`}
             >
-                {/* Position & Flag */}
                 <div className="flex flex-col items-center justify-center w-10 mr-3 gap-1">
                     <span className={`w-8 h-6 flex items-center justify-center text-[10px] font-black rounded shadow-sm ${getPositionColor(player.position)}`}>
                         {player.position}
@@ -188,28 +185,33 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                     <span className="text-lg leading-none filter drop-shadow-md">{player.nationality}</span>
                 </div>
 
-                {/* Name & Personality */}
                 <div className="flex-grow min-w-0">
                     <div className="flex items-center justify-between">
                         <span className={`font-bold text-sm truncate ${isDisabled ? 'text-gray-500' : 'text-gray-200'}`}>
                             {player.name}
                         </span>
+                        <div className="flex items-center gap-1">
+                            <div className="w-12 h-1 bg-gray-900 rounded-full overflow-hidden">
+                                <div 
+                                    className={`h-full ${condColor}`} 
+                                    style={{ width: `${player.condition}%` }}
+                                ></div>
+                            </div>
+                            <span className="text-[9px] font-mono text-gray-400">{player.condition}%</span>
+                        </div>
                     </div>
                     
                     <div className="flex items-center gap-2 mt-0.5">
-                        {/* Personality Badge */}
                         <div className={`flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-black/30 border border-white/5 ${personality.color}`}>
                             <span>{personality.icon}</span>
                             <span>{personality.label}</span>
                         </div>
-                        {/* Status Icons */}
                         <div className="flex items-center gap-1">
                             {getEffectIndicators(player)}
                         </div>
                     </div>
                 </div>
 
-                {/* Rating */}
                 <div className="ml-3 flex flex-col items-center justify-center min-w-[2.5rem]">
                     <span className={`text-lg font-bold font-mono ${player.rating >= 85 ? 'text-green-400' : player.rating >= 80 ? 'text-green-200' : 'text-gray-400'}`}>
                         {player.rating}
@@ -221,9 +223,31 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
 
     return (
         <div className="bg-gray-800/50 rounded-lg shadow-lg p-4 border border-gray-700 space-y-4 h-full flex flex-col">
-            <div>
-                <h2 className="text-xl font-bold text-center text-green-400 tracking-wide">{team.name}</h2>
-                {isNationalTeam && <p className="text-xs text-center text-gray-400 uppercase tracking-widest mt-1">National Team Manager</p>}
+            <div className="flex justify-between items-start">
+                <div className="flex-grow">
+                    <h2 className="text-xl font-bold text-green-400 tracking-wide">{team.name}</h2>
+                    {!isNationalTeam && (
+                        <p className="text-xs text-blue-400 font-mono font-bold">
+                            £{team.balance.toLocaleString()}
+                        </p>
+                    )}
+                </div>
+                <div className="flex bg-gray-900 rounded-lg p-0.5 border border-gray-700">
+                    <button 
+                        onClick={() => setViewMode('squad')}
+                        className={`p-1.5 rounded-md transition-all ${viewMode === 'squad' ? 'bg-gray-700 text-green-400' : 'text-gray-500 hover:text-gray-300'}`}
+                        title="Squad List"
+                    >
+                        <UserGroupIcon className="w-4 h-4" />
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('tactics')}
+                        className={`p-1.5 rounded-md transition-all ${viewMode === 'tactics' ? 'bg-gray-700 text-green-400' : 'text-gray-500 hover:text-gray-300'}`}
+                        title="Tactics Board"
+                    >
+                        <GlobeAltIcon className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -266,7 +290,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                     className={`flex flex-col items-center justify-center p-2 rounded-lg transition-colors ${isNationalTeam || gameState !== 'PRE_MATCH' ? 'bg-gray-800 opacity-50 cursor-not-allowed' : 'bg-blue-900/50 hover:bg-blue-800/50 border border-blue-800'}`}
                 >
                     <ArrowsRightLeftIcon className="w-5 h-5 text-blue-300"/>
-                    <span className="text-[10px] mt-1 font-bold text-blue-400">TRANSFER</span>
+                    <span className="text-[10px] mt-1 font-bold text-blue-400">SCOUT</span>
                 </button>
                 {!isNationalTeam && (
                     <button 
@@ -279,7 +303,6 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 )}
             </div>
 
-             {/* Contracts Dropdown */}
              {showContracts && playersWithContractIssues.length > 0 && (
                  <div className="bg-gray-900/50 p-2 rounded-lg border border-yellow-800/30 space-y-1">
                     {playersWithContractIssues.map(player => (
@@ -293,59 +316,70 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 </div>
             )}
             
-            {/* --- SQUAD LIST --- */}
             <div className="flex-grow overflow-y-auto pr-1">
-                <div className="flex justify-between items-center pb-2 mb-2 border-b border-gray-700 sticky top-0 bg-[#1f2937] z-10 pt-2">
-                    <h3 className="text-sm font-bold text-gray-200 flex items-center">
-                        <UserGroupIcon className="w-4 h-4 mr-2 text-blue-400" /> 
-                        SQUAD SELECTION
-                    </h3>
-                    {isMatchLive ? (
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${subsUsed >= 5 ? 'bg-red-900 text-red-200' : 'bg-blue-900 text-blue-200'}`}>
-                            SUBS: {subsUsed}/5
-                        </span>
-                    ) : (
-                         <span className={`font-mono text-sm font-bold ${starterColor}`}>{starterCount}/11</span>
-                    )}
-                </div>
-
-                {/* Analysis Box */}
-                {(activeChemistryRifts.length > 0 || injuredStarters.length > 0 || sentOffStarters.length > 0) && (
-                     <div className="bg-red-950/50 border border-red-500/30 rounded p-2 mb-3">
-                        {sentOffStarters.map(p => (
-                             <div key={p.name} className="text-xs text-red-300 font-bold flex items-center gap-2">
-                                🟥 {p.name} (Sent Off)
-                             </div>
-                        ))}
-                        {injuredStarters.map(p => (
-                             <div key={p.name} className="text-xs text-red-300 font-bold flex items-center gap-2">
-                                🚑 {p.name} (Injured) - {subsUsed >= 5 ? "NO SUBS LEFT!" : "SUB NOW"}
-                             </div>
-                        ))}
-                        {activeChemistryRifts.map((rift, i) => (
-                             <div key={i} className="text-xs text-orange-300 flex items-center gap-2">
-                                <BrokenLinkIcon className="w-3 h-3" />
-                                <span>{rift.replace('-', ' & ')}</span>
-                             </div>
-                        ))}
+                {viewMode === 'tactics' ? (
+                    <div className="mt-2">
+                        <TacticsBoard 
+                            starters={starters} 
+                            formation={team.tactic.formation} 
+                            onPlayerClick={handlePlayerClick}
+                        />
+                        <p className="text-[10px] text-gray-500 text-center mt-2 italic uppercase">Click a player to adjust lineup or sub</p>
                     </div>
+                ) : (
+                    <>
+                        <div className="flex justify-between items-center pb-2 mb-2 border-b border-gray-700 sticky top-0 bg-[#1f2937] z-10 pt-2">
+                            <h3 className="text-sm font-bold text-gray-200 flex items-center">
+                                <UserGroupIcon className="w-4 h-4 mr-2 text-blue-400" /> 
+                                SQUAD
+                            </h3>
+                            {isMatchLive ? (
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${subsUsed >= 5 ? 'bg-red-900 text-red-200' : 'bg-blue-900 text-blue-200'}`}>
+                                    SUBS: {subsUsed}/5
+                                </span>
+                            ) : (
+                                 <span className={`font-mono text-sm font-bold ${starterColor}`}>{starterCount}/11</span>
+                            )}
+                        </div>
+
+                        {(activeChemistryRifts.length > 0 || injuredStarters.length > 0 || sentOffStarters.length > 0) && (
+                             <div className="bg-red-950/50 border border-red-500/30 rounded p-2 mb-3">
+                                {sentOffStarters.map(p => (
+                                     <div key={p.name} className="text-xs text-red-300 font-bold flex items-center gap-2">
+                                        🟥 {p.name} (Sent Off)
+                                     </div>
+                                ))}
+                                {injuredStarters.map(p => (
+                                     <div key={p.name} className="text-xs text-red-300 font-bold flex items-center gap-2">
+                                        🚑 {p.name} (Injured)
+                                     </div>
+                                ))}
+                                {activeChemistryRifts.map((rift, i) => (
+                                     <div key={i} className="text-xs text-orange-300 flex items-center gap-2">
+                                        <BrokenLinkIcon className="w-3 h-3" />
+                                        <span>{rift.replace('-', ' & ')}</span>
+                                     </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="space-y-4">
+                            <div>
+                                <h4 className="text-[10px] font-bold text-green-500 uppercase tracking-widest mb-2 pl-1">Starting XI</h4>
+                                <ul className="space-y-1">
+                                    {starters.map(p => renderPlayerRow(p, false))}
+                                </ul>
+                            </div>
+
+                            <div>
+                                <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 pl-1">Bench</h4>
+                                <ul className="space-y-1">
+                                    {bench.map(p => renderPlayerRow(p, true))}
+                                </ul>
+                            </div>
+                        </div>
+                    </>
                 )}
-
-                <div className="space-y-4">
-                    <div>
-                        <h4 className="text-[10px] font-bold text-green-500 uppercase tracking-widest mb-2 pl-1">Starting XI</h4>
-                        <ul className="space-y-1">
-                            {starters.map(p => renderPlayerRow(p, false))}
-                        </ul>
-                    </div>
-
-                    <div>
-                        <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 pl-1">Bench</h4>
-                        <ul className="space-y-1">
-                            {bench.map(p => renderPlayerRow(p, true))}
-                        </ul>
-                    </div>
-                </div>
             </div>
         </div>
     );

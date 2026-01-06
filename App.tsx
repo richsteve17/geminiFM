@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
 import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, TournamentStage, GameMode } from './types';
 import { AppScreen, GameState } from './types';
@@ -199,7 +199,6 @@ export default function App() {
             qualifiedTeams = leagueTable.filter(t => t.league === 'International').sort((a,b) => b.points - a.points).slice(0, 32).map(t => t.name);
             if (!qualifiedTeams.includes(userTeamName!)) { handleEndPrologue('GroupStageFail'); return null; }
         } else {
-            // General logic for next rounds: winners of last week
             const prevFixtures = fixtures.filter(f => f.week === week - 1 && f.played);
             prevFixtures.forEach(f => {
                 const [h, a] = (f.score || "0-0").split('-').map(Number);
@@ -251,6 +250,29 @@ export default function App() {
         }
     };
 
+    const reduceCondition = (teamName: string, duration: number) => {
+        setTeams(prev => {
+            const team = prev[teamName];
+            if (!team) return prev;
+            
+            const mentalityFactor = 
+                team.tactic.mentality === 'All-Out Attack' ? 1.5 :
+                team.tactic.mentality === 'Attacking' ? 1.2 :
+                team.tactic.mentality === 'Defensive' ? 0.8 :
+                team.tactic.mentality === 'Park the Bus' ? 0.6 : 1.0;
+
+            const updatedPlayers = team.players.map(p => {
+                if (p.isStarter) {
+                    const drop = (duration / 3.5) * mentalityFactor;
+                    return { ...p, condition: Math.max(0, Math.floor(p.condition - drop)) };
+                }
+                return p;
+            });
+
+            return { ...prev, [teamName]: { ...team, players: updatedPlayers } };
+        });
+    };
+
     const handlePlayFirstHalf = useCallback(async () => {
         if (!currentFixture || !userTeam) return;
         if (userTeam.players.filter(p => p.isStarter).length !== 11) {
@@ -263,6 +285,10 @@ export default function App() {
         setMatchState(initialState);
         try {
             const result = await simulateMatchSegment(teams[currentFixture.homeTeam], teams[currentFixture.awayTeam], initialState, 45, { stage: currentFixture.stage, isKnockout: currentFixture.isKnockout });
+            
+            reduceCondition(currentFixture.homeTeam, 45);
+            reduceCondition(currentFixture.awayTeam, 45);
+
             setMatchState(prev => prev ? ({ ...prev, currentMinute: 45, homeScore: result.homeScoreAdded, awayScore: result.awayScoreAdded, events: result.events.map(e => ({ ...e, id: Math.random() })), momentum: result.momentum, tacticalAnalysis: result.tacticalAnalysis }) : null);
             setGameState(GameState.PAUSED);
         } catch (e) { setGameState(GameState.PRE_MATCH); }
@@ -273,6 +299,10 @@ export default function App() {
         setGameState(GameState.SIMULATING);
         try {
             const result = await simulateMatchSegment(teams[currentFixture.homeTeam], teams[currentFixture.awayTeam], matchState, 60, { stage: currentFixture.stage, isKnockout: currentFixture.isKnockout, teamTalk: { teamName: userTeamName!, shout } });
+            
+            reduceCondition(currentFixture.homeTeam, 15);
+            reduceCondition(currentFixture.awayTeam, 15);
+
             setMatchState(prev => prev ? ({ ...prev, currentMinute: 60, homeScore: prev.homeScore + result.homeScoreAdded, awayScore: prev.awayScore + result.awayScoreAdded, events: [...prev.events, ...result.events.map(e => ({ ...e, id: Math.random() }))], momentum: result.momentum, tacticalAnalysis: result.tacticalAnalysis }) : null);
             setGameState(GameState.PAUSED);
         } catch (e) { setGameState(GameState.PAUSED); }
@@ -282,7 +312,12 @@ export default function App() {
         if (!currentFixture || !matchState) return;
         setGameState(GameState.SIMULATING);
         try {
+            const duration = target - matchState.currentMinute;
             const result = await simulateMatchSegment(teams[currentFixture.homeTeam], teams[currentFixture.awayTeam], matchState, target, { stage: currentFixture.stage, isKnockout: currentFixture.isKnockout });
+            
+            reduceCondition(currentFixture.homeTeam, duration);
+            reduceCondition(currentFixture.awayTeam, duration);
+
             setMatchState(prev => {
                 if (!prev) return null;
                 const newState = { ...prev, currentMinute: target, homeScore: prev.homeScore + result.homeScoreAdded, awayScore: prev.awayScore + result.awayScoreAdded, events: [...prev.events, ...result.events.map(e => ({ ...e, id: Math.random() }))], momentum: result.momentum, tacticalAnalysis: result.tacticalAnalysis };
@@ -333,24 +368,69 @@ export default function App() {
         proceedToNextWeek();
     };
 
+    const processFinances = (teamName: string, playedMatch: boolean, isHome: boolean) => {
+        setTeams(prev => {
+            const team = prev[teamName];
+            if (!team) return prev;
+            
+            const weeklyWages = team.players.reduce((sum, p) => sum + p.wage, 0);
+            let revenue = 0;
+            if (playedMatch) {
+                revenue = isHome ? (team.prestige * 25000) : (team.prestige * 5000);
+            }
+            
+            const net = revenue - weeklyWages;
+            const newBalance = team.balance + net;
+
+            if (teamName === userTeamName) {
+                const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+                addNewsItem("Financial Update", `Weekly Balance: ${formatter.format(newBalance)}. Net: ${formatter.format(net)}.`, 'finance');
+            }
+
+            return { ...prev, [teamName]: { ...team, balance: newBalance } };
+        });
+    };
+
+    const recoverCondition = () => {
+        setTeams(prev => {
+            const newTeams = { ...prev };
+            Object.keys(newTeams).forEach(name => {
+                newTeams[name].players = newTeams[name].players.map(p => ({
+                    ...p,
+                    condition: Math.min(100, p.condition + 20)
+                }));
+            });
+            return newTeams;
+        });
+    };
+
     const proceedToNextWeek = async () => {
         const nextW = currentWeek + 1;
         const weekFixtures = fixtures.filter(f => f.week === currentWeek);
         const userM = weekFixtures.find(f => f.homeTeam === userTeamName || f.awayTeam === userTeamName);
         const results: Fixture[] = [];
 
+        recoverCondition();
+
         weekFixtures.filter(f => f !== userM).forEach(f => {
             const res = simulateQuickMatch(teams[f.homeTeam], teams[f.awayTeam]);
             updateLeagueTable(f.homeTeam, f.awayTeam, res.homeGoals, res.awayGoals, f.league);
             results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
+            processFinances(f.homeTeam, true, true);
+            processFinances(f.awayTeam, true, false);
         });
-        if (userM && matchState?.isFinished) results.push({ ...userM, played: true, score: `${matchState.homeScore}-${matchState.awayScore}` });
-        setWeeklyResults(results);
+        
+        if (userM && matchState?.isFinished) {
+            results.push({ ...userM, played: true, score: `${matchState.homeScore}-${matchState.awayScore}` });
+            processFinances(userM.homeTeam, true, true);
+            processFinances(userM.awayTeam, true, false);
+        } else if (!userM && userTeamName) {
+            processFinances(userTeamName, false, false);
+        }
 
         if (nextW > weeksInSeason) { addNewsItem("Season Over", "Check final rankings.", "tournament-result"); setIsLoading(false); return; }
 
         let nextF: Fixture[] = fixtures.filter(f => f.week === nextW);
-        // Generation of next stages if necessary
         if (nextW === 35 && gameMode === 'Club') {
             const clNext = generateKnockoutFixtures(35, 'Play-offs');
             if (clNext) nextF = [...nextF, ...clNext];
@@ -415,7 +495,7 @@ export default function App() {
             case AppScreen.TRANSFERS: return <TransfersScreen targets={TRANSFER_TARGETS} onApproachPlayer={p => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.SCOUTING: return <ScoutingScreen onScout={handleScoutRequest} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={p => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen questions={pressQuestions} onFinish={() => { setAppScreen(AppScreen.GAMEPLAY); handleAdvanceWeek(); }} />;
-            case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={() => { if(talkResult?.convinced && playerTalk) { if(playerTalk.context === 'renewal') { setTeams(prev => { const t = prev[userTeamName!]; return { ...prev, [userTeamName!]: { ...t, players: t.players.map(pl => pl.name === playerTalk.player.name ? { ...pl, contractExpires: pl.contractExpires + 3 } : pl) }}; }); } else { setTeams(prev => { const t = prev[userTeamName!]; return { ...prev, [userTeamName!]: { ...t, players: [...t.players, { ...playerTalk.player, isStarter: false }] }}; }); } } setAppScreen(AppScreen.GAMEPLAY); }} />;
+            case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={() => { if(talkResult?.convinced && playerTalk) { if(playerTalk.context === 'renewal') { setTeams(prev => { const t = prev[userTeamName!]; return { ...prev, [userTeamName!]: { ...t, players: t.players.map(pl => pl.name === playerTalk.player.name ? { ...pl, contractExpires: pl.contractExpires + 3 } : pl) }}; }); } else { setTeams(prev => { const t = prev[userTeamName!]; return { ...prev, [userTeamName!]: { ...t, players: [...t.players, { ...playerTalk.player, isStarter: false, condition: 100 }] }}; }); } } setAppScreen(AppScreen.GAMEPLAY); }} />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;

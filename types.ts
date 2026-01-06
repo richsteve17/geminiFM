@@ -8,8 +8,8 @@ export enum AppScreen {
     JOB_INTERVIEW,
     GAMEPLAY,
     TRANSFERS,
-    SCOUTING, // New
-    PRESS_CONFERENCE, // New
+    SCOUTING,
+    PRESS_CONFERENCE,
     PLAYER_TALK,
     PLAYER_NEGOTIATION,
     NEWS_FEED,
@@ -23,8 +23,8 @@ export type PlayerStatus =
     | { type: 'Available' }
     | { type: 'On International Duty'; until: number }
     | { type: 'Injured'; weeks: number }
-    | { type: 'Suspended'; until: number } // New Status
-    | { type: 'SentOff' }; // Temporary In-Match Status
+    | { type: 'Suspended'; until: number }
+    | { type: 'SentOff' };
 
 export type PlayerEffect = 
     | { type: 'PostTournamentMorale'; morale: 'Winner' | 'FiredUp' | 'Disappointed'; message: string; until: number }
@@ -35,22 +35,22 @@ export interface Player {
   position: 'GK' | 'DEF' | 'MID' | 'FWD';
   rating: number;
   age: number;
-  nationality: string; // Using string for emoji flags
+  nationality: string;
   personality: PlayerPersonality;
   wage: number;
   status: PlayerStatus;
   effects: PlayerEffect[];
-  contractExpires: number; // Years left
-  isStarter: boolean; // New field for lineup management
-  matchCard?: 'yellow' | 'red' | null; // Track cards within a single match
-  scoutingReport?: string; // For scouted players
+  contractExpires: number;
+  isStarter: boolean;
+  matchCard?: 'yellow' | 'red' | null;
+  scoutingReport?: string;
   marketValue?: number;
+  condition: number; // 0 to 100
 }
 
 export type Formation = '4-4-2' | '4-3-3' | '5-3-2' | '3-5-2';
 export type Mentality = 'All-Out Attack' | 'Attacking' | 'Balanced' | 'Defensive' | 'Park the Bus';
 export type ChairmanPersonality = 'Traditionalist' | 'Ambitious Tycoon' | 'Moneyball Advocate' | 'Fan-Focused Owner';
-
 
 export interface Tactic {
   formation: Formation;
@@ -66,10 +66,11 @@ export interface Team {
   tactic: Tactic;
   prestige: number;
   chairmanPersonality: ChairmanPersonality;
-  group?: string; // For World Cup (A-L)
+  group?: string;
+  balance: number; // Club finances
 }
 
-export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league'> {
+export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance'> {
     countryCode: string;
     players: Player[];
 }
@@ -90,11 +91,11 @@ export interface Fixture {
   homeTeam: string;
   awayTeam: string;
   played: boolean;
-  score?: string; // "2-1"
-  stage?: TournamentStage; // For WC / UCL
+  score?: string;
+  stage?: TournamentStage;
   isKnockout?: boolean;
-  aggregateScore?: string; // "Agg: 4-3"
-  firstLegScore?: string; // For tracking
+  aggregateScore?: string;
+  firstLegScore?: string;
 }
 
 export interface LeagueTableEntry {
@@ -108,10 +109,8 @@ export interface LeagueTableEntry {
   goalsAgainst: number;
   goalDifference: number;
   points: number;
-  group?: string; // For WC Group tables
+  group?: string;
 }
-
-// --- NEW MATCH ENGINE TYPES ---
 
 export interface MatchEvent {
     id: number;
@@ -120,27 +119,26 @@ export interface MatchEvent {
     teamName?: string;
     player?: string;
     description: string;
-    scoreAfter?: string; // "1-0"
-    cardType?: 'yellow' | 'red'; // Detail for card events
+    scoreAfter?: string;
+    cardType?: 'yellow' | 'red';
 }
 
 export interface MatchState {
-    currentMinute: number; // 0 to 90 (or 120)
+    currentMinute: number;
     homeScore: number;
     awayScore: number;
     events: MatchEvent[];
     isFinished: boolean;
     penaltyWinner?: string;
-    subsUsed: { home: number; away: number }; // Track subs
-    momentum: number; // -10 (Away Dominating) to +10 (Home Dominating)
-    tacticalAnalysis: string; // "Home team pressing high but leaving gaps."
+    subsUsed: { home: number; away: number };
+    momentum: number;
+    tacticalAnalysis: string;
 }
-
 
 export enum GameState {
     PRE_MATCH = 'PRE_MATCH',
     SIMULATING = 'SIMULATING',
-    PAUSED = 'PAUSED', // Replaces HALF_TIME, used for HT, 60', 75' stops
+    PAUSED = 'PAUSED',
     POST_MATCH = 'POST_MATCH'
 }
 
@@ -164,7 +162,7 @@ export interface PressConference {
     questions: string[];
     answers: string[];
     currentQuestionIndex: number;
-    context: string; // "Won against Rivals", "Lost heavy"
+    context: string;
 }
 
 export interface PlayerTalk {
@@ -186,13 +184,13 @@ export interface NewsItem {
     week: number;
     title: string;
     body: string;
-    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press';
+    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance';
 }
 
 export interface ExperienceLevel {
     id: string;
     label: string;
     description: string;
-    prestigeCap: number; // Max prestige of teams likely to hire you
+    prestigeCap: number;
     prestigeMin: number;
 }

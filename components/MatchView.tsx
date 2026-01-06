@@ -55,7 +55,9 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
             players: [],
             tactic: { formation: '4-4-2', mentality: 'Balanced' },
             prestige: 50,
-            chairmanPersonality: 'Traditionalist'
+            chairmanPersonality: 'Traditionalist',
+            // Added balance to satisfy Team interface
+            balance: 0
         });
 
         const homeTeam = teams[fixture.homeTeam] || fallbackTeam(fixture.homeTeam);

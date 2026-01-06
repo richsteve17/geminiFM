@@ -16,7 +16,9 @@ const generateGenericNationalPlayer = (nationality: string, position: 'GK' | 'DE
         status: { type: 'Available' },
         effects: [],
         contractExpires: 3,
-        isStarter
+        isStarter,
+        // Added condition to satisfy Player interface
+        condition: 100
     };
 };
 
@@ -72,7 +74,9 @@ const getNationalPlayer = (nationality: string, name: string, rating: number, po
         status: { type: 'Available' },
         effects: [],
         contractExpires: 3,
-        isStarter
+        isStarter,
+        // Added condition to satisfy Player interface
+        condition: 100
     }
 }
 
@@ -307,7 +311,9 @@ export const generateWorldCupStructure = (): Record<string, Team> => {
             tactic: nt.tactic,
             prestige: nt.prestige,
             chairmanPersonality: 'Traditionalist',
-            group: GROUP_NAMES[groupIndex]
+            group: GROUP_NAMES[groupIndex],
+            // Added balance to satisfy Team interface
+            balance: 0
         };
     });
 

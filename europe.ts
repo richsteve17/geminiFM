@@ -18,7 +18,9 @@ const generateEuroPlayer = (nationality: string, position: 'GK' | 'DEF' | 'MID' 
         status: { type: 'Available' },
         effects: [],
         contractExpires: 3,
-        isStarter
+        isStarter,
+        // Added condition to satisfy Player interface
+        condition: 100
     };
 };
 
@@ -49,7 +51,9 @@ const createEuroTeam = (name: string, flag: string, prestige: number): Team => {
         players: [...starters, ...bench],
         tactic: { formation, mentality: 'Balanced' },
         prestige,
-        chairmanPersonality: 'Traditionalist'
+        chairmanPersonality: 'Traditionalist',
+        // Added balance to satisfy Team interface
+        balance: 0
     };
 };
 
