@@ -537,7 +537,7 @@ export default function App() {
             if (homeGoals > awayGoals) { home.won++; home.points += 3; away.lost++; } 
             else if (awayGoals > homeGoals) { away.won++; away.points += 3; home.lost++; } 
             else { home.drawn++; away.drawn++; home.points++; away.points++; }
-            return newTable.sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference);
+            return newTable.sort((a, b) => b.points - a.points || b.goalDifference - b.goalsAgainst);
         });
     };
 
@@ -596,12 +596,6 @@ export default function App() {
                 }
                 return fixtures;
              }
-
-             // Simplified R16+ logic similar to previous but accounting for integrated schedule
-             // (Omitting full expansion for brevity, basic random pairing logic applies if not explicit)
-             // For simulation sake, if previous stage finished, we generate next.
-             // We need to know WHO qualified.
-             // See simplified generic logic below.
         }
 
 
@@ -665,7 +659,8 @@ export default function App() {
         for (let i = 0; i < qualifiedTeams.length; i += 2) {
             if (isTwoLeggedNext) {
                  newFixtures.push({ id: `ko-${stage}-L1-${i}`, week: week, league: 'Champions League', homeTeam: qualifiedTeams[i], awayTeam: qualifiedTeams[i+1], played: false, stage: stage, isKnockout: true });
-                 newFixtures.push({ id: `ko-${stage}-L2-${i}`, week: week + 1, league: 'Champions League', homeTeam: highSeed, awayTeam: lowSeed, played: false, stage: 'Play-offs', isKnockout: true });
+                 // Fix: Replace highSeed and lowSeed with actual team names from qualifiedTeams for second leg reversal
+                 newFixtures.push({ id: `ko-${stage}-L2-${i}`, week: week + 1, league: 'Champions League', homeTeam: qualifiedTeams[i+1], awayTeam: qualifiedTeams[i], played: false, stage: stage, isKnockout: true });
             } else {
                  newFixtures.push({ id: `ko-${stage}-${i}`, week: week, league: gameMode === 'Club' ? 'Champions League' : 'International', homeTeam: qualifiedTeams[i], awayTeam: qualifiedTeams[i+1], played: false, stage: stage, isKnockout: true });
             }
@@ -698,7 +693,6 @@ export default function App() {
         const nextWeek = currentWeek + 1;
 
         if (matchState && userTeamName) {
-            // ... (Persistence Logic same as before) ...
              const userEvents = matchState.events;
             setTeams(prevTeams => {
                 const newTeams = { ...prevTeams };
