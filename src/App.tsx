@@ -736,7 +736,8 @@ export default function App() {
         // --- STANDARD GAME LOGIC ---
         // Process effects expiring (Shared logic)
         const updatedTeams = { ...teams };
-        (Object.values(updatedTeams) as Team[]).forEach((team: Team) => {
+        const teamsArray = Object.values(updatedTeams) as Team[];
+        teamsArray.forEach((team) => {
             team.players.forEach(player => {
                 player.effects = player.effects.filter(effect => effect.until > currentWeek);
                 if (player.status.type === 'On International Duty' && player.status.until <= currentWeek) {
@@ -752,7 +753,7 @@ export default function App() {
             addNewsItem('International Break', `Club football pauses for the ${tournament.name}.`, 'tournament-result');
 
             // 1. Call up players
-            const clubPlayersOnDuty = userTeam ? userTeam.players.filter(p => NATIONAL_TEAMS.some((nt: NationalTeam) => nt.players.some((ntp: Player) => ntp.name === p.name)) && p.rating > 85) : [];
+            const clubPlayersOnDuty = userTeam ? userTeam.players.filter(p => (NATIONAL_TEAMS as NationalTeam[]).some(nt => nt.players.some(ntp => ntp.name === p.name)) && p.rating > 85) : [];
             const newTeams = { ...teams };
             clubPlayersOnDuty.forEach(player => {
                 const teamPlayer = newTeams[userTeamName!].players.find(p => p.name === player.name);
