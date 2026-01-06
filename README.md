@@ -1,6 +1,8 @@
 
 # ⚽ Gemini Football Manager '27
 
+**Gemini API · React · TypeScript**
+
 Gemini Football Manager '27 is a next-generation text-simulation game where match reports, negotiations, interviews, and world events are generated dynamically using Google’s Gemini API.
 
 Instead of fixed commentary and rigid decision trees, every season produces unique scenarios and outcomes based on tactics, club prestige, player personalities, and international events.
@@ -28,6 +30,7 @@ Traditional football managers simulate numbers and wrap results in canned text. 
 *   **🗣️ Conversational Negotiations:** Agents ask specific, multi-part questions about playing time and wages. You must persuade them based on their client's personality.
 *   **👔 Dynamic Interviews:** Board interviews evaluate your specific answers. A "Moneyball" owner wants different answers than a "Tycoon."
 *   **🌍 Narrative Match Engine:** The AI understands context. A 90th-minute winner in the World Cup Final generates different commentary than a pre-season friendly.
+*   **🏟️ 2D Match View:** A live top-down pitch view driven by match momentum and events for a "matchday" feel.
 *   **💢 Chemistry Rifts:** International teammates who knock each other out of tournaments can return to your club with "Bad Chemistry," affecting performance for weeks.
 
 ## 🏆 Game Modes
