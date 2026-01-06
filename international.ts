@@ -73,7 +73,8 @@ export const generateWorldCupStructure = (): Record<string, Team> => {
                 chairmanPersonality: 'Football Federation',
                 prestige: Math.max(50, template.prestige - (i * 5)), // Vary prestige within group
                 players: generateSquad(template.players[0].nationality, template.prestige - 5 - (i * 2)),
-                tactic: { ...template.tactic }
+                tactic: { ...template.tactic },
+                objectives: []
             };
             teamCounter++;
         }

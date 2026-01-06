@@ -74,11 +74,13 @@ export interface Team {
   chairmanPersonality: ChairmanPersonality;
   group?: string;
   balance: number; 
+  objectives: string[];
 }
 
-export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance'> {
+export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance' | 'objectives'> {
     countryCode: string;
     players: Player[];
+    objectives?: string[];
 }
 
 export interface Tournament {
@@ -170,6 +172,7 @@ export interface PlayerTalk {
     answers: string[];
     currentQuestionIndex: number;
     context: 'transfer' | 'renewal';
+    teammates?: string[]; // Context for "Who else are you signing?"
 }
 
 export interface NewsItem {

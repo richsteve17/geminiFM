@@ -57,7 +57,8 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
             prestige: 50,
             chairmanPersonality: 'Traditionalist',
             // Added balance to satisfy Team interface
-            balance: 0
+            balance: 0,
+            objectives: []
         });
 
         const homeTeam = teams[fixture.homeTeam] || fallbackTeam(fixture.homeTeam);

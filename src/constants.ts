@@ -52,6 +52,12 @@ const generatePlayers = (baseRating: number, region: keyof typeof NATIONALITIES)
     const positions: PlayerPosition[] = ['GK', 'LB', 'CB', 'CB', 'RB', 'DM', 'CM', 'CM', 'LW', 'ST', 'RW'];
     const benchPositions: PlayerPosition[] = ['GK', 'CB', 'LB', 'RB', 'DM', 'CM', 'AM', 'ST', 'LW', 'CB', 'CM', 'RW'];
     
+    // Helper to add random flair
+    const getRandomEffect = (): any[] => {
+        if (Math.random() > 0.9) return [{ type: 'PostTournamentMorale', morale: 'FiredUp', message: 'Eager to impress', until: 3 }];
+        return [];
+    };
+
     // Ensure integer ratings
     const squad: Player[] = positions.map((pos) => ({
         name: generateName(nats[0]),
@@ -62,7 +68,7 @@ const generatePlayers = (baseRating: number, region: keyof typeof NATIONALITIES)
         personality: 'Professional',
         wage: baseRating * 1000,
         status: { type: 'Available' },
-        effects: [],
+        effects: getRandomEffect(),
         contractExpires: 3,
         isStarter: true,
         condition: 100
@@ -88,42 +94,42 @@ const generatePlayers = (baseRating: number, region: keyof typeof NATIONALITIES)
     return squad;
 };
 
-// Real Rosters for key teams
+// Real Rosters for key teams (Updated for 2027 Timeline)
 const LIVERPOOL_SQUAD: Player[] = [
-    { name: 'Alisson', position: 'GK', rating: 89, age: 31, nationality: '🇧🇷', personality: 'Professional', wage: 150000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: true, condition: 100 },
-    { name: 'A. Robertson', position: 'LB', rating: 86, age: 30, nationality: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', personality: 'Leader', wage: 100000, status: { type: 'Available' }, effects: [], contractExpires: 2, isStarter: true, condition: 100 },
-    { name: 'V. van Dijk', position: 'CB', rating: 89, age: 33, nationality: '🇳🇱', personality: 'Leader', wage: 220000, status: { type: 'Available' }, effects: [], contractExpires: 0, isStarter: true, condition: 100 }, // Expiring!
-    { name: 'I. Konate', position: 'CB', rating: 83, age: 25, nationality: '🇫🇷', personality: 'Ambitious', wage: 90000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: true, condition: 100 },
-    { name: 'T. Alexander-Arnold', position: 'RB', rating: 87, age: 26, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Ambitious', wage: 180000, status: { type: 'Available' }, effects: [], contractExpires: 1, isStarter: true, condition: 100 },
-    { name: 'A. Mac Allister', position: 'CM', rating: 84, age: 25, nationality: '🇦🇷', personality: 'Professional', wage: 120000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
-    { name: 'D. Szoboszlai', position: 'CM', rating: 82, age: 23, nationality: '🇭🇺', personality: 'Ambitious', wage: 120000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
-    { name: 'R. Gravenberch', position: 'DM', rating: 81, age: 22, nationality: '🇳🇱', personality: 'Young Prospect', wage: 80000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
-    { name: 'L. Diaz', position: 'LW', rating: 84, age: 27, nationality: '🇨🇴', personality: 'Volatile', wage: 110000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: true, condition: 100 },
-    { name: 'M. Salah', position: 'RW', rating: 89, age: 32, nationality: '🇪🇬', personality: 'Professional', wage: 350000, status: { type: 'Available' }, effects: [], contractExpires: 1, isStarter: true, condition: 100 },
-    { name: 'D. Nunez', position: 'ST', rating: 82, age: 25, nationality: '🇺🇾', personality: 'Volatile', wage: 140000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
+    { name: 'Alisson', position: 'GK', rating: 89, age: 34, nationality: '🇧🇷', personality: 'Professional', wage: 150000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: true, condition: 100 },
+    { name: 'A. Robertson', position: 'LB', rating: 85, age: 33, nationality: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', personality: 'Leader', wage: 100000, status: { type: 'Available' }, effects: [], contractExpires: 1, isStarter: true, condition: 100 },
+    { name: 'V. van Dijk', position: 'CB', rating: 88, age: 36, nationality: '🇳🇱', personality: 'Leader', wage: 220000, status: { type: 'Available' }, effects: [], contractExpires: 0, isStarter: true, condition: 95 }, // Expiring!
+    { name: 'I. Konate', position: 'CB', rating: 85, age: 28, nationality: '🇫🇷', personality: 'Ambitious', wage: 110000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: true, condition: 100 },
+    { name: 'T. Alexander-Arnold', position: 'RB', rating: 89, age: 28, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Ambitious', wage: 200000, status: { type: 'Available' }, effects: [{ type: 'PostTournamentMorale', morale: 'Winner', message: 'Euro Champion', until: 5 }], contractExpires: 2, isStarter: true, condition: 100 },
+    { name: 'A. Mac Allister', position: 'CM', rating: 86, age: 28, nationality: '🇦🇷', personality: 'Professional', wage: 140000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
+    { name: 'D. Szoboszlai', position: 'CM', rating: 85, age: 26, nationality: '🇭🇺', personality: 'Ambitious', wage: 140000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
+    { name: 'R. Gravenberch', position: 'DM', rating: 83, age: 25, nationality: '🇳🇱', personality: 'Young Prospect', wage: 90000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
+    { name: 'L. Diaz', position: 'LW', rating: 86, age: 30, nationality: '🇨🇴', personality: 'Volatile', wage: 130000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: true, condition: 100 },
+    { name: 'M. Salah', position: 'RW', rating: 88, age: 35, nationality: '🇪🇬', personality: 'Professional', wage: 350000, status: { type: 'Available' }, effects: [], contractExpires: 1, isStarter: true, condition: 100 },
+    { name: 'D. Nunez', position: 'ST', rating: 84, age: 28, nationality: '🇺🇾', personality: 'Volatile', wage: 150000, status: { type: 'Available' }, effects: [{ type: 'PostTournamentMorale', morale: 'FiredUp', message: 'Critics Silenced', until: 3 }], contractExpires: 4, isStarter: true, condition: 100 },
     // Bench
-    { name: 'C. Gakpo', position: 'LW', rating: 81, age: 25, nationality: '🇳🇱', personality: 'Professional', wage: 90000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: false, condition: 100 },
-    { name: 'D. Jota', position: 'ST', rating: 82, age: 27, nationality: '🇵🇹', personality: 'Professional', wage: 100000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
-    { name: 'H. Elliott', position: 'AM', rating: 78, age: 21, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 60000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
-    { name: 'C. Jones', position: 'CM', rating: 79, age: 23, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Loyal', wage: 70000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
+    { name: 'C. Gakpo', position: 'LW', rating: 83, age: 28, nationality: '🇳🇱', personality: 'Professional', wage: 100000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: false, condition: 100 },
+    { name: 'F. Chiesa', position: 'RW', rating: 82, age: 29, nationality: '🇮🇹', personality: 'Professional', wage: 110000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 90 },
+    { name: 'H. Elliott', position: 'AM', rating: 81, age: 24, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Loyal', wage: 70000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
+    { name: 'C. Jones', position: 'CM', rating: 81, age: 26, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Loyal', wage: 80000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
 ];
 
 const CHELSEA_SQUAD: Player[] = [
-    { name: 'R. Sanchez', position: 'GK', rating: 79, age: 26, nationality: '🇪🇸', personality: 'Professional', wage: 80000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
-    { name: 'M. Cucurella', position: 'LB', rating: 80, age: 26, nationality: '🇪🇸', personality: 'Volatile', wage: 100000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
-    { name: 'L. Colwill', position: 'CB', rating: 79, age: 21, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 70000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: true, condition: 100 },
-    { name: 'W. Fofana', position: 'CB', rating: 79, age: 23, nationality: '🇫🇷', personality: 'Ambitious', wage: 120000, status: { type: 'Available' }, effects: [], contractExpires: 6, isStarter: true, condition: 100 },
-    { name: 'R. James', position: 'RB', rating: 84, age: 24, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Leader', wage: 200000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
-    { name: 'M. Caicedo', position: 'DM', rating: 82, age: 22, nationality: '🇪🇨', personality: 'Professional', wage: 150000, status: { type: 'Available' }, effects: [], contractExpires: 7, isStarter: true, condition: 100 },
-    { name: 'E. Fernandez', position: 'CM', rating: 83, age: 23, nationality: '🇦🇷', personality: 'Ambitious', wage: 180000, status: { type: 'Available' }, effects: [], contractExpires: 7, isStarter: true, condition: 100 },
-    { name: 'C. Palmer', position: 'AM', rating: 85, age: 22, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Ambitious', wage: 130000, status: { type: 'Available' }, effects: [], contractExpires: 9, isStarter: true, condition: 100 },
-    { name: 'J. Sancho', position: 'LW', rating: 81, age: 24, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Volatile', wage: 180000, status: { type: 'Available' }, effects: [], contractExpires: 1, isStarter: true, condition: 100 },
-    { name: 'N. Madueke', position: 'RW', rating: 78, age: 22, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 60000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: true, condition: 100 },
-    { name: 'N. Jackson', position: 'ST', rating: 80, age: 23, nationality: '🇸🇳', personality: 'Volatile', wage: 90000, status: { type: 'Available' }, effects: [], contractExpires: 6, isStarter: true, condition: 100 },
+    { name: 'R. Sanchez', position: 'GK', rating: 80, age: 29, nationality: '🇪🇸', personality: 'Professional', wage: 90000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
+    { name: 'M. Cucurella', position: 'LB', rating: 81, age: 29, nationality: '🇪🇸', personality: 'Volatile', wage: 110000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
+    { name: 'L. Colwill', position: 'CB', rating: 83, age: 24, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Leader', wage: 90000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: true, condition: 100 },
+    { name: 'W. Fofana', position: 'CB', rating: 82, age: 26, nationality: '🇫🇷', personality: 'Ambitious', wage: 130000, status: { type: 'Available' }, effects: [], contractExpires: 6, isStarter: true, condition: 100 },
+    { name: 'R. James', position: 'RB', rating: 86, age: 27, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Leader', wage: 220000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 90 },
+    { name: 'M. Caicedo', position: 'DM', rating: 85, age: 25, nationality: '🇪🇨', personality: 'Professional', wage: 170000, status: { type: 'Available' }, effects: [], contractExpires: 7, isStarter: true, condition: 100 },
+    { name: 'E. Fernandez', position: 'CM', rating: 85, age: 26, nationality: '🇦🇷', personality: 'Ambitious', wage: 200000, status: { type: 'Available' }, effects: [{ type: 'BadChemistry', with: 'M. Caicedo', message: 'Midfield Clash', until: 4 }], contractExpires: 7, isStarter: true, condition: 100 },
+    { name: 'C. Palmer', position: 'AM', rating: 88, age: 25, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Ambitious', wage: 180000, status: { type: 'Available' }, effects: [], contractExpires: 9, isStarter: true, condition: 100 },
+    { name: 'J. Sancho', position: 'LW', rating: 82, age: 27, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Volatile', wage: 190000, status: { type: 'Available' }, effects: [], contractExpires: 1, isStarter: true, condition: 100 },
+    { name: 'N. Madueke', position: 'RW', rating: 81, age: 25, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 70000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: true, condition: 100 },
+    { name: 'N. Jackson', position: 'ST', rating: 83, age: 26, nationality: '🇸🇳', personality: 'Volatile', wage: 100000, status: { type: 'Available' }, effects: [{ type: 'PostTournamentMorale', morale: 'Disappointed', message: 'Goal Drought', until: 2 }], contractExpires: 6, isStarter: true, condition: 100 },
     // Bench
-    { name: 'C. Nkunku', position: 'ST', rating: 83, age: 26, nationality: '🇫🇷', personality: 'Ambitious', wage: 150000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: false, condition: 100 },
-    { name: 'P. Neto', position: 'LW', rating: 80, age: 24, nationality: '🇵🇹', personality: 'Professional', wage: 100000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
-    { name: 'Joao Felix', position: 'AM', rating: 81, age: 24, nationality: '🇵🇹', personality: 'Mercurial' as any, wage: 120000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
+    { name: 'C. Nkunku', position: 'ST', rating: 84, age: 29, nationality: '🇫🇷', personality: 'Ambitious', wage: 160000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: false, condition: 100 },
+    { name: 'P. Neto', position: 'LW', rating: 81, age: 27, nationality: '🇵🇹', personality: 'Professional', wage: 110000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
+    { name: 'Joao Felix', position: 'AM', rating: 82, age: 27, nationality: '🇵🇹', personality: 'Volatile', wage: 130000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
 ];
 
 export const TEAMS: Record<string, Team> = {

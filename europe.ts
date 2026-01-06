@@ -56,7 +56,8 @@ const createEuroTeam = (name: string, flag: string, prestige: number): Team => {
         prestige,
         chairmanPersonality: 'Traditionalist',
         // Added balance to satisfy Team interface
-        balance: 0
+        balance: 0,
+        objectives: []
     };
 };
 
