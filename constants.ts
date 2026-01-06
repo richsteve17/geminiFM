@@ -1,5 +1,5 @@
 
-import type { Team, Tactic, ChairmanPersonality, Player, PlayerPersonality, TouchlineShout, ExperienceLevel, PlayerPosition } from './types';
+import type { Team, Tactic, ChairmanPersonality, Player, PlayerPersonality, TouchlineShout, ExperienceLevel, PlayerPosition, Formation } from './types';
 import { generateName } from './utils';
 
 export const FORMATIONS: Tactic['formation'][] = ['4-4-2', '4-3-3', '5-3-2', '3-5-2', '4-2-3-1', '4-5-1'];
@@ -24,10 +24,10 @@ export const PLAYER_PERSONALITIES: Record<PlayerPersonality, string> = {
 };
 
 export const EXPERIENCE_LEVELS: ExperienceLevel[] = [
-    { id: 'sunday', label: 'Sunday League', description: 'Low prestige, hard to get top jobs.', prestigeCap: 72, prestigeMin: 0 },
-    { id: 'semi-pro', label: 'Semi-Pro', description: 'Respectable start for Championship/MLS.', prestigeCap: 78, prestigeMin: 65 },
-    { id: 'pro', label: 'Professional', description: 'Standard top-tier entry level.', prestigeCap: 85, prestigeMin: 75 },
-    { id: 'international', label: 'Int. Star', description: 'Household name.', prestigeCap: 92, prestigeMin: 82 },
+    { id: 'sunday', label: 'Sunday League', description: 'Low prestige, hard to get top jobs.', prestigeCap: 65, prestigeMin: 0 },
+    { id: 'semi-pro', label: 'Semi-Pro', description: 'Respectable start for Championship/MLS.', prestigeCap: 75, prestigeMin: 60 },
+    { id: 'pro', label: 'Professional', description: 'Standard top-tier entry level.', prestigeCap: 82, prestigeMin: 70 },
+    { id: 'international', label: 'Int. Star', description: 'Household name.', prestigeCap: 90, prestigeMin: 80 },
     { id: 'legend', label: 'Legend', description: 'Can walk into any job.', prestigeCap: 100, prestigeMin: 90 }
 ];
 
@@ -50,12 +50,13 @@ const NATIONALITIES = {
 const generatePlayers = (baseRating: number, region: keyof typeof NATIONALITIES): Player[] => {
     const nats = NATIONALITIES[region];
     const positions: PlayerPosition[] = ['GK', 'LB', 'CB', 'CB', 'RB', 'DM', 'CM', 'CM', 'LW', 'ST', 'RW'];
-    const benchPositions: PlayerPosition[] = ['GK', 'CB', 'LB', 'RB', 'DM', 'CM', 'AM', 'ST', 'LW'];
+    const benchPositions: PlayerPosition[] = ['GK', 'CB', 'LB', 'RB', 'DM', 'CM', 'AM', 'ST', 'LW', 'CB', 'CM', 'RW'];
     
-    const squad: Player[] = positions.map((pos, i) => ({
+    // Ensure integer ratings
+    const squad: Player[] = positions.map((pos) => ({
         name: generateName(nats[0]),
         position: pos,
-        rating: baseRating + (Math.random() * 4 - 2),
+        rating: Math.round(baseRating + (Math.random() * 4 - 2)),
         age: 20 + Math.floor(Math.random() * 12),
         nationality: nats[Math.floor(Math.random() * nats.length)],
         personality: 'Professional',
@@ -71,7 +72,7 @@ const generatePlayers = (baseRating: number, region: keyof typeof NATIONALITIES)
         squad.push({
             name: generateName(nats[0]),
             position: pos,
-            rating: baseRating - 5 + (Math.random() * 4),
+            rating: Math.round(baseRating - 5 + (Math.random() * 4)),
             age: 18 + Math.floor(Math.random() * 15),
             nationality: nats[Math.floor(Math.random() * nats.length)],
             personality: 'Young Prospect',
@@ -88,26 +89,100 @@ const generatePlayers = (baseRating: number, region: keyof typeof NATIONALITIES)
 };
 
 export const TEAMS: Record<string, Team> = {
+    // PREMIER LEAGUE (Full 20)
     'Manchester Rovers': { name: 'Manchester Rovers', league: 'Premier League', players: generatePlayers(84, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 88, chairmanPersonality: 'Fan-Focused Owner', balance: 180000000 },
     'London City': { name: 'London City', league: 'Premier League', players: generatePlayers(86, 'UK'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 93, chairmanPersonality: 'Ambitious Tycoon', balance: 550000000 },
     'Liverpool Wanderers': { name: 'Liverpool Wanderers', league: 'Premier League', players: generatePlayers(85, 'UK'), tactic: { formation: '4-3-3', mentality: 'All-Out Attack' }, prestige: 91, chairmanPersonality: 'Ambitious Tycoon', balance: 280000000 },
     'Arsenal United': { name: 'Arsenal United', league: 'Premier League', players: generatePlayers(83, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Attacking' }, prestige: 89, chairmanPersonality: 'Moneyball Advocate', balance: 220000000 },
     'Southern Giants': { name: 'Southern Giants', league: 'Premier League', players: generatePlayers(80, 'UK'), tactic: { formation: '5-3-2', mentality: 'Defensive' }, prestige: 82, chairmanPersonality: 'Traditionalist', balance: 150000000 },
     'Newcastle Knights': { name: 'Newcastle Knights', league: 'Premier League', players: generatePlayers(82, 'UK'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 86, chairmanPersonality: 'Ambitious Tycoon', balance: 350000000 },
-    
+    'Aston Lions': { name: 'Aston Lions', league: 'Premier League', players: generatePlayers(81, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 84, chairmanPersonality: 'Moneyball Advocate', balance: 120000000 },
+    'West Ham Hammers': { name: 'West Ham Hammers', league: 'Premier League', players: generatePlayers(79, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 80, chairmanPersonality: 'Fan-Focused Owner', balance: 90000000 },
+    'Brighton Seagulls': { name: 'Brighton Seagulls', league: 'Premier League', players: generatePlayers(79, 'UK'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 81, chairmanPersonality: 'Moneyball Advocate', balance: 75000000 },
+    'Chelsea Blues': { name: 'Chelsea Blues', league: 'Premier League', players: generatePlayers(82, 'UK'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 87, chairmanPersonality: 'Ambitious Tycoon', balance: 400000000 },
+    'Spurs North': { name: 'Spurs North', league: 'Premier League', players: generatePlayers(82, 'UK'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 86, chairmanPersonality: 'Fan-Focused Owner', balance: 250000000 },
+    'Everton Toffees': { name: 'Everton Toffees', league: 'Premier League', players: generatePlayers(77, 'UK'), tactic: { formation: '4-4-2', mentality: 'Defensive' }, prestige: 76, chairmanPersonality: 'Traditionalist', balance: 50000000 },
+    'Wolves Gold': { name: 'Wolves Gold', league: 'Premier League', players: generatePlayers(77, 'UK'), tactic: { formation: '3-5-2', mentality: 'Balanced' }, prestige: 78, chairmanPersonality: 'Traditionalist', balance: 60000000 },
+    'Fulham Cottagers': { name: 'Fulham Cottagers', league: 'Premier League', players: generatePlayers(77, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 77, chairmanPersonality: 'Moneyball Advocate', balance: 55000000 },
+    'Nottingham Foresters': { name: 'Nottingham Foresters', league: 'Premier League', players: generatePlayers(76, 'UK'), tactic: { formation: '4-5-1', mentality: 'Defensive' }, prestige: 75, chairmanPersonality: 'Ambitious Tycoon', balance: 70000000 },
+    'Leicester Foxes': { name: 'Leicester Foxes', league: 'Premier League', players: generatePlayers(76, 'UK'), tactic: { formation: '4-3-3', mentality: 'Balanced' }, prestige: 76, chairmanPersonality: 'Moneyball Advocate', balance: 65000000 },
+    'Bournemouth Cherries': { name: 'Bournemouth Cherries', league: 'Premier League', players: generatePlayers(75, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 74, chairmanPersonality: 'Moneyball Advocate', balance: 40000000 },
+    'Crystal Eagles': { name: 'Crystal Eagles', league: 'Premier League', players: generatePlayers(77, 'UK'), tactic: { formation: '3-5-2', mentality: 'Balanced' }, prestige: 77, chairmanPersonality: 'Fan-Focused Owner', balance: 50000000 },
+    'Ipswich Towners': { name: 'Ipswich Towners', league: 'Premier League', players: generatePlayers(73, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Attacking' }, prestige: 71, chairmanPersonality: 'Moneyball Advocate', balance: 35000000 },
+    'Southampton Saints': { name: 'Southampton Saints', league: 'Premier League', players: generatePlayers(74, 'UK'), tactic: { formation: '4-3-3', mentality: 'Balanced' }, prestige: 72, chairmanPersonality: 'Moneyball Advocate', balance: 45000000 },
+
+    // CHAMPIONSHIP (10 Teams)
     'Northern Power': { name: 'Northern Power', league: 'Championship', players: generatePlayers(74, 'UK'), tactic: { formation: '4-4-2', mentality: 'Balanced' }, prestige: 75, chairmanPersonality: 'Fan-Focused Owner', balance: 45000000 },
     'Yorkshire Terriers': { name: 'Yorkshire Terriers', league: 'Championship', players: generatePlayers(72, 'UK'), tactic: { formation: '4-5-1', mentality: 'Defensive' }, prestige: 70, chairmanPersonality: 'Traditionalist', balance: 25000000 },
-    
+    'Burnley Claret': { name: 'Burnley Claret', league: 'Championship', players: generatePlayers(73, 'UK'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 72, chairmanPersonality: 'Moneyball Advocate', balance: 30000000 },
+    'Leeds Whites': { name: 'Leeds Whites', league: 'Championship', players: generatePlayers(74, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Attacking' }, prestige: 75, chairmanPersonality: 'Fan-Focused Owner', balance: 40000000 },
+    'Norwich Canaries': { name: 'Norwich Canaries', league: 'Championship', players: generatePlayers(72, 'UK'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 71, chairmanPersonality: 'Moneyball Advocate', balance: 28000000 },
+    'Watford Hornets': { name: 'Watford Hornets', league: 'Championship', players: generatePlayers(71, 'UK'), tactic: { formation: '4-3-3', mentality: 'Balanced' }, prestige: 70, chairmanPersonality: 'Ambitious Tycoon', balance: 35000000 },
+    'Sheffield Blades': { name: 'Sheffield Blades', league: 'Championship', players: generatePlayers(71, 'UK'), tactic: { formation: '3-5-2', mentality: 'Defensive' }, prestige: 70, chairmanPersonality: 'Traditionalist', balance: 20000000 },
+    'Sunderland Black Cats': { name: 'Sunderland Black Cats', league: 'Championship', players: generatePlayers(72, 'UK'), tactic: { formation: '4-4-2', mentality: 'Balanced' }, prestige: 73, chairmanPersonality: 'Fan-Focused Owner', balance: 25000000 },
+    'West Brom Baggies': { name: 'West Brom Baggies', league: 'Championship', players: generatePlayers(71, 'UK'), tactic: { formation: '4-2-3-1', mentality: 'Defensive' }, prestige: 71, chairmanPersonality: 'Moneyball Advocate', balance: 22000000 },
+    'Stoke Potters': { name: 'Stoke Potters', league: 'Championship', players: generatePlayers(70, 'UK'), tactic: { formation: '4-5-1', mentality: 'Defensive' }, prestige: 69, chairmanPersonality: 'Traditionalist', balance: 18000000 },
+
+    // LA LIGA (10 Teams)
     'Madrid Kings': { name: 'Madrid Kings', league: 'La Liga', players: generatePlayers(88, 'ES'), tactic: { formation: '4-2-3-1' as any, mentality: 'Attacking' }, prestige: 96, chairmanPersonality: 'Ambitious Tycoon', balance: 600000000 },
     'Barcelona Giants': { name: 'Barcelona Giants', league: 'La Liga', players: generatePlayers(86, 'ES'), tactic: { formation: '4-3-3', mentality: 'Balanced' }, prestige: 94, chairmanPersonality: 'Fan-Focused Owner', balance: 350000000 },
+    'Atletico Stripes': { name: 'Atletico Stripes', league: 'La Liga', players: generatePlayers(84, 'ES'), tactic: { formation: '4-4-2', mentality: 'Defensive' }, prestige: 88, chairmanPersonality: 'Traditionalist', balance: 180000000 },
+    'Seville Eagles': { name: 'Seville Eagles', league: 'La Liga', players: generatePlayers(81, 'ES'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 83, chairmanPersonality: 'Traditionalist', balance: 90000000 },
+    'Sociedad Blue': { name: 'Sociedad Blue', league: 'La Liga', players: generatePlayers(81, 'ES'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 82, chairmanPersonality: 'Moneyball Advocate', balance: 75000000 },
+    'Bilbao Lions': { name: 'Bilbao Lions', league: 'La Liga', players: generatePlayers(81, 'ES'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 82, chairmanPersonality: 'Fan-Focused Owner', balance: 80000000 },
+    'Valencia Bats': { name: 'Valencia Bats', league: 'La Liga', players: generatePlayers(79, 'ES'), tactic: { formation: '4-4-2', mentality: 'Balanced' }, prestige: 80, chairmanPersonality: 'Ambitious Tycoon', balance: 60000000 },
+    'Villarreal Subs': { name: 'Villarreal Subs', league: 'La Liga', players: generatePlayers(80, 'ES'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 81, chairmanPersonality: 'Moneyball Advocate', balance: 65000000 },
+    'Betis Green': { name: 'Betis Green', league: 'La Liga', players: generatePlayers(79, 'ES'), tactic: { formation: '4-2-3-1' as any, mentality: 'Attacking' }, prestige: 79, chairmanPersonality: 'Fan-Focused Owner', balance: 55000000 },
+    'Girona Catalans': { name: 'Girona Catalans', league: 'La Liga', players: generatePlayers(78, 'ES'), tactic: { formation: '3-5-2', mentality: 'Attacking' }, prestige: 78, chairmanPersonality: 'Moneyball Advocate', balance: 45000000 },
 
+    // SERIE A (10 Teams)
     'Turin Zebras': { name: 'Turin Zebras', league: 'Serie A', players: generatePlayers(85, 'IT'), tactic: { formation: '3-5-2', mentality: 'Balanced' }, prestige: 92, chairmanPersonality: 'Traditionalist', balance: 220000000 },
     'Milan Devils': { name: 'Milan Devils', league: 'Serie A', players: generatePlayers(84, 'IT'), tactic: { formation: '4-2-3-1' as any, mentality: 'Attacking' }, prestige: 91, chairmanPersonality: 'Ambitious Tycoon', balance: 190000000 },
-    
-    'Munich Wall': { name: 'Munich Wall', league: 'Bundesliga', players: generatePlayers(88, 'DE'), tactic: { formation: '4-2-3-1' as any, mentality: 'All-Out Attack' }, prestige: 95, chairmanPersonality: 'Ambitious Tycoon', balance: 450000000 },
-    'Paris Blues': { name: 'Paris Blues', league: 'Ligue 1', players: generatePlayers(89, 'FR'), tactic: { formation: '4-3-3', mentality: 'All-Out Attack' }, prestige: 94, chairmanPersonality: 'Ambitious Tycoon', balance: 750000000 },
+    'Inter Snakes': { name: 'Inter Snakes', league: 'Serie A', players: generatePlayers(86, 'IT'), tactic: { formation: '3-5-2', mentality: 'Balanced' }, prestige: 93, chairmanPersonality: 'Traditionalist', balance: 240000000 },
+    'Naples Blues': { name: 'Naples Blues', league: 'Serie A', players: generatePlayers(83, 'IT'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 88, chairmanPersonality: 'Fan-Focused Owner', balance: 150000000 },
+    'Rome Gladiators': { name: 'Rome Gladiators', league: 'Serie A', players: generatePlayers(81, 'IT'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 85, chairmanPersonality: 'Ambitious Tycoon', balance: 110000000 },
+    'Lazio Eagles': { name: 'Lazio Eagles', league: 'Serie A', players: generatePlayers(80, 'IT'), tactic: { formation: '4-3-3', mentality: 'Balanced' }, prestige: 84, chairmanPersonality: 'Traditionalist', balance: 90000000 },
+    'Bergamo Atalanta': { name: 'Bergamo Atalanta', league: 'Serie A', players: generatePlayers(81, 'IT'), tactic: { formation: '3-4-3' as any, mentality: 'All-Out Attack' }, prestige: 83, chairmanPersonality: 'Moneyball Advocate', balance: 80000000 },
+    'Florence Violets': { name: 'Florence Violets', league: 'Serie A', players: generatePlayers(79, 'IT'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 80, chairmanPersonality: 'Fan-Focused Owner', balance: 70000000 },
+    'Bologna Rosso': { name: 'Bologna Rosso', league: 'Serie A', players: generatePlayers(78, 'IT'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 77, chairmanPersonality: 'Moneyball Advocate', balance: 40000000 },
+    'Torino Bulls': { name: 'Torino Bulls', league: 'Serie A', players: generatePlayers(76, 'IT'), tactic: { formation: '5-3-2', mentality: 'Defensive' }, prestige: 75, chairmanPersonality: 'Traditionalist', balance: 35000000 },
 
+    // BUNDESLIGA (10 Teams)
+    'Munich Wall': { name: 'Munich Wall', league: 'Bundesliga', players: generatePlayers(88, 'DE'), tactic: { formation: '4-2-3-1' as any, mentality: 'All-Out Attack' }, prestige: 95, chairmanPersonality: 'Ambitious Tycoon', balance: 450000000 },
+    'Dortmund Yellows': { name: 'Dortmund Yellows', league: 'Bundesliga', players: generatePlayers(84, 'DE'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 89, chairmanPersonality: 'Moneyball Advocate', balance: 120000000 },
+    'Leipzig Bulls': { name: 'Leipzig Bulls', league: 'Bundesliga', players: generatePlayers(82, 'DE'), tactic: { formation: '4-2-2-2' as any, mentality: 'Attacking' }, prestige: 86, chairmanPersonality: 'Ambitious Tycoon', balance: 150000000 },
+    'Leverkusen Pills': { name: 'Leverkusen Pills', league: 'Bundesliga', players: generatePlayers(83, 'DE'), tactic: { formation: '3-4-2-1' as any, mentality: 'Attacking' }, prestige: 88, chairmanPersonality: 'Moneyball Advocate', balance: 100000000 },
+    'Frankfurt Eagles': { name: 'Frankfurt Eagles', league: 'Bundesliga', players: generatePlayers(79, 'DE'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 82, chairmanPersonality: 'Fan-Focused Owner', balance: 70000000 },
+    'Stuttgart Reds': { name: 'Stuttgart Reds', league: 'Bundesliga', players: generatePlayers(79, 'DE'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 81, chairmanPersonality: 'Traditionalist', balance: 65000000 },
+    'Wolfsburg Green': { name: 'Wolfsburg Green', league: 'Bundesliga', players: generatePlayers(77, 'DE'), tactic: { formation: '4-4-2', mentality: 'Balanced' }, prestige: 78, chairmanPersonality: 'Ambitious Tycoon', balance: 80000000 },
+    'Gladbach Foals': { name: 'Gladbach Foals', league: 'Bundesliga', players: generatePlayers(76, 'DE'), tactic: { formation: '4-2-3-1' as any, mentality: 'Attacking' }, prestige: 77, chairmanPersonality: 'Traditionalist', balance: 50000000 },
+    'Berlin Union': { name: 'Berlin Union', league: 'Bundesliga', players: generatePlayers(75, 'DE'), tactic: { formation: '5-3-2', mentality: 'Defensive' }, prestige: 75, chairmanPersonality: 'Fan-Focused Owner', balance: 40000000 },
+    'Hoffenheim Blue': { name: 'Hoffenheim Blue', league: 'Bundesliga', players: generatePlayers(76, 'DE'), tactic: { formation: '3-5-2', mentality: 'Attacking' }, prestige: 74, chairmanPersonality: 'Moneyball Advocate', balance: 45000000 },
+
+    // LIGUE 1 (10 Teams)
+    'Paris Blues': { name: 'Paris Blues', league: 'Ligue 1', players: generatePlayers(89, 'FR'), tactic: { formation: '4-3-3', mentality: 'All-Out Attack' }, prestige: 94, chairmanPersonality: 'Ambitious Tycoon', balance: 750000000 },
+    'Marseille O': { name: 'Marseille O', league: 'Ligue 1', players: generatePlayers(80, 'FR'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 84, chairmanPersonality: 'Fan-Focused Owner', balance: 80000000 },
+    'Lyon Lions': { name: 'Lyon Lions', league: 'Ligue 1', players: generatePlayers(79, 'FR'), tactic: { formation: '4-3-3', mentality: 'Balanced' }, prestige: 82, chairmanPersonality: 'Traditionalist', balance: 70000000 },
+    'Monaco Prince': { name: 'Monaco Prince', league: 'Ligue 1', players: generatePlayers(81, 'FR'), tactic: { formation: '4-4-2', mentality: 'Attacking' }, prestige: 85, chairmanPersonality: 'Ambitious Tycoon', balance: 120000000 },
+    'Nice Coast': { name: 'Nice Coast', league: 'Ligue 1', players: generatePlayers(78, 'FR'), tactic: { formation: '4-3-3', mentality: 'Balanced' }, prestige: 79, chairmanPersonality: 'Moneyball Advocate', balance: 60000000 },
+    'Lille Dogs': { name: 'Lille Dogs', league: 'Ligue 1', players: generatePlayers(79, 'FR'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 81, chairmanPersonality: 'Moneyball Advocate', balance: 55000000 },
+    'Lens Miners': { name: 'Lens Miners', league: 'Ligue 1', players: generatePlayers(77, 'FR'), tactic: { formation: '3-4-3' as any, mentality: 'Attacking' }, prestige: 78, chairmanPersonality: 'Fan-Focused Owner', balance: 45000000 },
+    'Rennes Red': { name: 'Rennes Red', league: 'Ligue 1', players: generatePlayers(77, 'FR'), tactic: { formation: '4-4-2', mentality: 'Balanced' }, prestige: 77, chairmanPersonality: 'Moneyball Advocate', balance: 50000000 },
+    'Nantes Canaries': { name: 'Nantes Canaries', league: 'Ligue 1', players: generatePlayers(75, 'FR'), tactic: { formation: '4-5-1', mentality: 'Defensive' }, prestige: 74, chairmanPersonality: 'Traditionalist', balance: 30000000 },
+    'Reims Champagne': { name: 'Reims Champagne', league: 'Ligue 1', players: generatePlayers(75, 'FR'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 73, chairmanPersonality: 'Moneyball Advocate', balance: 35000000 },
+
+    // MLS (11 Teams)
     'Miami Pink': { name: 'Miami Pink', league: 'MLS', players: generatePlayers(76, 'US'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 78, chairmanPersonality: 'Ambitious Tycoon', balance: 90000000 },
+    'LA Galaxy Stars': { name: 'LA Galaxy Stars', league: 'MLS', players: generatePlayers(74, 'US'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 75, chairmanPersonality: 'Ambitious Tycoon', balance: 70000000 },
+    'NY Apples': { name: 'NY Apples', league: 'MLS', players: generatePlayers(74, 'US'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 76, chairmanPersonality: 'Moneyball Advocate', balance: 65000000 },
+    'Atlanta Peach': { name: 'Atlanta Peach', league: 'MLS', players: generatePlayers(75, 'US'), tactic: { formation: '4-2-3-1' as any, mentality: 'Attacking' }, prestige: 77, chairmanPersonality: 'Fan-Focused Owner', balance: 55000000 },
+    'Seattle Sounders': { name: 'Seattle Sounders', league: 'MLS', players: generatePlayers(73, 'US'), tactic: { formation: '4-3-3', mentality: 'Balanced' }, prestige: 74, chairmanPersonality: 'Traditionalist', balance: 50000000 },
+    'Portland Timbers': { name: 'Portland Timbers', league: 'MLS', players: generatePlayers(72, 'US'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 72, chairmanPersonality: 'Fan-Focused Owner', balance: 45000000 },
+    'LA Black & Gold': { name: 'LA Black & Gold', league: 'MLS', players: generatePlayers(74, 'US'), tactic: { formation: '4-3-3', mentality: 'Attacking' }, prestige: 76, chairmanPersonality: 'Fan-Focused Owner', balance: 60000000 },
+    'Columbus Crew': { name: 'Columbus Crew', league: 'MLS', players: generatePlayers(73, 'US'), tactic: { formation: '3-4-3' as any, mentality: 'Balanced' }, prestige: 74, chairmanPersonality: 'Moneyball Advocate', balance: 50000000 },
+    'Toronto Reds': { name: 'Toronto Reds', league: 'MLS', players: generatePlayers(71, 'US'), tactic: { formation: '4-4-2', mentality: 'Defensive' }, prestige: 70, chairmanPersonality: 'Traditionalist', balance: 40000000 },
+    'Chicago Fire': { name: 'Chicago Fire', league: 'MLS', players: generatePlayers(70, 'US'), tactic: { formation: '4-2-3-1' as any, mentality: 'Balanced' }, prestige: 69, chairmanPersonality: 'Traditionalist', balance: 35000000 },
+    'Philadelphia Liberty': { name: 'Philadelphia Liberty', league: 'MLS', players: generatePlayers(74, 'US'), tactic: { formation: '4-4-2', mentality: 'Balanced' }, prestige: 73, chairmanPersonality: 'Moneyball Advocate', balance: 35000000 },
 };
 
 export const TRANSFER_TARGETS: Player[] = [
@@ -116,4 +191,6 @@ export const TRANSFER_TARGETS: Player[] = [
     { name: 'Kylian Mbappa', position: 'ST', rating: 93, age: 27, nationality: '🇫🇷', personality: 'Ambitious', wage: 450000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: true, condition: 100 },
     { name: 'Jude Bellinger', position: 'CM', rating: 91, age: 23, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 300000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
     { name: 'Trent A-A', position: 'RB', rating: 88, age: 28, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Ambitious', wage: 180000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: true, condition: 100 },
+    { name: 'Vini Jr', position: 'LW', rating: 91, age: 24, nationality: '🇧🇷', personality: 'Ambitious', wage: 350000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: true, condition: 100 },
+    { name: 'Rodri', position: 'DM', rating: 91, age: 28, nationality: '🇪🇸', personality: 'Leader', wage: 300000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: true, condition: 100 },
 ];

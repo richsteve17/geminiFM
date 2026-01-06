@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import type { Team, Tactic, Formation, Mentality, Player, GameState, PlayerPosition } from '../types';
+import type { Team, Tactic, Formation, Mentality, Player, GameState, PlayerPosition, PlayerEffect } from '../types';
 import { NewspaperIcon } from './icons/NewspaperIcon';
 import { ArrowsRightLeftIcon } from './icons/ArrowsRightLeftIcon';
 import { UserGroupIcon } from './icons/UserGroupIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
+import { BrokenLinkIcon } from './icons/BrokenLinkIcon';
 import { FORMATIONS, MENTALITIES, CHAIRMAN_PERSONALITIES } from '../constants';
 import TacticsBoard from './TacticsBoard';
 
@@ -25,6 +26,24 @@ const getPositionColor = (pos: PlayerPosition) => {
     if (['LB', 'CB', 'RB', 'LWB', 'RWB'].includes(pos)) return 'bg-blue-600';
     if (['DM', 'CM', 'AM', 'LM', 'RM'].includes(pos)) return 'bg-green-600';
     return 'bg-red-600';
+};
+
+const getEffectIndicators = (player: Player) => {
+    const indicators = [];
+    if (player.status.type === 'Injured') indicators.push(<span key="inj" title="Injured">🚑</span>);
+    if (player.status.type === 'Suspended') indicators.push(<span key="sus" title="Suspended">🟥</span>);
+    
+    player.effects.forEach((eff, i) => {
+        if (eff.type === 'PostTournamentMorale') {
+            if (eff.morale === 'FiredUp') indicators.push(<span key={`eff-${i}`} title={eff.message}>🔥</span>);
+            if (eff.morale === 'Winner') indicators.push(<span key={`eff-${i}`} title={eff.message}>🏆</span>);
+            if (eff.morale === 'Disappointed') indicators.push(<span key={`eff-${i}`} title={eff.message}>😔</span>);
+        }
+        if (eff.type === 'BadChemistry') {
+            indicators.push(<span key={`eff-${i}`} title={eff.message}><BrokenLinkIcon className="w-3 h-3 text-orange-400" /></span>);
+        }
+    });
+    return indicators;
 };
 
 const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onToggleStarter, gameState }) => {
@@ -85,6 +104,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                                         <span className={`w-7 h-5 text-[9px] font-black flex items-center justify-center rounded text-white ${getPositionColor(p.position)}`}>{p.position}</span>
                                         <div className="flex-grow min-w-0">
                                             <p className="text-xs font-bold truncate text-gray-200">{p.name}</p>
+                                            <div className="flex gap-1">{getEffectIndicators(p)}</div>
                                         </div>
                                         <span className="text-xs font-black text-green-400">{p.rating}</span>
                                     </li>
@@ -99,6 +119,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                                         <span className={`w-7 h-5 text-[9px] font-black flex items-center justify-center rounded text-white ${getPositionColor(p.position)}`}>{p.position}</span>
                                         <div className="flex-grow min-w-0">
                                             <p className="text-xs font-bold truncate text-gray-200">{p.name}</p>
+                                            <div className="flex gap-1">{getEffectIndicators(p)}</div>
                                         </div>
                                         <span className="text-xs font-black text-gray-400">{p.rating}</span>
                                     </li>

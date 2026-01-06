@@ -3,7 +3,7 @@ import type { NationalTeam, Team, Player, PlayerPosition, PlayerPersonality, For
 import { generateName } from './utils';
 
 const getNationalPlayer = (nationality: string, name: string, rating: number, position: PlayerPosition, personality: PlayerPersonality = 'Ambitious', isStarter: boolean = true): Player => ({
-    name, nationality, rating, position, age: 24 + Math.floor(Math.random() * 8), personality, wage: 50000, 
+    name, nationality, rating: Math.round(rating), position, age: 24 + Math.floor(Math.random() * 8), personality, wage: 50000, 
     status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter, condition: 100
 });
 
@@ -28,6 +28,9 @@ const generateSquad = (nationality: string, rating: number): Player[] => {
         getNationalPlayer(nationality, 'Sub LB', rating - 4, 'LB', 'Loyal', false),
         getNationalPlayer(nationality, 'Sub AM', rating - 3, 'AM', 'Young Prospect', false),
         getNationalPlayer(nationality, 'Sub RW', rating - 2, 'RW', 'Professional', false),
+        getNationalPlayer(nationality, 'Youth CB', rating - 6, 'CB', 'Young Prospect', false),
+        getNationalPlayer(nationality, 'Utility MID', rating - 4, 'CM', 'Professional', false),
+        getNationalPlayer(nationality, 'Backup ST', rating - 5, 'ST', 'Professional', false),
     ];
 };
 
@@ -44,30 +47,33 @@ export const NATIONAL_TEAMS: NationalTeam[] = [
     { name: 'USA', countryCode: 'USA', prestige: 80, tactic: { formation: '4-3-3', mentality: 'Attacking' }, players: generateSquad('🇺🇸', 79) },
     { name: 'Japan', countryCode: 'JPN', prestige: 82, tactic: { formation: '4-2-3-1', mentality: 'Balanced' }, players: generateSquad('🇯🇵', 80) },
     { name: 'Morocco', countryCode: 'MAR', prestige: 83, tactic: { formation: '4-3-3', mentality: 'Balanced' }, players: generateSquad('🇲🇦', 81) },
+    { name: 'Belgium', countryCode: 'BEL', prestige: 85, tactic: { formation: '3-4-3' as any, mentality: 'Balanced' }, players: generateSquad('🇧🇪', 84) },
+    { name: 'Croatia', countryCode: 'CRO', prestige: 84, tactic: { formation: '4-3-3', mentality: 'Balanced' }, players: generateSquad('🇭🇷', 83) },
+    { name: 'Uruguay', countryCode: 'URU', prestige: 84, tactic: { formation: '4-2-3-1', mentality: 'Attacking' }, players: generateSquad('🇺🇾', 83) },
+    { name: 'Colombia', countryCode: 'COL', prestige: 83, tactic: { formation: '4-3-3', mentality: 'Attacking' }, players: generateSquad('🇨🇴', 82) },
 ];
 
 export const generateWorldCupStructure = (): Record<string, Team> => {
     const teams: Record<string, Team> = {};
-    const groups = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
-    
-    // In a real 48 team WC, we'd need 48 unique teams. 
-    // For now, let's fill the groups by duplicating our major teams with 'B' or 'Sub' variants if needed, 
-    // or just creating generic filler squads to ensure the user sees a full 12 groups.
+    const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
     
     let teamCounter = 0;
-    groups.forEach(group => {
+    groupLetters.forEach(group => {
         for (let i = 0; i < 4; i++) {
             const template = NATIONAL_TEAMS[teamCounter % NATIONAL_TEAMS.length];
-            const name = i === 0 ? template.name : `${template.name} (${group}${i})`;
+            // Make names unique for the structure
+            const suffix = i === 0 ? "" : ` (${group})`; // Use simple suffix to avoid excessively long names
+            const name = i === 0 ? template.name : template.name + suffix;
+            
             teams[name] = { 
                 name, 
                 league: 'International', 
                 balance: 0, 
                 group, 
                 chairmanPersonality: 'Football Federation',
-                prestige: template.prestige,
-                players: generateSquad(template.players[0].nationality, template.prestige - 5),
-                tactic: template.tactic
+                prestige: Math.max(50, template.prestige - (i * 5)), // Vary prestige within group
+                players: generateSquad(template.players[0].nationality, template.prestige - 5 - (i * 2)),
+                tactic: { ...template.tactic }
             };
             teamCounter++;
         }
