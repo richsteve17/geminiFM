@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { Team, Tactic, Formation, Mentality, PlayerEffect, Player } from '../types';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
@@ -47,14 +48,17 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     const [showPlayers, setShowPlayers] = useState(true);
     const [showContracts, setShowContracts] = useState(true);
 
-    const playersWithContractIssues = team.players
+    const isNationalTeam = team.league === 'International';
+
+    const playersWithContractIssues = !isNationalTeam ? team.players
         .filter(p => p.contractExpires < 2)
-        .sort((a, b) => a.contractExpires - b.contractExpires);
+        .sort((a, b) => a.contractExpires - b.contractExpires) : [];
 
     return (
         <div className="bg-gray-800/50 rounded-lg shadow-lg p-4 border border-gray-700 space-y-4">
             <div>
                 <h2 className="text-xl font-bold text-center text-green-400 tracking-wide">{team.name}</h2>
+                {isNationalTeam && <p className="text-xs text-center text-gray-400 uppercase tracking-widest mt-1">National Team Manager</p>}
             </div>
 
             <div className="space-y-3">
@@ -93,7 +97,9 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 <div className="grid grid-cols-2 gap-2">
                     <button
                         onClick={onNavigateToTransfers}
-                        className="w-full flex items-center justify-center text-center text-sm font-semibold text-white p-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors"
+                        disabled={isNationalTeam}
+                        title={isNationalTeam ? "Transfers disabled during World Cup" : "Open Transfer Market"}
+                        className={`w-full flex items-center justify-center text-center text-sm font-semibold text-white p-2.5 rounded-lg transition-colors ${isNationalTeam ? 'bg-gray-700 opacity-50 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                     >
                         <ArrowsRightLeftIcon className="w-5 h-5 mr-2"/>
                         Transfers
@@ -109,7 +115,8 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 </div>
             </div>
 
-             {playersWithContractIssues.length > 0 && (
+             {/* Contracts Section - Only show if NOT national team and has issues */}
+             {!isNationalTeam && playersWithContractIssues.length > 0 && (
                 <div>
                     <button 
                         onClick={() => setShowContracts(!showContracts)}

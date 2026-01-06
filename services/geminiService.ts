@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import type { Team, MatchHalfResult, ChairmanPersonality, Player, PlayerTalk, TouchlineShout, PlayerEffect, Tournament, NationalTeam } from '../types';
+import type { Team, MatchHalfResult, ChairmanPersonality, Player, PlayerTalk, TouchlineShout, PlayerEffect, Tournament, NationalTeam, TournamentStage } from '../types';
 
 const API_KEY = process.env.API_KEY;
 
@@ -38,7 +38,9 @@ export const simulateHalf = async (
     context: { 
         half: 'first' | 'second', 
         halfTimeScore?: { home: number; away: number },
-        teamTalk?: { teamName: string, shout: TouchlineShout }
+        teamTalk?: { teamName: string, shout: TouchlineShout },
+        stage?: TournamentStage,
+        isKnockout?: boolean
     }
 ): Promise<MatchHalfResult> => {
 
@@ -51,6 +53,11 @@ Your task is to simulate one half of a football match. The tactical matchup and 
 **Home Team:** ${formatTeamForPrompt(homeTeam, homeAvailablePlayers)}
 **Away Team:** ${formatTeamForPrompt(awayTeam, awayAvailablePlayers)}
 `;
+    
+    // Context Injection for World Cup
+    if (context.stage) {
+        prompt += `\n**CONTEXT:** This is a World Cup **${context.stage}** match. The stakes are incredibly high.`;
+    }
 
     if (context.half === 'first') {
         prompt += `\n**Simulating: First Half**\n`;
@@ -61,15 +68,21 @@ Your task is to simulate one half of a football match. The tactical matchup and 
         if (context.teamTalk) {
             prompt += `The manager of **${context.teamTalk.teamName}** gave a team talk at half-time, telling them to **'${context.teamTalk.shout}'**. This should influence their performance.\n`;
         }
+        
+        if (context.isKnockout) {
+            prompt += `\n**IMPORTANT KNOCKOUT RULE:** This match CANNOT end in a draw. If the score is level after 90 minutes, assume the match went to **Extra Time and Penalties**. 
+            In your commentary, if it was a draw, describe the drama of extra time and who won the penalty shootout.
+            CRITICAL: The final 'score' field in JSON must remain the score after 120mins (e.g., 2-2). The 'commentary' must explicitly state who won on penalties.`;
+        }
     }
 
     prompt += `
 **Instructions:**
-1.  **Analyze the tactical battle AND chemistry**: How does a ${homeTeam.tactic.formation} match up against a ${awayTeam.tactic.formation}? Crucially, if any players have bad chemistry, reflect this in the commentary (e.g., a misplaced pass between them, a defensive mix-up).
-2.  **Generate a realistic score for this half only.**
-3.  **Write a compelling summary for this half** (1-2 paragraphs) focusing on how tactics and player relationships dictated the play.
+1.  **Analyze the tactical battle AND chemistry**: How does a ${homeTeam.tactic.formation} match up against a ${awayTeam.tactic.formation}?
+2.  **Generate a realistic score for this half.**
+3.  **Write a compelling summary.**
 4.  **Respond ONLY with a valid JSON object.**
-**JSON Output Format:** { "score": "H-A", "homeGoals": H, "awayGoals": A, "commentary": "Your summary for this half." }`;
+**JSON Output Format:** { "score": "H-A", "homeGoals": H, "awayGoals": A, "commentary": "Your summary." }`;
 
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
@@ -179,9 +192,9 @@ Respond ONLY with a valid JSON object: { "convinced": boolean, "reasoning": "A s
 };
 
 export const getTournamentResult = async (tournament: Tournament, nationalTeams: NationalTeam[]): Promise<{ winner: NationalTeam; summary: string }> => {
-    const teamsList = nationalTeams.map(t => `${t.name} (Avg Rating: ${(t.players.reduce((a,b) => a + b.rating, 0) / t.players.length).toFixed(1)})`).join(', ');
+    const teamsList = nationalTeams.slice(0, 8).map(t => `${t.name} (Avg Rating: ${(t.players.reduce((a,b) => a + b.rating, 0) / t.players.length).toFixed(1)})`).join(', ');
     const prompt = `Simulate the ${tournament.name} ${tournament.year}.
-Participating major teams: ${teamsList}.
+Participating major teams: ${teamsList} and others.
 
 Who wins? Write a brief summary (2 sentences) of the final.
 Respond ONLY with a valid JSON object: { "winnerName": "Name of winning country", "summary": "Summary text" }`;

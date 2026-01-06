@@ -1,39 +1,123 @@
-import type { Fixture } from './types';
 
-export const generateFixtures = (teamNames: string[]): Fixture[] => {
+import type { Fixture, Team } from './types';
+
+const NAMES_BY_NATION: Record<string, { first: string[], last: string[] }> = {
+    'EN': {
+        first: ["James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph", "Thomas", "Charles", "Liam", "Noah", "Oliver", "Elijah", "Lucas", "Mason", "Logan", "Ethan", "Jacob", "Leo"],
+        last: ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Taylor", "Anderson", "Thomas", "Hernandez", "Moore", "Martin", "Jackson", "Thompson", "White", "Lopez"]
+    },
+    'ES': {
+        first: ["Antonio", "Jose", "Manuel", "Francisco", "David", "Juan", "Javier", "Daniel", "Carlos", "Jesus", "Alejandro", "Miguel", "Rafael", "Pedro", "Angel", "Pablo", "Sergio", "Fernando", "Luis", "Jorge"],
+        last: ["Garcia", "Rodriguez", "Gonzalez", "Fernandez", "Lopez", "Martinez", "Sanchez", "Perez", "Gomez", "Martin", "Jimenez", "Ruiz", "Hernandez", "Diaz", "Moreno", "Muñoz", "Alvarez", "Romero", "Alonso", "Gutierrez"]
+    },
+    'IT': {
+        first: ["Alessandro", "Lorenzo", "Mattia", "Francesco", "Andrea", "Leonardo", "Matteo", "Gabriele", "Riccardo", "Tommaso", "Giuseppe", "Antonio", "Giovanni", "Roberto", "Salvatore", "Luigi", "Mario", "Vincenzo", "Federico", "Marco"],
+        last: ["Rossi", "Russo", "Ferrari", "Esposito", "Bianchi", "Romano", "Colombo", "Ricci", "Marino", "Greco", "Bruno", "Gallo", "Conti", "De Luca", "Mancini", "Costa", "Giordano", "Rizzo", "Lombardi", "Moretti"]
+    },
+    'DE': {
+        first: ["Maximilian", "Alexander", "Paul", "Elias", "Luis", "Felix", "Leon", "Lukas", "Niklas", "Tim", "Jan", "Jonas", "Finn", "Ben", "Luca", "David", "Philipp", "Simon", "Julian", "Moritz"],
+        last: ["Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Schulz", "Hoffmann", "Schäfer", "Koch", "Bauer", "Richter", "Klein", "Wolf", "Schröder", "Neumann", "Schwarz", "Zimmermann"]
+    },
+    'FR': {
+        first: ["Jean", "Michel", "Pierre", "Philippe", "Alain", "Nicolas", "Christophe", "Patrick", "Christian", "Stéphane", "Sébastien", "Frédéric", "Laurent", "Julien", "Olivier", "Eric", "David", "Thomas", "Thierry", "Vincent"],
+        last: ["Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau", "Laurent", "Simon", "Michel", "Lefebvre", "Leroy", "Roux", "David", "Bertrand", "Morel", "Fournier", "Girard"]
+    },
+};
+
+export const generateName = (nationalityCode: string): string => {
+    // Map emoji flags or codes to our name lists
+    let code = 'EN';
+    if (['🇪🇸', '🇦🇷', '🇨🇴', '🇲🇽'].includes(nationalityCode)) code = 'ES';
+    else if (['🇮🇹'].includes(nationalityCode)) code = 'IT';
+    else if (['🇩🇪', '🇦🇹', '🇨🇭'].includes(nationalityCode)) code = 'DE';
+    else if (['🇫🇷', '🇧🇪'].includes(nationalityCode)) code = 'FR';
+    else if (['🏴󠁧󠁢󠁥󠁮󠁧󠁿', '🇺🇸', '🇨🇦', '🇦🇺'].includes(nationalityCode)) code = 'EN';
+
+    const list = NAMES_BY_NATION[code] || NAMES_BY_NATION['EN'];
+    const first = list.first[Math.floor(Math.random() * list.first.length)];
+    const last = list.last[Math.floor(Math.random() * list.last.length)];
+    return `${first.charAt(0)}. ${last}`;
+};
+
+export const generateFixtures = (teams: Team[]): Fixture[] => {
     const fixtures: Fixture[] = [];
-    const teams = [...teamNames];
+    
+    // Group by league
+    const leagues = Array.from(new Set(teams.map(t => t.league)));
 
-    if (teams.length % 2 !== 0) {
-        teams.push('dummy'); // Add a dummy team for odd numbers to make scheduling easier
-    }
+    leagues.forEach(league => {
+        const leagueTeams = teams.filter(t => t.league === league).map(t => t.name);
+        
+        if (leagueTeams.length % 2 !== 0) {
+            leagueTeams.push('dummy');
+        }
 
-    const numTeams = teams.length;
-    const rounds = numTeams - 1;
-    const matchesPerRound = numTeams / 2;
+        const numTeams = leagueTeams.length;
+        const rounds = numTeams - 1;
+        const matchesPerRound = numTeams / 2;
+        
+        let roundTeams = [...leagueTeams];
 
-    for (let round = 0; round < rounds; round++) {
-        for (let match = 0; match < matchesPerRound; match++) {
-            const home = teams[match];
-            const away = teams[numTeams - 1 - match];
+        for (let round = 0; round < rounds; round++) {
+            for (let match = 0; match < matchesPerRound; match++) {
+                const home = roundTeams[match];
+                const away = roundTeams[numTeams - 1 - match];
 
-            if (home !== 'dummy' && away !== 'dummy') {
-                fixtures.push({ homeTeam: home, awayTeam: away });
+                if (home !== 'dummy' && away !== 'dummy') {
+                    // First half of season
+                    fixtures.push({ 
+                        id: `${league}-${round}-${home}-${away}`,
+                        week: round + 1,
+                        league: league,
+                        homeTeam: home, 
+                        awayTeam: away,
+                        played: false
+                    });
+                    
+                    // Second half of season (Return fixtures)
+                    fixtures.push({
+                         id: `${league}-${round+rounds}-${away}-${home}`,
+                        week: round + 1 + rounds,
+                        league: league,
+                        homeTeam: away,
+                        awayTeam: home,
+                        played: false
+                    });
+                }
+            }
+
+            // Rotate teams
+            const lastTeam = roundTeams.pop();
+            if (lastTeam) {
+                roundTeams.splice(1, 0, lastTeam);
             }
         }
+    });
 
-        // Rotate teams for the next round
-        const lastTeam = teams.pop();
-        if (lastTeam) {
-            teams.splice(1, 0, lastTeam);
-        }
-    }
+    return fixtures.sort((a, b) => a.week - b.week);
+};
+
+// Simple weighted random simulation for background matches
+export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals: number, awayGoals: number } => {
+    const homeRating = homeTeam.players.reduce((sum, p) => sum + p.rating, 0) / homeTeam.players.length;
+    const awayRating = awayTeam.players.reduce((sum, p) => sum + p.rating, 0) / awayTeam.players.length;
     
-    // Generate return fixtures
-    const returnFixtures = fixtures.map(fixture => ({
-        homeTeam: fixture.awayTeam,
-        awayTeam: fixture.homeTeam
-    }));
+    // Home advantage
+    const homeAdvantage = 3;
+    const ratingDiff = (homeRating + homeAdvantage) - awayRating;
+    
+    // Base goals
+    let homeGoals = 0;
+    let awayGoals = 0;
 
-    return [...fixtures, ...returnFixtures];
+    // Logic: Higher rating diff = more likely to score more
+    const baseChance = 0.3; // 30% chance to score per "attempt"
+    
+    // Simulate 5 "chances" per team, modified by rating
+    for(let i=0; i<5; i++) {
+        if (Math.random() < baseChance + (ratingDiff * 0.02)) homeGoals++;
+        if (Math.random() < baseChance - (ratingDiff * 0.02)) awayGoals++;
+    }
+
+    return { homeGoals, awayGoals };
 };

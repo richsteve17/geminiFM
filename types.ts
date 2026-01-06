@@ -1,6 +1,9 @@
+
 export enum AppScreen {
     START_SCREEN,
+    CREATE_MANAGER,
     TEAM_SELECTION,
+    NATIONAL_TEAM_SELECTION,
     JOB_CENTRE,
     JOB_INTERVIEW,
     GAMEPLAY,
@@ -43,15 +46,19 @@ export interface Tactic {
   mentality: Mentality;
 }
 
+export type LeagueTier = 'Premier League' | 'Championship' | 'La Liga' | 'Serie A' | 'Bundesliga' | 'Ligue 1' | 'MLS' | 'International';
+
 export interface Team {
   name: string;
+  league: LeagueTier;
   players: Player[];
   tactic: Tactic;
   prestige: number;
   chairmanPersonality: ChairmanPersonality;
+  group?: string; // For World Cup (A-L)
 }
 
-export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players'> {
+export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league'> {
     countryCode: string;
     players: Player[];
 }
@@ -63,14 +70,23 @@ export interface Tournament {
     teams: string[];
 }
 
+export type TournamentStage = 'Group Stage' | 'Round of 32' | 'Round of 16' | 'Quarter Final' | 'Semi Final' | 'Final';
 
 export interface Fixture {
+  id: string;
+  week: number;
+  league: LeagueTier;
   homeTeam: string;
   awayTeam: string;
+  played: boolean;
+  score?: string; // "2-1"
+  stage?: TournamentStage; // For WC
+  isKnockout?: boolean;
 }
 
 export interface LeagueTableEntry {
   teamName: string;
+  league: LeagueTier;
   played: number;
   won: number;
   drawn: number;
@@ -79,6 +95,7 @@ export interface LeagueTableEntry {
   goalsAgainst: number;
   goalDifference: number;
   points: number;
+  group?: string; // For WC Group tables
 }
 
 export interface MatchHalfResult {
@@ -93,6 +110,7 @@ export interface MatchState {
     secondHalfResult: MatchHalfResult | null;
     finalScore: string | null;
     fullTimeCommentary: string | null;
+    penaltyWinner?: string; // Name of winning team if penalties occurred
 }
 
 
@@ -139,4 +157,12 @@ export interface NewsItem {
     title: string;
     body: string;
     type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure';
+}
+
+export interface ExperienceLevel {
+    id: string;
+    label: string;
+    description: string;
+    prestigeCap: number; // Max prestige of teams likely to hire you
+    prestigeMin: number;
 }
