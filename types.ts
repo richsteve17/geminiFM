@@ -30,9 +30,15 @@ export type PlayerEffect =
     | { type: 'PostTournamentMorale'; morale: 'Winner' | 'FiredUp' | 'Disappointed'; message: string; until: number }
     | { type: 'BadChemistry'; with: string; message: string; until: number };
 
+export type PlayerPosition = 
+    | 'GK' 
+    | 'LB' | 'CB' | 'RB' | 'LWB' | 'RWB' 
+    | 'DM' | 'CM' | 'AM' | 'LM' | 'RM' 
+    | 'LW' | 'RW' | 'ST' | 'CF';
+
 export interface Player {
   name: string;
-  position: 'GK' | 'DEF' | 'MID' | 'FWD';
+  position: PlayerPosition;
   rating: number;
   age: number;
   nationality: string;
@@ -48,9 +54,9 @@ export interface Player {
   condition: number; // 0 to 100
 }
 
-export type Formation = '4-4-2' | '4-3-3' | '5-3-2' | '3-5-2';
+export type Formation = '4-4-2' | '4-3-3' | '5-3-2' | '3-5-2' | '4-2-3-1' | '4-5-1';
 export type Mentality = 'All-Out Attack' | 'Attacking' | 'Balanced' | 'Defensive' | 'Park the Bus';
-export type ChairmanPersonality = 'Traditionalist' | 'Ambitious Tycoon' | 'Moneyball Advocate' | 'Fan-Focused Owner';
+export type ChairmanPersonality = 'Traditionalist' | 'Ambitious Tycoon' | 'Moneyball Advocate' | 'Fan-Focused Owner' | 'Football Federation';
 
 export interface Tactic {
   formation: Formation;
@@ -67,7 +73,7 @@ export interface Team {
   prestige: number;
   chairmanPersonality: ChairmanPersonality;
   group?: string;
-  balance: number; // Club finances
+  balance: number; 
 }
 
 export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance'> {
@@ -158,25 +164,12 @@ export interface Interview {
     chairmanPersonality: ChairmanPersonality;
 }
 
-export interface PressConference {
-    questions: string[];
-    answers: string[];
-    currentQuestionIndex: number;
-    context: string;
-}
-
 export interface PlayerTalk {
     player: Player;
     questions: string[];
     answers: string[];
     currentQuestionIndex: number;
     context: 'transfer' | 'renewal';
-}
-
-export interface ContractOffer {
-    player: Player;
-    wage: number;
-    years: number;
 }
 
 export interface NewsItem {

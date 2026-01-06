@@ -1,14 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import type { Team, Tactic, Formation, Mentality, PlayerEffect, Player, GameState, PlayerPersonality } from '../types';
-import { ChevronDownIcon } from './icons/ChevronDownIcon';
-import { ArrowsRightLeftIcon } from './icons/ArrowsRightLeftIcon';
-import { GlobeAltIcon } from './icons/GlobeAltIcon';
+import type { Team, Tactic, Formation, Mentality, Player, GameState, PlayerPosition } from '../types';
 import { NewspaperIcon } from './icons/NewspaperIcon';
-import { FORMATIONS, MENTALITIES } from '../constants';
-import { BrokenLinkIcon } from './icons/BrokenLinkIcon';
-import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
+import { ArrowsRightLeftIcon } from './icons/ArrowsRightLeftIcon';
 import { UserGroupIcon } from './icons/UserGroupIcon';
+import { GlobeAltIcon } from './icons/GlobeAltIcon';
+import { FORMATIONS, MENTALITIES, CHAIRMAN_PERSONALITIES } from '../constants';
 import TacticsBoard from './TacticsBoard';
 
 interface TeamDetailsProps {
@@ -23,363 +20,100 @@ interface TeamDetailsProps {
     onSubstitute: (playerIn: Player, playerOut: Player) => void;
 }
 
-const getPositionColor = (position: string) => {
-    switch (position) {
-        case 'GK': return 'bg-yellow-600/80 text-yellow-50 border border-yellow-500';
-        case 'DEF': return 'bg-blue-600/80 text-blue-50 border border-blue-500';
-        case 'MID': return 'bg-green-600/80 text-green-50 border border-green-500';
-        case 'FWD': return 'bg-red-600/80 text-red-50 border border-red-500';
-        default: return 'bg-gray-500 text-white';
-    }
+const getPositionColor = (pos: PlayerPosition) => {
+    if (pos === 'GK') return 'bg-yellow-600';
+    if (['LB', 'CB', 'RB', 'LWB', 'RWB'].includes(pos)) return 'bg-blue-600';
+    if (['DM', 'CM', 'AM', 'LM', 'RM'].includes(pos)) return 'bg-green-600';
+    return 'bg-red-600';
 };
 
-const getPersonalityIcon = (personality: PlayerPersonality) => {
-    switch (personality) {
-        case 'Ambitious': return { icon: '🚀', label: 'Ambitious', color: 'text-purple-400' };
-        case 'Loyal': return { icon: '🛡️', label: 'Loyal', color: 'text-blue-400' };
-        case 'Mercenary': return { icon: '💰', label: 'Mercenary', color: 'text-yellow-400' };
-        case 'Young Prospect': return { icon: '💎', label: 'Prospect', color: 'text-cyan-400' };
-        default: return { icon: '👤', label: 'Balanced', color: 'text-gray-400' };
-    }
-};
-
-const getEffectIndicators = (player: Player) => {
-    const indicators = [];
-    
-    if (player.status.type === 'Injured') {
-        indicators.push(
-            <span key="inj" className="flex items-center bg-red-900/80 border border-red-500 px-1.5 py-0.5 rounded text-[10px] text-red-100 font-bold uppercase tracking-wider">
-                🚑 {player.status.weeks}w
-            </span>
-        );
-    }
-    if (player.status.type === 'Suspended') {
-        indicators.push(
-            <span key="susp" className="flex items-center bg-red-900/80 border border-red-500 px-1.5 py-0.5 rounded text-[10px] text-red-100 font-bold uppercase tracking-wider">
-                ⛔ Susp
-            </span>
-        );
-    }
-    if (player.status.type === 'SentOff') {
-        indicators.push(
-            <span key="rc" className="flex items-center bg-red-900/80 border border-red-500 px-1.5 py-0.5 rounded text-[10px] text-red-100 font-bold uppercase tracking-wider">
-                🟥 Sent Off
-            </span>
-        );
-    }
-    if (player.status.type === 'On International Duty') {
-        indicators.push(
-            <span key="int" className="flex items-center bg-blue-900/80 border border-blue-500 px-1.5 py-0.5 rounded text-[10px] text-blue-100 font-bold uppercase tracking-wider">
-                ✈️ Intl
-            </span>
-        );
-    }
-
-    if (player.matchCard === 'yellow') {
-        indicators.push(<span key="yc" title="Yellow Card" className="text-yellow-400 text-sm">🟨</span>);
-    }
-
-    const moraleEffect = player.effects.find(e => e.type === 'PostTournamentMorale');
-    if (moraleEffect && moraleEffect.type === 'PostTournamentMorale') {
-        if (moraleEffect.morale === 'Winner') indicators.push(<span key="m-win" title="Morale: High (Winner)" className="text-sm">🏆</span>);
-        if (moraleEffect.morale === 'FiredUp') indicators.push(<span key="m-fire" title="Morale: High (Fired Up)" className="text-sm">🔥</span>);
-        if (moraleEffect.morale === 'Disappointed') indicators.push(<span key="m-sad" title="Morale: Low (Disappointed)" className="text-sm">😞</span>);
-    } else {
-        indicators.push(<span key="m-ok" title="Morale: Okay" className="text-sm grayscale opacity-30">🙂</span>);
-    }
-
-    const chemEffect = player.effects.find(e => e.type === 'BadChemistry');
-    if (chemEffect) {
-        indicators.push(
-            <span key="chem" title="Bad Chemistry" className="flex items-center text-orange-400">
-                <BrokenLinkIcon className="w-4 h-4" />
-            </span>
-        );
-    }
-
-    return indicators;
-}
-
-
-const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onStartContractTalk, onToggleStarter, gameState, subsUsed, onSubstitute }) => {
-    const [showContracts, setShowContracts] = useState(false);
-    const [subSelection, setSubSelection] = useState<Player | null>(null);
-    const [viewMode, setViewMode] = useState<'squad' | 'tactics'>('squad');
-
-    const isNationalTeam = team.league === 'International';
-    const isMatchLive = gameState === 'PAUSED';
-
-    const playersWithContractIssues = !isNationalTeam ? team.players
-        .filter(p => p.contractExpires < 2)
-        .sort((a, b) => a.contractExpires - b.contractExpires) : [];
-
+const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onToggleStarter, gameState }) => {
+    const [view, setView] = useState<'squad' | 'tactics'>('squad');
     const starters = team.players.filter(p => p.isStarter);
-    const bench = team.players.filter(p => !p.isStarter);
+    const isInternational = team.league === 'International';
     
-    const starterCount = starters.length;
-    const starterColor = starterCount === 11 ? 'text-green-400' : 'text-red-400';
-
-    const activeChemistryRifts = useMemo(() => {
-        const rifts: string[] = [];
-        starters.forEach(p1 => {
-            p1.effects.forEach(e => {
-                if (e.type === 'BadChemistry') {
-                    const otherPlayer = starters.find(p2 => p2.name === e.with);
-                    if (otherPlayer) {
-                        const pairId = [p1.name, otherPlayer.name].sort().join('-');
-                        if (!rifts.includes(pairId)) rifts.push(pairId);
-                    }
-                }
-            })
-        });
-        return rifts;
-    }, [starters]);
-
-    const injuredStarters = starters.filter(p => p.status.type === 'Injured');
-    const sentOffStarters = starters.filter(p => p.status.type === 'SentOff');
-
-    const handlePlayerClick = (player: Player) => {
-        if (player.status.type === 'SentOff') return;
-        if (player.status.type === 'Suspended') return;
-        if (player.status.type === 'Injured' && gameState === 'PRE_MATCH') return;
-
-        const isBench = !player.isStarter;
-
-        if (isMatchLive) {
-            if (subsUsed >= 5) return;
-            if (isBench) {
-                if (subSelection?.name === player.name) setSubSelection(null);
-                else setSubSelection(player);
-            } else {
-                if (subSelection) {
-                    onSubstitute(subSelection, player);
-                    setSubSelection(null);
-                }
-            }
-        } else if (gameState === 'PRE_MATCH') {
-            onToggleStarter(player.name);
-        }
-    };
-
-    const renderPlayerRow = (player: Player, isBench: boolean) => {
-        const personality = getPersonalityIcon(player.personality);
-        const isDisabled = player.status.type === 'SentOff' || player.status.type === 'Suspended' || (player.status.type === 'Injured' && gameState === 'PRE_MATCH');
-        const isSelectedSub = isMatchLive && subSelection?.name === player.name;
-        
-        const condColor = player.condition > 75 ? 'bg-green-500' : player.condition > 50 ? 'bg-yellow-500' : 'bg-red-500';
-
-        return (
-            <li key={player.name} 
-                onClick={() => handlePlayerClick(player)}
-                className={`relative flex items-center p-2 mb-1 border rounded-lg cursor-pointer transition-all duration-200 group ${
-                    isDisabled ? 'bg-black/40 border-gray-800 opacity-60 cursor-not-allowed' :
-                    isSelectedSub ? 'bg-green-900/40 border-green-400 ring-1 ring-green-400 translate-x-1' :
-                    isBench ? 'bg-gray-800/60 border-gray-700 hover:bg-gray-700' : 
-                    'bg-gray-800 border-gray-600 hover:bg-gray-700 hover:border-gray-500'
-                }`}
-            >
-                <div className="flex flex-col items-center justify-center w-10 mr-3 gap-1">
-                    <span className={`w-8 h-6 flex items-center justify-center text-[10px] font-black rounded shadow-sm ${getPositionColor(player.position)}`}>
-                        {player.position}
-                    </span>
-                    <span className="text-lg leading-none filter drop-shadow-md">{player.nationality}</span>
-                </div>
-
-                <div className="flex-grow min-w-0">
-                    <div className="flex items-center justify-between">
-                        <span className={`font-bold text-sm truncate ${isDisabled ? 'text-gray-500' : 'text-gray-200'}`}>
-                            {player.name}
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <div className="w-12 h-1 bg-gray-900 rounded-full overflow-hidden">
-                                <div 
-                                    className={`h-full ${condColor}`} 
-                                    style={{ width: `${player.condition}%` }}
-                                ></div>
-                            </div>
-                            <span className="text-[9px] font-mono text-gray-400">{player.condition}%</span>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 mt-0.5">
-                        <div className={`flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-black/30 border border-white/5 ${personality.color}`}>
-                            <span>{personality.icon}</span>
-                            <span>{personality.label}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            {getEffectIndicators(player)}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="ml-3 flex flex-col items-center justify-center min-w-[2.5rem]">
-                    <span className={`text-lg font-bold font-mono ${player.rating >= 85 ? 'text-green-400' : player.rating >= 80 ? 'text-green-200' : 'text-gray-400'}`}>
-                        {player.rating}
-                    </span>
-                </div>
-            </li>
-        );
-    };
-
     return (
-        <div className="bg-gray-800/50 rounded-lg shadow-lg p-4 border border-gray-700 space-y-4 h-full flex flex-col">
-            <div className="flex justify-between items-start">
-                <div className="flex-grow">
-                    <h2 className="text-xl font-bold text-green-400 tracking-wide">{team.name}</h2>
-                    {!isNationalTeam && (
-                        <p className="text-xs text-blue-400 font-mono font-bold">
-                            £{team.balance.toLocaleString()}
-                        </p>
+        <div className="bg-gray-800/50 rounded-lg shadow-lg p-4 border border-gray-700 flex flex-col h-full">
+            <div className="flex justify-between items-start mb-2">
+                <div>
+                    <h2 className="text-xl font-bold text-green-400">{team.name}</h2>
+                    {!isInternational && (
+                        <p className="text-xs text-blue-400 font-mono font-bold uppercase">£{team.balance.toLocaleString()}</p>
                     )}
                 </div>
-                <div className="flex bg-gray-900 rounded-lg p-0.5 border border-gray-700">
-                    <button 
-                        onClick={() => setViewMode('squad')}
-                        className={`p-1.5 rounded-md transition-all ${viewMode === 'squad' ? 'bg-gray-700 text-green-400' : 'text-gray-500 hover:text-gray-300'}`}
-                        title="Squad List"
-                    >
-                        <UserGroupIcon className="w-4 h-4" />
-                    </button>
-                    <button 
-                        onClick={() => setViewMode('tactics')}
-                        className={`p-1.5 rounded-md transition-all ${viewMode === 'tactics' ? 'bg-gray-700 text-green-400' : 'text-gray-500 hover:text-gray-300'}`}
-                        title="Tactics Board"
-                    >
-                        <GlobeAltIcon className="w-4 h-4" />
-                    </button>
+                <div className="flex bg-gray-900 rounded p-1 border border-gray-700 shadow-inner">
+                    <button onClick={() => setView('squad')} className={`p-1.5 rounded transition-all ${view === 'squad' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`}><UserGroupIcon className="w-4 h-4" /></button>
+                    <button onClick={() => setView('tactics')} className={`p-1.5 rounded transition-all ${view === 'tactics' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`}><GlobeAltIcon className="w-4 h-4" /></button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-                 <div>
-                    <label htmlFor="formation-select" className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Formation</label>
-                    <select 
-                        id="formation-select" 
-                        value={team.tactic.formation} 
-                        onChange={(e) => onTacticChange({ formation: e.target.value as Formation })}
-                        disabled={isMatchLive}
-                        className="bg-gray-700 border border-gray-600 text-white text-xs rounded-lg focus:ring-green-500 focus:border-green-500 block w-full p-2 disabled:opacity-50"
-                    >
+            <div className="mb-4">
+                <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">{isInternational ? 'Federation Goals' : 'Board Focus'}</p>
+                <div className="bg-gray-900/50 p-2 rounded border border-gray-700 group relative">
+                    <p className="text-xs font-bold text-gray-300">{team.chairmanPersonality}</p>
+                    <div className="hidden group-hover:block absolute top-full left-0 right-0 z-50 bg-black border border-gray-600 p-2 text-[10px] text-white rounded mt-1 shadow-2xl">
+                        {CHAIRMAN_PERSONALITIES[team.chairmanPersonality]}
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+                <div>
+                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Formation</label>
+                    <select value={team.tactic.formation} onChange={e => onTacticChange({ formation: e.target.value as Formation })} className="w-full bg-gray-700 text-xs rounded p-2 border border-gray-600 focus:ring-1 focus:ring-green-500 outline-none">
                         {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
                     </select>
                 </div>
-                 <div>
-                    <label htmlFor="mentality-select" className="block text-[10px] uppercase font-bold text-gray-400 mb-1">Mentality</label>
-                    <select 
-                        id="mentality-select" 
-                        value={team.tactic.mentality} 
-                        onChange={(e) => onTacticChange({ mentality: e.target.value as Mentality })}
-                        className="bg-gray-700 border border-gray-600 text-white text-xs rounded-lg focus:ring-green-500 focus:border-green-500 block w-full p-2"
-                    >
+                <div>
+                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Style</label>
+                    <select value={team.tactic.mentality} onChange={e => onTacticChange({ mentality: e.target.value as Mentality })} className="w-full bg-gray-700 text-xs rounded p-2 border border-gray-600 focus:ring-1 focus:ring-green-500 outline-none">
                         {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-                 <button
-                    onClick={onNavigateToNews}
-                    className="flex flex-col items-center justify-center p-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors"
-                >
-                    <NewspaperIcon className="w-5 h-5 text-gray-300"/>
-                    <span className="text-[10px] mt-1 font-bold text-gray-400">NEWS</span>
-                </button>
-                <button
-                    onClick={onNavigateToTransfers}
-                    disabled={isNationalTeam || gameState !== 'PRE_MATCH'}
-                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-colors ${isNationalTeam || gameState !== 'PRE_MATCH' ? 'bg-gray-800 opacity-50 cursor-not-allowed' : 'bg-blue-900/50 hover:bg-blue-800/50 border border-blue-800'}`}
-                >
-                    <ArrowsRightLeftIcon className="w-5 h-5 text-blue-300"/>
-                    <span className="text-[10px] mt-1 font-bold text-blue-400">SCOUT</span>
-                </button>
-                {!isNationalTeam && (
-                    <button 
-                        onClick={() => setShowContracts(!showContracts)}
-                        className={`flex flex-col items-center justify-center p-2 rounded-lg transition-colors ${playersWithContractIssues.length > 0 ? 'bg-yellow-900/50 hover:bg-yellow-800/50 border border-yellow-800' : 'bg-gray-700 hover:bg-gray-600'}`}
-                    >
-                        <DocumentCheckIcon className={`w-5 h-5 ${playersWithContractIssues.length > 0 ? 'text-yellow-300' : 'text-gray-300'}`} />
-                        <span className={`text-[10px] mt-1 font-bold ${playersWithContractIssues.length > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>CONTRACTS</span>
-                    </button>
+            <div className="flex-grow overflow-y-auto pr-1">
+                {view === 'tactics' ? (
+                    <TacticsBoard starters={starters} formation={team.tactic.formation} onPlayerClick={p => onToggleStarter(p.name)} />
+                ) : (
+                    <div className="space-y-4">
+                        <div>
+                            <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest mb-1 pl-1">Starting XI ({starters.length}/11)</p>
+                            <ul className="space-y-1">
+                                {team.players.filter(p => p.isStarter).map(p => (
+                                    <li key={p.name} onClick={() => onToggleStarter(p.name)} className="p-2 rounded border border-gray-700 bg-gray-800 cursor-pointer flex items-center gap-2 hover:bg-gray-700 transition-all group">
+                                        <span className={`w-7 h-5 text-[9px] font-black flex items-center justify-center rounded text-white ${getPositionColor(p.position)}`}>{p.position}</span>
+                                        <div className="flex-grow min-w-0">
+                                            <p className="text-xs font-bold truncate text-gray-200">{p.name}</p>
+                                        </div>
+                                        <span className="text-xs font-black text-green-400">{p.rating}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 pl-1">Bench ({team.players.length - starters.length})</p>
+                            <ul className="space-y-1">
+                                {team.players.filter(p => !p.isStarter).map(p => (
+                                    <li key={p.name} onClick={() => onToggleStarter(p.name)} className="p-2 rounded border border-gray-700 bg-gray-900/50 cursor-pointer flex items-center gap-2 opacity-60 hover:opacity-100 hover:bg-gray-700 transition-all group">
+                                        <span className={`w-7 h-5 text-[9px] font-black flex items-center justify-center rounded text-white ${getPositionColor(p.position)}`}>{p.position}</span>
+                                        <div className="flex-grow min-w-0">
+                                            <p className="text-xs font-bold truncate text-gray-200">{p.name}</p>
+                                        </div>
+                                        <span className="text-xs font-black text-gray-400">{p.rating}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
                 )}
             </div>
 
-             {showContracts && playersWithContractIssues.length > 0 && (
-                 <div className="bg-gray-900/50 p-2 rounded-lg border border-yellow-800/30 space-y-1">
-                    {playersWithContractIssues.map(player => (
-                        <div key={player.name} className="flex justify-between items-center p-1.5 rounded bg-gray-800">
-                            <span className="text-xs font-semibold text-gray-300">{player.name}</span>
-                            <button onClick={() => onStartContractTalk(player)} className="text-[10px] font-bold bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-0.5 rounded">
-                                Renew
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-            
-            <div className="flex-grow overflow-y-auto pr-1">
-                {viewMode === 'tactics' ? (
-                    <div className="mt-2">
-                        <TacticsBoard 
-                            starters={starters} 
-                            formation={team.tactic.formation} 
-                            onPlayerClick={handlePlayerClick}
-                        />
-                        <p className="text-[10px] text-gray-500 text-center mt-2 italic uppercase">Click a player to adjust lineup or sub</p>
-                    </div>
-                ) : (
-                    <>
-                        <div className="flex justify-between items-center pb-2 mb-2 border-b border-gray-700 sticky top-0 bg-[#1f2937] z-10 pt-2">
-                            <h3 className="text-sm font-bold text-gray-200 flex items-center">
-                                <UserGroupIcon className="w-4 h-4 mr-2 text-blue-400" /> 
-                                SQUAD
-                            </h3>
-                            {isMatchLive ? (
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${subsUsed >= 5 ? 'bg-red-900 text-red-200' : 'bg-blue-900 text-blue-200'}`}>
-                                    SUBS: {subsUsed}/5
-                                </span>
-                            ) : (
-                                 <span className={`font-mono text-sm font-bold ${starterColor}`}>{starterCount}/11</span>
-                            )}
-                        </div>
-
-                        {(activeChemistryRifts.length > 0 || injuredStarters.length > 0 || sentOffStarters.length > 0) && (
-                             <div className="bg-red-950/50 border border-red-500/30 rounded p-2 mb-3">
-                                {sentOffStarters.map(p => (
-                                     <div key={p.name} className="text-xs text-red-300 font-bold flex items-center gap-2">
-                                        🟥 {p.name} (Sent Off)
-                                     </div>
-                                ))}
-                                {injuredStarters.map(p => (
-                                     <div key={p.name} className="text-xs text-red-300 font-bold flex items-center gap-2">
-                                        🚑 {p.name} (Injured)
-                                     </div>
-                                ))}
-                                {activeChemistryRifts.map((rift, i) => (
-                                     <div key={i} className="text-xs text-orange-300 flex items-center gap-2">
-                                        <BrokenLinkIcon className="w-3 h-3" />
-                                        <span>{rift.replace('-', ' & ')}</span>
-                                     </div>
-                                ))}
-                            </div>
-                        )}
-
-                        <div className="space-y-4">
-                            <div>
-                                <h4 className="text-[10px] font-bold text-green-500 uppercase tracking-widest mb-2 pl-1">Starting XI</h4>
-                                <ul className="space-y-1">
-                                    {starters.map(p => renderPlayerRow(p, false))}
-                                </ul>
-                            </div>
-
-                            <div>
-                                <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 pl-1">Bench</h4>
-                                <ul className="space-y-1">
-                                    {bench.map(p => renderPlayerRow(p, true))}
-                                </ul>
-                            </div>
-                        </div>
-                    </>
-                )}
+            <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-gray-700">
+                <button onClick={onNavigateToNews} className="p-2.5 bg-gray-700 hover:bg-gray-600 rounded text-[10px] font-black flex items-center justify-center gap-1.5"><NewspaperIcon className="w-3.5 h-3.5" /> NEWS</button>
+                <button onClick={onNavigateToTransfers} className="p-2.5 bg-blue-900 hover:bg-blue-800 rounded text-[10px] font-black flex items-center justify-center gap-1.5 text-blue-100 uppercase tracking-tighter">
+                    <ArrowsRightLeftIcon className="w-3.5 h-3.5" /> {isInternational ? 'Selection' : 'Scouting'}
+                </button>
             </div>
         </div>
     );

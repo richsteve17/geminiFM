@@ -69,10 +69,11 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                         {/* Avatar / Flag */}
                         <div className="flex flex-col items-center">
                             <span className="text-4xl mb-1">{player.nationality}</span>
+                            {/* Fix: use actual PlayerPosition values for comparison to avoid type mismatch */}
                             <span className={`text-xs font-bold px-2 py-1 rounded text-white ${
                                 player.position === 'GK' ? 'bg-yellow-600' :
-                                player.position === 'DEF' ? 'bg-blue-600' :
-                                player.position === 'MID' ? 'bg-green-600' : 'bg-red-600'
+                                ['LB', 'CB', 'RB', 'LWB', 'RWB'].includes(player.position) ? 'bg-blue-600' :
+                                ['DM', 'CM', 'AM', 'LM', 'RM'].includes(player.position) ? 'bg-green-600' : 'bg-red-600'
                             }`}>
                                 {player.position}
                             </span>

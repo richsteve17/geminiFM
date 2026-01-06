@@ -1,12 +1,13 @@
 
-import type { Team, Player, Formation, PlayerPersonality } from './types';
+import type { Team, Player, Formation, PlayerPersonality, PlayerPosition } from './types';
 import { TEAMS } from './constants';
 import { generateName } from './utils';
 
 const FORMATIONS: Formation[] = ['4-3-3', '4-4-2', '5-3-2', '3-5-2'];
 
 // Helper to generate a generic player
-const generateEuroPlayer = (nationality: string, position: 'GK' | 'DEF' | 'MID' | 'FWD', rating: number, isStarter: boolean): Player => {
+// Fix: Use PlayerPosition type for the position parameter to ensure compatibility with Player interface
+const generateEuroPlayer = (nationality: string, position: PlayerPosition, rating: number, isStarter: boolean): Player => {
     return {
         name: generateName(nationality),
         nationality,
@@ -33,16 +34,18 @@ const createEuroTeam = (name: string, flag: string, prestige: number): Team => {
 
     const starters = [
         generateEuroPlayer(flag, 'GK', prestige - 2, true),
-        ...Array.from({ length: defCount }, () => generateEuroPlayer(flag, 'DEF', prestige - 3, true)),
-        ...Array.from({ length: midCount }, () => generateEuroPlayer(flag, 'MID', prestige - 3, true)),
-        ...Array.from({ length: fwdCount }, () => generateEuroPlayer(flag, 'FWD', prestige - 1, true)),
+        // Fix: Use valid PlayerPosition values like 'CB', 'CM', 'ST'
+        ...Array.from({ length: defCount }, () => generateEuroPlayer(flag, 'CB', prestige - 3, true)),
+        ...Array.from({ length: midCount }, () => generateEuroPlayer(flag, 'CM', prestige - 3, true)),
+        ...Array.from({ length: fwdCount }, () => generateEuroPlayer(flag, 'ST', prestige - 1, true)),
     ];
 
     const bench = [
         generateEuroPlayer(flag, 'GK', prestige - 6, false),
-        ...Array.from({ length: 2 }, () => generateEuroPlayer(flag, 'DEF', prestige - 6, false)),
-        ...Array.from({ length: 2 }, () => generateEuroPlayer(flag, 'MID', prestige - 6, false)),
-        ...Array.from({ length: 2 }, () => generateEuroPlayer(flag, 'FWD', prestige - 6, false)),
+        // Fix: Use valid PlayerPosition values for the bench
+        ...Array.from({ length: 2 }, () => generateEuroPlayer(flag, 'CB', prestige - 6, false)),
+        ...Array.from({ length: 2 }, () => generateEuroPlayer(flag, 'CM', prestige - 6, false)),
+        ...Array.from({ length: 2 }, () => generateEuroPlayer(flag, 'ST', prestige - 6, false)),
     ];
 
     return {
