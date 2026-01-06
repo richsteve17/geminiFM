@@ -80,7 +80,7 @@ export default function App() {
         
         // Group teams by their group 'A' -> 'L'
         const groups: Record<string, string[]> = {};
-        allWcTeams.forEach(t => {
+        allWcTeams.forEach((t: Team) => {
             if (t.group) {
                 if (!groups[t.group]) groups[t.group] = [];
                 groups[t.group].push(t.name);
@@ -106,7 +106,7 @@ export default function App() {
         setFixtures(groupFixtures);
         
         // Init Tables for all groups
-        const initialTable = allWcTeams.map(t => ({
+        const initialTable = allWcTeams.map((t: Team) => ({
             teamName: t.name, league: 'International' as const, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, group: t.group
         }));
         setLeagueTable(initialTable);
@@ -130,7 +130,7 @@ export default function App() {
     const initializeGame = useCallback((selectedTeamName: string) => {
         setIsPrologue(false);
         const teamArray = Object.values(allTeams);
-        const initialTable = teamArray.map(t => ({
+        const initialTable = teamArray.map((t: Team) => ({
             teamName: t.name, league: t.league, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0,
         }));
         
@@ -177,7 +177,7 @@ export default function App() {
 
     // Logic to generate job openings based on experience
     const generateJobs = (experience: ExperienceLevel) => {
-        const allTeamList = Object.values(allTeams);
+        const allTeamList: Team[] = Object.values(allTeams);
         let vacancies: Team[] = [];
 
         const feasibleTeams = allTeamList.filter(t => t.prestige <= experience.prestigeCap && t.prestige >= experience.prestigeMin);
@@ -602,7 +602,7 @@ export default function App() {
                 });
                 
                 // --- 2. GLOBAL CLEANUP (Recovery) ---
-                Object.values(newTeams).forEach((team) => {
+                (Object.values(newTeams) as Team[]).forEach((team) => {
                     team.players.forEach(player => {
                         // Clear In-Match Flags
                         player.matchCard = null;
@@ -734,6 +734,17 @@ export default function App() {
 
         
         // --- STANDARD GAME LOGIC ---
+        // Process effects expiring (Shared logic)
+        const updatedTeams = { ...teams };
+        (Object.values(updatedTeams) as Team[]).forEach((team: Team) => {
+            team.players.forEach(player => {
+                player.effects = player.effects.filter(effect => effect.until > currentWeek);
+                if (player.status.type === 'On International Duty' && player.status.until <= currentWeek) {
+                    player.status = { type: 'Available' };
+                }
+            });
+        });
+        setTeams(updatedTeams);
         
         // --- International Break Logic (ONLY IN MAIN GAME) ---
         if (!isPrologue && INTERNATIONAL_BREAK_WEEKS.includes(currentWeek)) {
@@ -741,7 +752,7 @@ export default function App() {
             addNewsItem('International Break', `Club football pauses for the ${tournament.name}.`, 'tournament-result');
 
             // 1. Call up players
-            const clubPlayersOnDuty = userTeam ? userTeam.players.filter(p => NATIONAL_TEAMS.some(nt => nt.players.some(ntp => ntp.name === p.name)) && p.rating > 85) : [];
+            const clubPlayersOnDuty = userTeam ? userTeam.players.filter(p => NATIONAL_TEAMS.some((nt: NationalTeam) => nt.players.some((ntp: Player) => ntp.name === p.name)) && p.rating > 85) : [];
             const newTeams = { ...teams };
             clubPlayersOnDuty.forEach(player => {
                 const teamPlayer = newTeams[userTeamName!].players.find(p => p.name === player.name);

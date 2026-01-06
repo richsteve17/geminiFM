@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { Team, Tactic, Formation, Mentality, PlayerEffect, Player, GameState } from '../types';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
@@ -37,13 +36,8 @@ const getEffectIndicators = (player: Player) => {
     
     // Status
     if (player.status.type === 'On International Duty') indicators.push(<span key="int" className="text-xs font-bold text-blue-400">INT</span>);
-    if (player.status.type === 'Injured') indicators.push(<span key="inj" className="text-lg" title={`Injured (${player.status.weeks} wks)`}>🚑</span>);
-    if (player.status.type === 'SentOff') indicators.push(<span key="red" className="text-lg" title="Sent Off">🟥</span>);
-    if (player.status.type === 'Suspended') indicators.push(<span key="susp" className="text-lg" title="Suspended">⛔</span>);
+    if (player.status.type === 'Injured') indicators.push(<span key="inj" className="text-lg" title="Injured">🚑</span>);
 
-    // Cards (In-Match)
-    if (player.matchCard === 'yellow') indicators.push(<span key="yel" className="text-lg" title="Yellow Card">🟨</span>);
-    
     // Effects
     player.effects.forEach((effect, index) => {
         if (effect.type === 'PostTournamentMorale') {
@@ -75,7 +69,6 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     const starters = team.players.filter(p => p.isStarter);
     const bench = team.players.filter(p => !p.isStarter);
     
-    // Count only active players (not sent off) for the visual count, but formation needs 11 slots
     const starterCount = starters.length;
     const starterColor = starterCount === 11 ? 'text-green-400' : 'text-red-400';
 
@@ -97,15 +90,9 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     }, [starters]);
 
     const injuredStarters = starters.filter(p => p.status.type === 'Injured');
-    const sentOffStarters = starters.filter(p => p.status.type === 'SentOff');
 
 
     const handlePlayerClick = (player: Player, isBench: boolean) => {
-        // Locked states
-        if (player.status.type === 'SentOff') return;
-        if (player.status.type === 'Suspended') return;
-        if (player.status.type === 'Injured' && gameState === 'PRE_MATCH') return; // Can't start injured player
-
         if (isMatchLive) {
             // SUB MODE
             if (subsUsed >= 5) return; // Max subs reached
@@ -235,16 +222,11 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 </div>
 
                 {/* Analysis Box */}
-                {(activeChemistryRifts.length > 0 || injuredStarters.length > 0 || sentOffStarters.length > 0) && (
+                {(activeChemistryRifts.length > 0 || injuredStarters.length > 0) && (
                      <div className="bg-red-900/30 border border-red-500/50 rounded-md p-3 mb-3 animate-pulse">
-                        {sentOffStarters.map(p => (
-                             <p key={p.name} className="text-xs text-red-400 font-bold">
-                                🟥 {p.name} SENT OFF.
-                             </p>
-                        ))}
                         {injuredStarters.map(p => (
                              <p key={p.name} className="text-xs text-red-300 font-bold">
-                                🚑 {p.name} is injured! {subsUsed >= 5 ? "NO SUBS LEFT!" : "SUB HIM OFF!"}
+                                🚑 {p.name} is injured! SUB HIM OFF!
                              </p>
                         ))}
                         {activeChemistryRifts.map((rift, i) => (
@@ -263,8 +245,6 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                             <li key={player.name} 
                                 onClick={() => handlePlayerClick(player, false)}
                                 className={`flex justify-between items-center p-2 border rounded-md cursor-pointer transition-colors ${
-                                    player.status.type === 'SentOff' ? 'bg-black/50 border-gray-800 opacity-50 cursor-not-allowed' :
-                                    player.status.type === 'Suspended' ? 'bg-black/50 border-gray-800 opacity-50 cursor-not-allowed' :
                                     player.status.type === 'Injured' ? 'bg-red-900/40 border-red-500' :
                                     isMatchLive && subSelection ? 'bg-green-900/20 hover:bg-green-700/50 border-green-500/50 animate-pulse' :
                                     'bg-green-900/20 hover:bg-green-900/40 border-green-900/50'
@@ -294,8 +274,6 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                             <li key={player.name} 
                                 onClick={() => handlePlayerClick(player, true)}
                                 className={`flex justify-between items-center p-2 border rounded-md cursor-pointer transition-colors ${
-                                    player.status.type === 'Suspended' ? 'bg-black/50 border-gray-800 opacity-50 cursor-not-allowed' :
-                                    player.status.type === 'Injured' ? 'bg-red-900/40 border-red-500' :
                                     isMatchLive && subSelection?.name === player.name ? 'bg-green-900/40 border-green-500 animate-pulse' :
                                     'bg-gray-800 hover:bg-gray-700 border-gray-600'
                                 }`}

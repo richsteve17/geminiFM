@@ -17,7 +17,10 @@ export type PlayerPersonality = 'Ambitious' | 'Loyal' | 'Mercenary' | 'Young Pro
 
 export type PlayerStatus = 
     | { type: 'Available' }
-    | { type: 'On International Duty'; until: number };
+    | { type: 'On International Duty'; until: number }
+    | { type: 'Injured'; weeks: number }
+    | { type: 'Suspended'; until: number } // New Status
+    | { type: 'SentOff' }; // Temporary In-Match Status
 
 export type PlayerEffect = 
     | { type: 'PostTournamentMorale'; morale: 'Winner' | 'FiredUp' | 'Disappointed'; message: string; until: number }
@@ -34,6 +37,8 @@ export interface Player {
   status: PlayerStatus;
   effects: PlayerEffect[];
   contractExpires: number; // Years left
+  isStarter: boolean; // New field for lineup management
+  matchCard?: 'yellow' | 'red' | null; // Track cards within a single match
 }
 
 export type Formation = '4-4-2' | '4-3-3' | '5-3-2' | '3-5-2';
@@ -98,26 +103,36 @@ export interface LeagueTableEntry {
   group?: string; // For WC Group tables
 }
 
-export interface MatchHalfResult {
-    score: string;
-    homeGoals: number;
-    awayGoals: number;
-    commentary: string;
+// --- NEW MATCH ENGINE TYPES ---
+
+export interface MatchEvent {
+    id: number;
+    minute: number;
+    type: 'goal' | 'sub' | 'injury' | 'card' | 'whistle' | 'commentary';
+    teamName?: string;
+    player?: string;
+    description: string;
+    scoreAfter?: string; // "1-0"
+    cardType?: 'yellow' | 'red'; // Detail for card events
 }
 
 export interface MatchState {
-    firstHalfResult: MatchHalfResult | null;
-    secondHalfResult: MatchHalfResult | null;
-    finalScore: string | null;
-    fullTimeCommentary: string | null;
-    penaltyWinner?: string; // Name of winning team if penalties occurred
+    currentMinute: number; // 0 to 90 (or 120)
+    homeScore: number;
+    awayScore: number;
+    events: MatchEvent[];
+    isFinished: boolean;
+    penaltyWinner?: string;
+    subsUsed: { home: number; away: number }; // Track subs
+    momentum: number; // -10 (Away Dominating) to +10 (Home Dominating)
+    tacticalAnalysis: string; // "Home team pressing high but leaving gaps."
 }
 
 
 export enum GameState {
     PRE_MATCH = 'PRE_MATCH',
     SIMULATING = 'SIMULATING',
-    HALF_TIME = 'HALF_TIME',
+    PAUSED = 'PAUSED', // Replaces HALF_TIME, used for HT, 60', 75' stops
     POST_MATCH = 'POST_MATCH'
 }
 
@@ -156,7 +171,7 @@ export interface NewsItem {
     week: number;
     title: string;
     body: string;
-    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure';
+    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension';
 }
 
 export interface ExperienceLevel {

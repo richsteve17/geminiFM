@@ -4,7 +4,7 @@ import { TRANSFER_TARGETS } from './constants';
 import { generateName } from './utils';
 
 // Helper to generate a generic player for filler teams
-const generateGenericNationalPlayer = (nationality: string, position: 'GK' | 'DEF' | 'MID' | 'FWD', rating: number): Player => {
+const generateGenericNationalPlayer = (nationality: string, position: 'GK' | 'DEF' | 'MID' | 'FWD', rating: number, isStarter: boolean): Player => {
     return {
         name: generateName(nationality),
         nationality,
@@ -15,7 +15,8 @@ const generateGenericNationalPlayer = (nationality: string, position: 'GK' | 'DE
         wage: 50000,
         status: { type: 'Available' },
         effects: [],
-        contractExpires: 3
+        contractExpires: 3,
+        isStarter
     };
 };
 
@@ -27,15 +28,16 @@ const createFillerTeam = (name: string, countryCode: string, flag: string, prest
         prestige,
         tactic: { formation: '4-4-2', mentality: 'Balanced' },
         players: [
-            generateGenericNationalPlayer(flag, 'GK', prestige - 2),
-            ...Array.from({ length: 4 }, () => generateGenericNationalPlayer(flag, 'DEF', prestige - 3)),
-            ...Array.from({ length: 4 }, () => generateGenericNationalPlayer(flag, 'MID', prestige - 3)),
-            ...Array.from({ length: 2 }, () => generateGenericNationalPlayer(flag, 'FWD', prestige - 1)),
+            generateGenericNationalPlayer(flag, 'GK', prestige - 2, true),
+            ...Array.from({ length: 4 }, () => generateGenericNationalPlayer(flag, 'DEF', prestige - 3, true)),
+            ...Array.from({ length: 4 }, () => generateGenericNationalPlayer(flag, 'MID', prestige - 3, true)),
+            ...Array.from({ length: 2 }, () => generateGenericNationalPlayer(flag, 'FWD', prestige - 1, true)),
+            ...Array.from({ length: 7 }, () => generateGenericNationalPlayer(flag, 'MID', prestige - 5, false)), // Bench
         ]
     };
 };
 
-const getNationalPlayer = (nationality: string, name: string, rating: number, position: 'GK' | 'DEF' | 'MID' | 'FWD', age: number, personality: PlayerPersonality = 'Ambitious'): Player => {
+const getNationalPlayer = (nationality: string, name: string, rating: number, position: 'GK' | 'DEF' | 'MID' | 'FWD', age: number, personality: PlayerPersonality = 'Ambitious', isStarter: boolean = true): Player => {
     return {
         name,
         nationality,
@@ -47,6 +49,7 @@ const getNationalPlayer = (nationality: string, name: string, rating: number, po
         status: { type: 'Available' },
         effects: [],
         contractExpires: 3,
+        isStarter
     }
 }
 
@@ -58,13 +61,13 @@ const DETAILED_TEAMS: NationalTeam[] = [
         tactic: { formation: '4-3-3', mentality: 'Attacking' },
         prestige: 92,
         players: [
-            ...TRANSFER_TARGETS.filter(p => p.nationality === '🇦🇷'),
+            ...TRANSFER_TARGETS.filter(p => p.nationality === '🇦🇷').map(p => ({...p, isStarter: true})),
             getNationalPlayer('🇦🇷', 'E. Martinez', 88, 'GK', 34),
             getNationalPlayer('🇦🇷', 'C. Romero', 86, 'DEF', 29),
             getNationalPlayer('🇦🇷', 'L. Martinez', 87, 'FWD', 29),
             getNationalPlayer('🇦🇷', 'A. Di Maria', 85, 'FWD', 39, 'Loyal'),
             getNationalPlayer('🇦🇷', 'E. Fernandez', 86, 'MID', 26, 'Young Prospect'),
-            ...Array.from({ length: 5 }, () => generateGenericNationalPlayer('🇦🇷', 'MID', 82)), // Fill bench
+            ...Array.from({ length: 5 }, () => generateGenericNationalPlayer('🇦🇷', 'MID', 82, false)), // Fill bench
         ]
     },
     {
@@ -73,13 +76,13 @@ const DETAILED_TEAMS: NationalTeam[] = [
         tactic: { formation: '4-3-3', mentality: 'Balanced' },
         prestige: 94,
         players: [
-             ...TRANSFER_TARGETS.filter(p => p.nationality === '🇫🇷'),
+             ...TRANSFER_TARGETS.filter(p => p.nationality === '🇫🇷').map(p => ({...p, isStarter: true})),
              getNationalPlayer('🇫🇷', 'M. Maignan', 89, 'GK', 31),
              getNationalPlayer('🇫🇷', 'W. Saliba', 87, 'DEF', 26, 'Young Prospect'),
              getNationalPlayer('🇫🇷', 'A. Griezmann', 89, 'FWD', 36),
              getNationalPlayer('🇫🇷', 'A. Tchouameni', 88, 'MID', 27, 'Young Prospect'),
              getNationalPlayer('🇫🇷', 'O. Dembele', 86, 'FWD', 30),
-             ...Array.from({ length: 5 }, () => generateGenericNationalPlayer('🇫🇷', 'DEF', 83)),
+             ...Array.from({ length: 5 }, () => generateGenericNationalPlayer('🇫🇷', 'DEF', 83, false)),
         ]
     },
     {
@@ -94,7 +97,7 @@ const DETAILED_TEAMS: NationalTeam[] = [
             getNationalPlayer('🇧🇷', 'Neymar Jr.', 88, 'FWD', 35),
             getNationalPlayer('🇧🇷', 'Casemiro', 88, 'MID', 35),
             getNationalPlayer('🇧🇷', 'Rodrygo', 87, 'FWD', 26, 'Young Prospect'),
-            ...Array.from({ length: 5 }, () => generateGenericNationalPlayer('🇧🇷', 'MID', 84)),
+            ...Array.from({ length: 5 }, () => generateGenericNationalPlayer('🇧🇷', 'MID', 84, false)),
         ]
     },
     {
@@ -103,13 +106,13 @@ const DETAILED_TEAMS: NationalTeam[] = [
         tactic: { formation: '4-3-3', mentality: 'Attacking' },
         prestige: 91,
         players: [
-            ...TRANSFER_TARGETS.filter(p => p.nationality === '🏴󠁧󠁢󠁥󠁮󠁧󠁿'),
+            ...TRANSFER_TARGETS.filter(p => p.nationality === '🏴󠁧󠁢󠁥󠁮󠁧󠁿').map(p => ({...p, isStarter: true})),
             getNationalPlayer('🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'H. Kane', 92, 'FWD', 33),
             getNationalPlayer('🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'D. Rice', 89, 'MID', 28),
             getNationalPlayer('🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'P. Foden', 90, 'MID', 27, 'Young Prospect'),
             getNationalPlayer('🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'K. Walker', 86, 'DEF', 37, 'Loyal'),
             getNationalPlayer('🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'J. Pickford', 86, 'GK', 33),
-            ...Array.from({ length: 5 }, () => generateGenericNationalPlayer('🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'DEF', 82)),
+            ...Array.from({ length: 5 }, () => generateGenericNationalPlayer('🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'DEF', 82, false)),
         ]
     },
      {
@@ -118,12 +121,12 @@ const DETAILED_TEAMS: NationalTeam[] = [
         tactic: { formation: '4-3-3', mentality: 'Attacking' },
         prestige: 90,
         players: [
-            ...TRANSFER_TARGETS.filter(p => p.nationality === '🇵🇹'),
+            ...TRANSFER_TARGETS.filter(p => p.nationality === '🇵🇹').map(p => ({...p, isStarter: true})),
             getNationalPlayer('🇵🇹', 'B. Fernandes', 89, 'MID', 32),
             getNationalPlayer('🇵🇹', 'R. Dias', 89, 'DEF', 30),
             getNationalPlayer('🇵🇹', 'B. Silva', 88, 'MID', 32),
             getNationalPlayer('🇵🇹', 'R. Leao', 87, 'FWD', 28),
-            ...Array.from({ length: 7 }, () => generateGenericNationalPlayer('🇵🇹', 'MID', 81)),
+            ...Array.from({ length: 7 }, () => generateGenericNationalPlayer('🇵🇹', 'MID', 81, false)),
         ]
     },
 ];

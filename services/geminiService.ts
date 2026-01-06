@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import type { Team, MatchHalfResult, ChairmanPersonality, Player, PlayerTalk, TouchlineShout, PlayerEffect, Tournament, NationalTeam, TournamentStage } from '../types';
+import type { Team, MatchState, ChairmanPersonality, Player, MatchEvent, TouchlineShout, PlayerEffect, Tournament, NationalTeam, TournamentStage } from '../types';
 
 const API_KEY = process.env.API_KEY;
 
@@ -11,95 +11,147 @@ if (!API_KEY) {
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 const model = 'gemini-3-flash-preview';
 
-const formatTeamForPrompt = (team: Team, availablePlayers: Player[]): string => {
-    const avgRating = availablePlayers.length > 0 ? availablePlayers.reduce((sum, p) => sum + p.rating, 0) / availablePlayers.length : 0;
+const formatTeamForPrompt = (team: Team, starters: Player[], subsUsed: number): string => {
+    // Filter out SentOff players immediately
+    const activePlayers = starters.filter(p => p.status.type !== 'SentOff');
     
-    const chemistryRifts = availablePlayers
+    // Stats for active players only
+    const avgRating = activePlayers.length > 0 ? activePlayers.reduce((sum, p) => sum + p.rating, 0) / activePlayers.length : 0;
+    
+    // Check for ACTIVE rifts within the Starting XI
+    const chemistryRifts = activePlayers
         .flatMap(p => p.effects.filter(e => e.type === 'BadChemistry').map(e => ({ player: p.name, rift: e })))
         .map(item => {
             const rift = item.rift as { type: 'BadChemistry', with: string };
-            if (item.player < rift.with) {
+            const otherPlayerIsPlaying = activePlayers.some(p => p.name === rift.with);
+            if (otherPlayerIsPlaying && item.player < rift.with) {
                 return `${item.player} and ${rift.with}`;
             }
             return null;
         })
         .filter((value, index, self) => value && self.indexOf(value) === index);
+    
+    // Check for Injuries ON PITCH
+    const injuredPlayers = activePlayers.filter(p => p.status.type === 'Injured').map(p => p.name);
+    
+    // Check for Yellow Cards
+    const bookedPlayers = activePlayers.filter(p => p.matchCard === 'yellow').map(p => p.name);
 
-    let prompt = `${team.name} (Avg Rating: ${avgRating.toFixed(1)}, Prestige: ${team.prestige}), Tactic: ${team.tactic.formation}, Mentality: ${team.tactic.mentality}.`;
-    if (chemistryRifts.length > 0) {
-        prompt += `\n**Chemistry Issues:** There is bad chemistry between: ${chemistryRifts.join(', ')}. This may cause disjointed play between them.`
+    let prompt = `${team.name} (Avg Rating: ${avgRating.toFixed(1)}, Men: ${activePlayers.length}), Tactic: ${team.tactic.formation}, Mentality: ${team.tactic.mentality}.`;
+    
+    if (activePlayers.length < 11) {
+        prompt += `\n**CRITICAL DISADVANTAGE:** ${team.name} is playing with ${activePlayers.length} men due to a Red Card. They will be exhausted and outnumbered on defense.`
     }
+
+    if (chemistryRifts.length > 0) {
+        prompt += `\n**NEGATIVE FACTOR:** Active bad chemistry on pitch: ${chemistryRifts.join(', ')}. Disjointed play expected.`
+    }
+
+    if (injuredPlayers.length > 0) {
+        if (subsUsed >= 5) {
+             prompt += `\n**EXTREME VULNERABILITY:** ${injuredPlayers.join(', ')} is INJURED. The team has NO SUBS left. He is forced to play but is a liability/passenger. Opponent should target him.`
+        } else {
+             prompt += `\n**NEGATIVE FACTOR:** ${injuredPlayers.join(', ')} is carrying an injury. Should probably be subbed.`
+        }
+    }
+    
+    if (bookedPlayers.length > 0) {
+        prompt += `\n**DISCIPLINE RISK:** On Yellow Card: ${bookedPlayers.join(', ')}. They must tackle cautiously.`
+    }
+
     return prompt;
 };
 
-export const simulateHalf = async (
+export const simulateMatchSegment = async (
     homeTeam: Team, 
     awayTeam: Team, 
+    currentMatchState: MatchState,
+    targetMinute: number,
     context: { 
-        half: 'first' | 'second', 
-        halfTimeScore?: { home: number; away: number },
-        teamTalk?: { teamName: string, shout: TouchlineShout },
         stage?: TournamentStage,
-        isKnockout?: boolean
+        isKnockout?: boolean,
+        teamTalk?: { teamName: string, shout: TouchlineShout }
     }
-): Promise<MatchHalfResult> => {
+): Promise<{ 
+    events: Omit<MatchEvent, 'id'>[]; 
+    homeScoreAdded: number; 
+    awayScoreAdded: number; 
+    momentum: number;
+    tacticalAnalysis: string;
+}> => {
 
-    const homeAvailablePlayers = homeTeam.players.filter(p => p.status.type === 'Available');
-    const awayAvailablePlayers = awayTeam.players.filter(p => p.status.type === 'Available');
+    const startMinute = currentMatchState.currentMinute;
+    const duration = targetMinute - startMinute;
 
-    let prompt = `You are an expert football commentator for a football manager game.
-Your task is to simulate one half of a football match. The tactical matchup and player chemistry are the MOST IMPORTANT factors.
+    const homeStarters = homeTeam.players.filter(p => p.isStarter);
+    const awayStarters = awayTeam.players.filter(p => p.isStarter); 
+    
+    // Pass subsUsed to format prompt correctly for injuries
+    const homePrompt = formatTeamForPrompt(homeTeam, homeStarters, currentMatchState.subsUsed.home);
+    const awayPrompt = formatTeamForPrompt(awayTeam, awayStarters, currentMatchState.subsUsed.away);
 
-**Home Team:** ${formatTeamForPrompt(homeTeam, homeAvailablePlayers)}
-**Away Team:** ${formatTeamForPrompt(awayTeam, awayAvailablePlayers)}
+    const homePlayersList = homeStarters.filter(p => p.status.type !== 'SentOff').map(p => p.name).join(', ');
+    const awayPlayersList = awayStarters.filter(p => p.status.type !== 'SentOff').map(p => p.name).join(', ');
+
+    let prompt = `You are a football match simulation engine.
+Simulate the match from **minute ${startMinute} to minute ${targetMinute}** (${duration} minutes).
+
+**Home Team:** ${homePrompt}
+**Away Team:** ${awayPrompt}
+
+**Current Score:** ${homeTeam.name} ${currentMatchState.homeScore} - ${currentMatchState.awayScore} ${awayTeam.name}
+**Current Momentum:** ${currentMatchState.momentum} (-10 Away Domination, +10 Home Domination). Use this to influence who attacks.
+
+**Players available on Pitch (excluding sent off):**
+Home: ${homePlayersList}
+Away: ${awayPlayersList}
 `;
     
-    // Context Injection for World Cup
-    if (context.stage) {
-        prompt += `\n**CONTEXT:** This is a World Cup **${context.stage}** match. The stakes are incredibly high.`;
-    }
-
-    if (context.half === 'first') {
-        prompt += `\n**Simulating: First Half**\n`;
-    } else {
-        prompt += `\n**Simulating: Second Half**
-**Half-Time Score:** ${homeTeam.name} ${context.halfTimeScore?.home} - ${context.halfTimeScore?.away} ${awayTeam.name}
-`;
-        if (context.teamTalk) {
-            prompt += `The manager of **${context.teamTalk.teamName}** gave a team talk at half-time, telling them to **'${context.teamTalk.shout}'**. This should influence their performance.\n`;
-        }
-        
-        if (context.isKnockout) {
-            prompt += `\n**IMPORTANT KNOCKOUT RULE:** This match CANNOT end in a draw. If the score is level after 90 minutes, assume the match went to **Extra Time and Penalties**. 
-            In your commentary, if it was a draw, describe the drama of extra time and who won the penalty shootout.
-            CRITICAL: The final 'score' field in JSON must remain the score after 120mins (e.g., 2-2). The 'commentary' must explicitly state who won on penalties.`;
-        }
+    if (context.stage) prompt += `\n**Context:** World Cup ${context.stage}. High stakes.`;
+    if (context.teamTalk && startMinute === 45) {
+        prompt += `\n**Half-Time Talk:** ${context.teamTalk.teamName} manager shouted: "${context.teamTalk.shout}".`;
     }
 
     prompt += `
 **Instructions:**
-1.  **Analyze the tactical battle AND chemistry**: How does a ${homeTeam.tactic.formation} match up against a ${awayTeam.tactic.formation}?
-2.  **Generate a realistic score for this half.**
-3.  **Write a compelling summary.**
-4.  **Respond ONLY with a valid JSON object.**
-**JSON Output Format:** { "score": "H-A", "homeGoals": H, "awayGoals": A, "commentary": "Your summary." }`;
+1. Generate key events (Goals, Cards, Injuries) for this time period.
+2. **Cards:** Referees can be strict. Players on Yellow Cards might get a second yellow (Red) if they foul.
+3. **Red Cards:** If a player gets a Red (or 2nd Yellow), output type 'card' with cardType 'red'.
+4. **Injuries:** 5% chance. Description: "Player X has pulled up..."
+5. **Tactical Analysis:** Provide a 1-sentence insight on the game flow (e.g. "Home team capitalizing on the extra man advantage").
+6. **Momentum:** Update the momentum score based on events.
+
+**Output JSON Format:**
+{
+  "homeScoreAdded": number,
+  "awayScoreAdded": number,
+  "momentum": number,
+  "tacticalAnalysis": "string",
+  "events": [
+    { "minute": number, "type": "goal" | "card" | "injury" | "commentary", "cardType": "yellow" | "red" (optional), "teamName": "string", "player": "string (must be from lists above)", "description": "Short description" }
+  ]
+}
+`;
 
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
             model: model, contents: prompt, config: { responseMimeType: "application/json" }
         });
         const result = JSON.parse(response.text);
-        if (typeof result.score === 'string' && typeof result.homeGoals === 'number' && typeof result.awayGoals === 'number' && typeof result.commentary === 'string') {
-            return result;
-        } else {
-            throw new Error("Invalid JSON structure from Gemini API for half simulation");
-        }
+        return result;
     } catch (error) {
-        console.error("Error calling Gemini API for half sim:", error);
-        return { score: "0-0", homeGoals: 0, awayGoals: 0, commentary: "The half was a tense, cagey affair with few clear-cut chances for either side as the simulation engine failed to respond." };
+        console.error("Error calling Gemini API for segment sim:", error);
+        return { 
+            homeScoreAdded: 0, 
+            awayScoreAdded: 0, 
+            momentum: currentMatchState.momentum,
+            tacticalAnalysis: "The game is stuck in a midfield battle.",
+            events: [{ minute: startMinute + 5, type: 'commentary', description: "The match continues...", teamName: '' }] 
+        };
     }
 };
 
+// ... (Rest of the file remains unchanged: getInterviewQuestions, etc.)
 const getChairmanPersonalityPrompt = (personality: ChairmanPersonality): string => {
     switch (personality) {
         case 'Traditionalist': return "You are a 'Traditionalist' chairman. You value defensive football, fiscal responsibility, and managers who respect the club's history. You dislike flashy, risky tactics and extravagant spending.";
