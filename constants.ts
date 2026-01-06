@@ -1,4 +1,3 @@
-
 import type { Team, Tactic, ChairmanPersonality, Player, PlayerPersonality, TouchlineShout, ExperienceLevel } from './types';
 import { generateName } from './utils';
 
@@ -14,7 +13,10 @@ export const PLAYER_PERSONALITIES: Record<PlayerPersonality, string> = {
     'Ambitious': 'Wants to win major trophies and play at the highest level.',
     'Loyal': 'Values stability and has a strong connection to their current club.',
     'Mercenary': 'Primarily motivated by financial rewards.',
-    'Young Prospect': 'Looking for playing time and a good environment to develop.'
+    'Young Prospect': 'Looking for playing time and a good environment to develop.',
+    'Leader': 'A natural leader who organizes the team and keeps morale high.',
+    'Professional': 'A model professional who trains hard and avoids controversy.',
+    'Volatile': 'A talented player who can be unpredictable and prone to disciplinary issues.'
 };
 
 export const EXPERIENCE_LEVELS: ExperienceLevel[] = [

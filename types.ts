@@ -8,12 +8,16 @@ export enum AppScreen {
     JOB_INTERVIEW,
     GAMEPLAY,
     TRANSFERS,
+    SCOUTING, // New
+    PRESS_CONFERENCE, // New
     PLAYER_TALK,
     PLAYER_NEGOTIATION,
     NEWS_FEED,
 }
 
-export type PlayerPersonality = 'Ambitious' | 'Loyal' | 'Mercenary' | 'Young Prospect';
+export type GameMode = 'Club' | 'WorldCup' | 'ChampionsLeague';
+
+export type PlayerPersonality = 'Ambitious' | 'Loyal' | 'Mercenary' | 'Young Prospect' | 'Leader' | 'Professional' | 'Volatile';
 
 export type PlayerStatus = 
     | { type: 'Available' }
@@ -39,6 +43,8 @@ export interface Player {
   contractExpires: number; // Years left
   isStarter: boolean; // New field for lineup management
   matchCard?: 'yellow' | 'red' | null; // Track cards within a single match
+  scoutingReport?: string; // For scouted players
+  marketValue?: number;
 }
 
 export type Formation = '4-4-2' | '4-3-3' | '5-3-2' | '3-5-2';
@@ -51,7 +57,7 @@ export interface Tactic {
   mentality: Mentality;
 }
 
-export type LeagueTier = 'Premier League' | 'Championship' | 'La Liga' | 'Serie A' | 'Bundesliga' | 'Ligue 1' | 'MLS' | 'International';
+export type LeagueTier = 'Premier League' | 'Championship' | 'La Liga' | 'Serie A' | 'Bundesliga' | 'Ligue 1' | 'MLS' | 'International' | 'Champions League';
 
 export interface Team {
   name: string;
@@ -75,7 +81,7 @@ export interface Tournament {
     teams: string[];
 }
 
-export type TournamentStage = 'Group Stage' | 'Round of 32' | 'Round of 16' | 'Quarter Final' | 'Semi Final' | 'Final';
+export type TournamentStage = 'Group Stage' | 'League Phase' | 'Play-offs' | 'Round of 32' | 'Round of 16' | 'Quarter Final' | 'Semi Final' | 'Final';
 
 export interface Fixture {
   id: string;
@@ -85,8 +91,10 @@ export interface Fixture {
   awayTeam: string;
   played: boolean;
   score?: string; // "2-1"
-  stage?: TournamentStage; // For WC
+  stage?: TournamentStage; // For WC / UCL
   isKnockout?: boolean;
+  aggregateScore?: string; // "Agg: 4-3"
+  firstLegScore?: string; // For tracking
 }
 
 export interface LeagueTableEntry {
@@ -152,6 +160,13 @@ export interface Interview {
     chairmanPersonality: ChairmanPersonality;
 }
 
+export interface PressConference {
+    questions: string[];
+    answers: string[];
+    currentQuestionIndex: number;
+    context: string; // "Won against Rivals", "Lost heavy"
+}
+
 export interface PlayerTalk {
     player: Player;
     questions: string[];
@@ -171,7 +186,7 @@ export interface NewsItem {
     week: number;
     title: string;
     body: string;
-    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension';
+    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press';
 }
 
 export interface ExperienceLevel {

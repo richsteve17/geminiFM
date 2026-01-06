@@ -11,6 +11,7 @@ if (!API_KEY) {
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 const model = 'gemini-3-flash-preview';
 
+// --- HELPER: Format Team for Prompt ---
 const formatTeamForPrompt = (team: Team, starters: Player[], subsUsed: number): string => {
     // Filter out SentOff players immediately
     const activePlayers = starters.filter(p => p.status.type !== 'SentOff');
@@ -37,30 +38,149 @@ const formatTeamForPrompt = (team: Team, starters: Player[], subsUsed: number): 
     // Check for Yellow Cards
     const bookedPlayers = activePlayers.filter(p => p.matchCard === 'yellow').map(p => p.name);
 
-    let prompt = `${team.name} (Avg Rating: ${avgRating.toFixed(1)}, Men: ${activePlayers.length}), Tactic: ${team.tactic.formation}, Mentality: ${team.tactic.mentality}.`;
+    let prompt = `Stats: Avg Rating ${avgRating.toFixed(1)}, Men: ${activePlayers.length}. Tactic: ${team.tactic.formation} (${team.tactic.mentality}).`;
     
     if (activePlayers.length < 11) {
-        prompt += `\n**CRITICAL DISADVANTAGE:** ${team.name} is playing with ${activePlayers.length} men due to a Red Card. They will be exhausted and outnumbered on defense.`
+        prompt += `\nCRITICAL DISADVANTAGE: Playing with ${activePlayers.length} men (Red Card). Exhausted and outnumbered.`
     }
 
     if (chemistryRifts.length > 0) {
-        prompt += `\n**NEGATIVE FACTOR:** Active bad chemistry on pitch: ${chemistryRifts.join(', ')}. Disjointed play expected.`
+        prompt += `\nNEGATIVE FACTOR: Bad Chemistry active: ${chemistryRifts.join(', ')}. Disjointed play.`
     }
 
     if (injuredPlayers.length > 0) {
         if (subsUsed >= 5) {
-             prompt += `\n**EXTREME VULNERABILITY:** ${injuredPlayers.join(', ')} is INJURED. The team has NO SUBS left. He is forced to play but is a liability/passenger. Opponent should target him.`
+             prompt += `\nEXTREME VULNERABILITY: ${injuredPlayers.join(', ')} is INJURED and team has NO SUBS. He is a passenger. Opponent should target him.`
         } else {
-             prompt += `\n**NEGATIVE FACTOR:** ${injuredPlayers.join(', ')} is carrying an injury. Should probably be subbed.`
+             prompt += `\nNEGATIVE FACTOR: ${injuredPlayers.join(', ')} is carrying an injury. Performance dropped.`
         }
     }
     
     if (bookedPlayers.length > 0) {
-        prompt += `\n**DISCIPLINE RISK:** On Yellow Card: ${bookedPlayers.join(', ')}. They must tackle cautiously.`
+        prompt += `\nDISCIPLINE RISK: On Yellow: ${bookedPlayers.join(', ')}. Must tackle cautiously.`
     }
 
     return prompt;
 };
+
+// --- HAWK-EYE VALIDATOR ---
+// This ensures the AI isn't hallucinating illegal states.
+const validateSimulationResult = (result: any, homeTeam: Team, awayTeam: Team, currentMatchState: MatchState): boolean => {
+    if (!result || typeof result !== 'object') return false;
+    if (typeof result.homeScoreAdded !== 'number' || typeof result.awayScoreAdded !== 'number') return false;
+    if (!Array.isArray(result.events)) return false;
+
+    // 1. Validate Score Consistency
+    const homeGoals = result.events.filter((e: any) => e.type === 'goal' && e.teamName === homeTeam.name).length;
+    const awayGoals = result.events.filter((e: any) => e.type === 'goal' && e.teamName === awayTeam.name).length;
+
+    if (homeGoals !== result.homeScoreAdded || awayGoals !== result.awayScoreAdded) {
+        console.warn(`Hawk-Eye Fail: Score Mismatch. Events say ${homeGoals}-${awayGoals}, Result says ${result.homeScoreAdded}-${result.awayScoreAdded}`);
+        return false;
+    }
+
+    // 2. Validate Roster Integrity (No Ghost Players)
+    const validHomePlayers = new Set(homeTeam.players.map(p => p.name));
+    const validAwayPlayers = new Set(awayTeam.players.map(p => p.name));
+
+    // 3. Validate Eligibility (No interacting if already Sent Off)
+    const sentOffHome = new Set(homeTeam.players.filter(p => p.status.type === 'SentOff').map(p => p.name));
+    const sentOffAway = new Set(awayTeam.players.filter(p => p.status.type === 'SentOff').map(p => p.name));
+
+    for (const event of result.events) {
+        if (event.player) {
+            // Check existence
+            const isHome = validHomePlayers.has(event.player);
+            const isAway = validAwayPlayers.has(event.player);
+            
+            if (!isHome && !isAway) {
+                console.warn(`Hawk-Eye Fail: Hallucinated Player '${event.player}'`);
+                return false;
+            }
+
+            // Check if already sent off (cannot perform actions)
+            if (sentOffHome.has(event.player) || sentOffAway.has(event.player)) {
+                console.warn(`Hawk-Eye Fail: Sent Off player '${event.player}' attempting action`);
+                return false;
+            }
+
+            // Check Team Name correctness
+            if (isHome && event.teamName !== homeTeam.name) return false;
+            if (isAway && event.teamName !== awayTeam.name) return false;
+        }
+    }
+
+    return true;
+};
+
+// --- FALLBACK ENGINE ---
+// If AI fails validation, we use this deterministic engine to prevent crashes.
+const generateFallbackSegment = (
+    homeTeam: Team, 
+    awayTeam: Team, 
+    startMinute: number, 
+    duration: number,
+    currentScore: { home: number, away: number }
+) => {
+    // Simple rating based calculation
+    const homeRating = homeTeam.players.reduce((sum, p) => sum + p.rating, 0) / 11; // Approx
+    const awayRating = awayTeam.players.reduce((sum, p) => sum + p.rating, 0) / 11;
+    const ratingDiff = homeRating - awayRating; // Positive = Home stronger
+
+    const events: any[] = [];
+    let homeScoreAdded = 0;
+    let awayScoreAdded = 0;
+
+    // Chance of goal per 15 min segment (approx 15-20%)
+    const baseChance = 0.15;
+    const homeChance = baseChance + (ratingDiff * 0.02);
+    const awayChance = baseChance - (ratingDiff * 0.02);
+
+    if (Math.random() < homeChance) {
+        homeScoreAdded++;
+        const scorer = homeTeam.players.filter(p => p.position === 'FWD' || p.position === 'MID')[0]?.name || homeTeam.players[0].name;
+        events.push({
+            minute: startMinute + Math.floor(Math.random() * duration),
+            type: 'goal',
+            teamName: homeTeam.name,
+            player: scorer,
+            description: `${scorer} finds the net with a tidy finish!`,
+            scoreAfter: `${currentScore.home + homeScoreAdded}-${currentScore.away}`
+        });
+    }
+
+    if (Math.random() < awayChance) {
+        awayScoreAdded++;
+        const scorer = awayTeam.players.filter(p => p.position === 'FWD' || p.position === 'MID')[0]?.name || awayTeam.players[0].name;
+        events.push({
+            minute: startMinute + Math.floor(Math.random() * duration),
+            type: 'goal',
+            teamName: awayTeam.name,
+            player: scorer,
+            description: `${scorer} silences the crowd with a goal!`,
+            scoreAfter: `${currentScore.home + homeScoreAdded}-${currentScore.away + awayScoreAdded}`
+        });
+    }
+
+    // Add some commentary filler
+    if (events.length === 0) {
+        events.push({
+            minute: startMinute + 5,
+            type: 'commentary',
+            description: "A period of sustained pressure, but no clear cut chances.",
+            teamName: ''
+        });
+    }
+
+    return {
+        homeScoreAdded,
+        awayScoreAdded,
+        momentum: ratingDiff > 5 ? 5 : ratingDiff < -5 ? -5 : 0,
+        tacticalAnalysis: "The teams are evenly matched in this phase.",
+        events: events.sort((a, b) => a.minute - b.minute)
+    };
+};
+
 
 export const simulateMatchSegment = async (
     homeTeam: Team, 
@@ -90,45 +210,56 @@ export const simulateMatchSegment = async (
     const homePrompt = formatTeamForPrompt(homeTeam, homeStarters, currentMatchState.subsUsed.home);
     const awayPrompt = formatTeamForPrompt(awayTeam, awayStarters, currentMatchState.subsUsed.away);
 
+    // Explicitly list ONLY valid players for events
     const homePlayersList = homeStarters.filter(p => p.status.type !== 'SentOff').map(p => p.name).join(', ');
     const awayPlayersList = awayStarters.filter(p => p.status.type !== 'SentOff').map(p => p.name).join(', ');
 
-    let prompt = `You are a football match simulation engine.
-Simulate the match from **minute ${startMinute} to minute ${targetMinute}** (${duration} minutes).
+    let prompt = `You are a rigorous football simulation engine.
 
-**Home Team:** ${homePrompt}
-**Away Team:** ${awayPrompt}
+*** CONTRACT & HARD RULES (DO NOT BREAK) ***
+1. STATE CONSISTENCY: You MUST respect the "Current Score" and "PLAYERS ON PITCH".
+2. ROSTER INTEGRITY: Only players listed in "PLAYERS ON PITCH" can be involved in events. Do NOT hallucinate player names.
+3. LOGIC: 
+   - A player with a Red Card (sent off) CANNOT appear in events.
+   - If a team has 5 subs used and gets an injury, they play with 10 men.
+4. OUTPUT: Return valid JSON. "homeScoreAdded" MUST equal the number of 'goal' events for home.
 
-**Current Score:** ${homeTeam.name} ${currentMatchState.homeScore} - ${currentMatchState.awayScore} ${awayTeam.name}
-**Current Momentum:** ${currentMatchState.momentum} (-10 Away Domination, +10 Home Domination). Use this to influence who attacks.
+*** MATCH CONTEXT ***
+Time: Minute ${startMinute} to ${targetMinute} (${duration} mins).
+Score: ${homeTeam.name} ${currentMatchState.homeScore} - ${currentMatchState.awayScore} ${awayTeam.name}
+Momentum: ${currentMatchState.momentum} (-10 Away, +10 Home)
+Stage: ${context.stage || 'League Match'} ${context.isKnockout ? '(Knockout - Winner required)' : ''}
 
-**Players available on Pitch (excluding sent off):**
-Home: ${homePlayersList}
-Away: ${awayPlayersList}
+*** ${homeTeam.name} (HOME) ***
+${homePrompt}
+PLAYERS ON PITCH: ${homePlayersList}
+
+*** ${awayTeam.name} (AWAY) ***
+${awayPrompt}
+PLAYERS ON PITCH: ${awayPlayersList}
 `;
-    
-    if (context.stage) prompt += `\n**Context:** World Cup ${context.stage}. High stakes.`;
+
     if (context.teamTalk && startMinute === 45) {
-        prompt += `\n**Half-Time Talk:** ${context.teamTalk.teamName} manager shouted: "${context.teamTalk.shout}".`;
+        prompt += `\n*** TEAM TALK EFFECT ***\n${context.teamTalk.teamName} manager shouted: "${context.teamTalk.shout}". Influence momentum accordingly.`;
     }
 
     prompt += `
-**Instructions:**
-1. Generate key events (Goals, Cards, Injuries) for this time period.
-2. **Cards:** Referees can be strict. Players on Yellow Cards might get a second yellow (Red) if they foul.
+\n*** INSTRUCTIONS ***
+1. Generate key events (Goals, Cards, Injuries) for this ${duration}-minute period.
+2. **Cards:** Referees can be strict. Players on Yellow Cards might get a second yellow (Red).
 3. **Red Cards:** If a player gets a Red (or 2nd Yellow), output type 'card' with cardType 'red'.
-4. **Injuries:** 5% chance. Description: "Player X has pulled up..."
-5. **Tactical Analysis:** Provide a 1-sentence insight on the game flow (e.g. "Home team capitalizing on the extra man advantage").
-6. **Momentum:** Update the momentum score based on events.
+4. **Injuries:** Low chance (approx 5%).
+5. **Tactical Analysis:** Provide a 1-sentence insight on the game flow.
+6. **Momentum:** Update the momentum score (-10 to 10) based on events.
 
-**Output JSON Format:**
+Respond ONLY with valid JSON matching this schema:
 {
   "homeScoreAdded": number,
   "awayScoreAdded": number,
   "momentum": number,
   "tacticalAnalysis": "string",
   "events": [
-    { "minute": number, "type": "goal" | "card" | "injury" | "commentary", "cardType": "yellow" | "red" (optional), "teamName": "string", "player": "string (must be from lists above)", "description": "Short description" }
+    { "minute": number, "type": "goal" | "card" | "injury" | "commentary", "cardType": "yellow" | "red" (optional), "teamName": "string", "player": "string (must be from lists above)", "description": "Short description", "scoreAfter": "string (optional)" }
   ]
 }
 `;
@@ -137,21 +268,138 @@ Away: ${awayPlayersList}
         const response: GenerateContentResponse = await ai.models.generateContent({
             model: model, contents: prompt, config: { responseMimeType: "application/json" }
         });
+        
         const result = JSON.parse(response.text);
-        return result;
+
+        // --- HAWK-EYE VALIDATION STEP ---
+        if (validateSimulationResult(result, homeTeam, awayTeam, currentMatchState)) {
+            return result;
+        } else {
+            throw new Error("Gemini response violated state contract.");
+        }
+
     } catch (error) {
-        console.error("Error calling Gemini API for segment sim:", error);
-        return { 
-            homeScoreAdded: 0, 
-            awayScoreAdded: 0, 
-            momentum: currentMatchState.momentum,
-            tacticalAnalysis: "The game is stuck in a midfield battle.",
-            events: [{ minute: startMinute + 5, type: 'commentary', description: "The match continues...", teamName: '' }] 
-        };
+        console.warn("Gemini Validation Failed or Error. Falling back to Quick Sim.", error);
+        
+        // --- FALLBACK: Deterministic Simulation ---
+        return generateFallbackSegment(
+            homeTeam, 
+            awayTeam, 
+            startMinute, 
+            duration, 
+            { home: currentMatchState.homeScore, away: currentMatchState.awayScore }
+        );
     }
 };
 
-// ... (Rest of the file remains unchanged: getInterviewQuestions, etc.)
+export const getAssistantAnalysis = async (homeTeam: Team, awayTeam: Team, matchState: MatchState, userTeamName: string): Promise<string> => {
+    // A quick, cheap tactical check
+    const isHome = userTeamName === homeTeam.name;
+    const userTeam = isHome ? homeTeam : awayTeam;
+    const oppTeam = isHome ? awayTeam : homeTeam;
+
+    const recentEvents = matchState.events.slice(-5).map(e => `${e.minute}': ${e.description}`).join('\n');
+    
+    const prompt = `
+    You are the Assistant Manager of ${userTeam.name}.
+    We are playing ${oppTeam.name}.
+    Score: ${matchState.homeScore}-${matchState.awayScore}.
+    Minute: ${matchState.currentMinute}.
+    My Tactic: ${userTeam.tactic.formation}, ${userTeam.tactic.mentality}.
+    Momentum: ${matchState.momentum} (-10 Away, +10 Home).
+    
+    Recent Events:
+    ${recentEvents}
+
+    Give me 3 bullet points of quick tactical advice. Keep it punchy and urgent.
+    Example:
+    - Our midfield is getting overrun, switch to 5-3-2?
+    - Their striker is tired, push our line up.
+    - We are lucky to be drawing, demand more passion!
+    
+    Respond in plain text.
+    `;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+             model: model, contents: prompt
+        });
+        return response.text || "Boss, I have no idea what's happening out there.";
+    } catch(e) {
+        return "The noise in the stadium is too loud! I can't analyze properly!";
+    }
+}
+
+// --- NEW FEATURE: AI SCOUT ---
+export const scoutPlayers = async (request: string): Promise<Player[]> => {
+    const prompt = `
+    You are a world-class football scout.
+    The manager has asked: "${request}"
+    
+    Generate 3 distinct, realistic football players that fit this request.
+    They should NOT be real famous players, but believable "newgens" or hidden gems.
+    
+    Respond ONLY with a valid JSON object:
+    {
+      "players": [
+        {
+          "name": "Name",
+          "nationality": "Emoji Flag",
+          "position": "GK" | "DEF" | "MID" | "FWD",
+          "age": number (16-35),
+          "rating": number (65-95, be realistic based on description),
+          "personality": "Ambitious" | "Loyal" | "Mercenary" | "Young Prospect" | "Leader" | "Professional" | "Volatile",
+          "scoutingReport": "A 1-sentence analysis of their style.",
+          "wage": number (weekly wage in £),
+          "marketValue": number (in £)
+        }
+      ]
+    }
+    `;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: model, contents: prompt, config: { responseMimeType: "application/json" }
+        });
+        const result = JSON.parse(response.text);
+        
+        // Map to Player type structure
+        return result.players.map((p: any) => ({
+            ...p,
+            status: { type: 'Available' },
+            effects: [],
+            contractExpires: 3,
+            isStarter: true
+        }));
+    } catch (e) {
+        console.error(e);
+        return [];
+    }
+}
+
+// --- NEW FEATURE: PRESS CONFERENCE ---
+export const generatePressConference = async (context: string): Promise<string[]> => {
+    const prompt = `
+    You are a hostile sports journalist.
+    Context of the match/situation: ${context}
+    
+    Ask 3 difficult, probing questions to the manager.
+    If they lost, grill them on tactics. If they won, ask if they can keep it up.
+    
+    Respond ONLY with JSON: { "questions": ["Q1", "Q2", "Q3"] }
+    `;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+             model: model, contents: prompt, config: { responseMimeType: "application/json" }
+        });
+        const result = JSON.parse(response.text);
+        return result.questions;
+    } catch (e) {
+        return ["Good game today?", "How is the squad morale?", "Any transfer plans?"];
+    }
+}
+
 const getChairmanPersonalityPrompt = (personality: ChairmanPersonality): string => {
     switch (personality) {
         case 'Traditionalist': return "You are a 'Traditionalist' chairman. You value defensive football, fiscal responsibility, and managers who respect the club's history. You dislike flashy, risky tactics and extravagant spending.";

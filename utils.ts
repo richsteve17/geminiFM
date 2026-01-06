@@ -68,7 +68,7 @@ export const generateFixtures = (teams: Team[]): Fixture[] => {
                     fixtures.push({ 
                         id: `${league}-${round}-${home}-${away}`,
                         week: round + 1,
-                        league: league,
+                        league: league as any,
                         homeTeam: home, 
                         awayTeam: away,
                         played: false
@@ -78,7 +78,7 @@ export const generateFixtures = (teams: Team[]): Fixture[] => {
                     fixtures.push({
                          id: `${league}-${round+rounds}-${away}-${home}`,
                         week: round + 1 + rounds,
-                        league: league,
+                        league: league as any,
                         homeTeam: away,
                         awayTeam: home,
                         played: false
@@ -96,6 +96,66 @@ export const generateFixtures = (teams: Team[]): Fixture[] => {
 
     return fixtures.sort((a, b) => a.week - b.week);
 };
+
+export const generateSwissFixtures = (teams: Team[]): Fixture[] => {
+    // A simplified algorithm to guarantee 8 unique matches for 36 teams.
+    // We create a single round-robin schedule (35 rounds) and pick 8 rounds from it.
+    // Rounds 1-4: Play as scheduled.
+    // Rounds 5-8: Play as scheduled but Swap Home/Away to ensure balance.
+
+    const teamNames = teams.map(t => t.name);
+    const n = teamNames.length; // 36
+    const rounds = 35; // n - 1
+    const matchesPerRound = n / 2;
+    
+    // Generate all rounds
+    const allRounds: {home: string, away: string}[][] = [];
+    let roundTeams = [...teamNames];
+
+    for (let r = 0; r < rounds; r++) {
+        const roundFixtures: {home: string, away: string}[] = [];
+        for (let i = 0; i < matchesPerRound; i++) {
+            roundFixtures.push({
+                home: roundTeams[i],
+                away: roundTeams[n - 1 - i]
+            });
+        }
+        allRounds.push(roundFixtures);
+        // Rotate
+        const last = roundTeams.pop();
+        if (last) roundTeams.splice(1, 0, last);
+    }
+
+    // Shuffle rounds to ensure randomness in opponents
+    const shuffledRounds = allRounds.sort(() => 0.5 - Math.random());
+    const selectedRounds = shuffledRounds.slice(0, 8); // Pick 8 rounds
+
+    const fixtures: Fixture[] = [];
+
+    selectedRounds.forEach((roundMatches, index) => {
+        const week = index + 1;
+        roundMatches.forEach(match => {
+            // Weeks 1-4: Normal. Weeks 5-8: Swap Home/Away for variety (though pure round robin already handles home/away balance over 35 games, selecting 8 random ones doesn't guarantee 4H/4A. Swapping manually helps balance).
+            // Actually, a simpler heuristic for 4H/4A:
+            // If index is even (0, 2, 4, 6) -> Use as is.
+            // If index is odd (1, 3, 5, 7) -> Swap.
+            
+            const isSwap = index % 2 !== 0;
+            fixtures.push({
+                id: `ucl-w${week}-${match.home}-${match.away}`,
+                week: week,
+                league: 'Champions League',
+                homeTeam: isSwap ? match.away : match.home,
+                awayTeam: isSwap ? match.home : match.away,
+                played: false,
+                stage: 'League Phase'
+            });
+        });
+    });
+
+    return fixtures;
+};
+
 
 // Simple weighted random simulation for background matches
 export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals: number, awayGoals: number } => {

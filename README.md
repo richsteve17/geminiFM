@@ -19,21 +19,24 @@ Traditional football managers simulate numbers and wrap results in canned text. 
 *   **👔 Dynamic Interviews:** Board interviews evaluate your specific answers. A "Moneyball" owner wants different answers than a "Tycoon."
 *   **🌍 Narrative Match Engine:** The AI understands context. A 90th-minute winner in the World Cup Final generates different commentary than a pre-season friendly.
 *   **💢 Chemistry Rifts:** International teammates who knock each other out of tournaments can return to your club with "Bad Chemistry," affecting performance for weeks.
+*   **🧠 AI Scout:** Ask for "a fast winger under 21 from South America" in natural language, and the AI generates realistic player profiles for you to sign.
+*   **📰 Press Conferences:** Face hostile journalists after a heavy loss or title win. Your answers are generated based on the match context.
 
 ---
 
 ## 🏆 Game Modes
 
-### 1. Club Career (Standard)
+### 1. Club Career (Integrated)
 *   **7 Leagues:** Premier League, Championship, La Liga, Serie A, Bundesliga, Ligue 1, MLS.
-*   **Full Management:** Manage a full season, handle transfers, and hit board expectations.
+*   **Champions League:** Fully integrated 36-team Swiss Model format. Top teams compete in Europe mid-week while fighting for the domestic title on weekends.
+*   **Full Management:** Manage a full season, handle transfers, scouting, and hit board expectations.
 
 ### 2. Zero to Hero (Unemployed Start)
 *   **RPG Character Creation:** Define your background (Sunday League Amateur → World Class Legend).
 *   **Prestige System:** Your background dictates which clubs will even grant you an interview.
 *   **Job Centre:** A live board of vacancies that updates as the simulation progresses.
 
-### 3. World Cup 2026 Prologue (New)
+### 3. World Cup 2026 Prologue
 *   **Authentic Format:** 48 teams, 12 groups (A–L).
 *   **Complex Qualification:** Top 2 advance + 8 best 3rd-place teams.
 *   **High Stakes:** Winning grants "Legend" status, allowing you to walk into elite club jobs in the main season.
@@ -43,10 +46,10 @@ Traditional football managers simulate numbers and wrap results in canned text. 
 ## 🕹️ Gameplay Loop
 
 1.  **Tactical Setup:** Choose formations (4-3-3, Park the Bus, etc.) and mentality.
-2.  **Match Simulation:** Watch the first half simulation.
+2.  **Match Simulation:** Watch the first half simulation with live tactical updates.
 3.  **Touchline Shouts:** Deliver a half-time talk (e.g., "Demand More") that actually influences the AI's second-half simulation.
-4.  **Full Time:** Read the dynamic match report and see how the league table updates.
-5.  **Man Management:** Deal with contract renewals, transfers, and morale issues during the week.
+4.  **Full Time:** Read the dynamic match report, face the press, and see how the league table updates.
+5.  **Man Management:** Deal with contract renewals, transfer negotiations, and morale issues during the week.
 
 ---
 
@@ -84,7 +87,6 @@ If you are cloning this repo to run locally:
 
 ## 🗺️ Roadmap
 
-*   [ ] Champions League / Continental Competitions
 *   [ ] Persistent Manager Reputation Arc (Press & Fan Sentiment)
 *   [ ] Save/Load Season Functionality
 *   [ ] Youth Academy Generation

@@ -1,9 +1,12 @@
 
-import React, { useRef, useEffect } from 'react';
-import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout } from '../types';
+import React, { useRef, useEffect, useState } from 'react';
+import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team } from '../types';
 import { GameState } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
 import { TOUCHLINE_SHOUTS } from '../constants';
+import { getAssistantAnalysis } from '../services/geminiService';
+import { UserIcon } from './icons/UserIcon';
+import PitchView from './PitchView';
 
 interface MatchViewProps {
     fixture: Fixture | undefined;
@@ -20,11 +23,14 @@ interface MatchViewProps {
     leagueTable: LeagueTableEntry[];
     isLoading: boolean;
     currentWeek: number;
+    teams: Record<string, Team>;
 }
 
-const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchState, gameState, onPlayFirstHalf, onPlaySecondHalf, onSimulateSegment, onNextMatch, error, isSeasonOver, userTeamName, isLoading, currentWeek }) => {
+const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchState, gameState, onPlayFirstHalf, onPlaySecondHalf, onSimulateSegment, onNextMatch, error, isSeasonOver, userTeamName, isLoading, currentWeek, teams }) => {
 
     const feedRef = useRef<HTMLDivElement>(null);
+    const [assistantAdvice, setAssistantAdvice] = useState<string | null>(null);
+    const [isAskingAssistant, setIsAskingAssistant] = useState(false);
 
     // Auto-scroll feed
     useEffect(() => {
@@ -32,6 +38,33 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
             feedRef.current.scrollTop = feedRef.current.scrollHeight;
         }
     }, [matchState?.events.length]);
+
+    // Reset advice on new game phase
+    useEffect(() => {
+        setAssistantAdvice(null);
+    }, [gameState]);
+
+    const handleAskAssistant = async () => {
+        if (!fixture || !matchState || !userTeamName) return;
+        setIsAskingAssistant(true);
+        
+        // Fallback team generator to satisfy TypeScript interface if team not found in state
+        const fallbackTeam = (name: string): Team => ({
+            name,
+            league: 'Premier League',
+            players: [],
+            tactic: { formation: '4-4-2', mentality: 'Balanced' },
+            prestige: 50,
+            chairmanPersonality: 'Traditionalist'
+        });
+
+        const homeTeam = teams[fixture.homeTeam] || fallbackTeam(fixture.homeTeam);
+        const awayTeam = teams[fixture.awayTeam] || fallbackTeam(fixture.awayTeam);
+
+        const advice = await getAssistantAnalysis(homeTeam, awayTeam, matchState, userTeamName);
+        setAssistantAdvice(advice);
+        setIsAskingAssistant(false);
+    }
 
     const renderEvent = (event: any) => {
         let color = 'text-gray-300';
@@ -79,31 +112,24 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
     }
 
     const renderTacticalMonitor = () => {
-        if (!matchState || gameState === GameState.PRE_MATCH) return null;
+        if (gameState === GameState.PRE_MATCH) return null;
         
-        // Calculate momentum bar width
-        // Range -10 to 10. Normalize to 0-100%. 0 is full away, 100 is full home.
-        const normalized = Math.min(Math.max(((matchState.momentum + 10) / 20) * 100, 0), 100);
+        // Use default values if matchState is null (start of game)
+        const momentum = matchState?.momentum || 0;
+        const lastEvent = matchState?.events && matchState.events.length > 0 
+            ? matchState.events[matchState.events.length - 1] 
+            : null;
 
         return (
-            <div className="bg-black/40 p-3 rounded-lg border border-gray-700 mb-2">
-                <div className="flex justify-between text-xs text-gray-400 uppercase font-bold mb-1">
-                    <span>Momentum</span>
-                </div>
-                <div className="h-2 w-full bg-gray-700 rounded-full mb-2 relative overflow-hidden">
-                    <div 
-                        className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-500 via-gray-400 to-green-500 transition-all duration-1000" 
-                        style={{ width: '100%', left: '0' }}
-                    >
-                        {/* Marker */}
-                        <div 
-                            className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_white] transition-all duration-1000"
-                            style={{ left: `${normalized}%` }}
-                        />
-                    </div>
-                </div>
-                <div className="text-xs text-gray-300 italic text-center">
-                    "{matchState.tacticalAnalysis || "The match is underway."}"
+            <div className="mb-2">
+                <PitchView 
+                    momentum={momentum} 
+                    homeTeamName={fixture?.homeTeam || 'Home'} 
+                    awayTeamName={fixture?.awayTeam || 'Away'} 
+                    lastEvent={lastEvent}
+                />
+                <div className="text-xs text-gray-300 italic text-center mt-1">
+                    "{matchState?.tacticalAnalysis || "The match is underway."}"
                 </div>
             </div>
         );
@@ -136,7 +162,33 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
         const score = matchState ? `${matchState.homeScore}-${matchState.awayScore}` : 'v';
         
         return (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full relative">
+                 {/* Assistant Overlay */}
+                 {assistantAdvice && (
+                    <div className="absolute inset-0 bg-black/80 z-20 flex items-center justify-center p-6 backdrop-blur-sm">
+                        <div className="bg-gray-800 border-2 border-blue-500 rounded-lg p-6 max-w-md w-full shadow-2xl">
+                             <div className="flex items-center gap-3 mb-4 border-b border-gray-700 pb-2">
+                                <div className="p-2 bg-blue-900 rounded-full">
+                                    <UserIcon className="w-6 h-6 text-blue-300" />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-blue-400 text-lg">Assistant Manager</h4>
+                                    <p className="text-xs text-gray-400">Tactical Analysis</p>
+                                </div>
+                             </div>
+                             <div className="space-y-2 text-gray-200 text-sm font-medium leading-relaxed whitespace-pre-line">
+                                {assistantAdvice}
+                             </div>
+                             <button 
+                                onClick={() => setAssistantAdvice(null)}
+                                className="mt-6 w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-white font-bold"
+                             >
+                                Got it, Boss.
+                             </button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="bg-gray-900/80 p-4 rounded-t-lg border-b border-gray-700">
                      <div className="flex justify-between items-center text-xs uppercase text-gray-500 mb-1">
                         <span>{fixture?.league}</span>
@@ -210,7 +262,16 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
                                 ))}
                             </div>
                         </div>
-                        <p className="text-center text-gray-500 text-xs italic">Tip: You can make substitutions in the Squad panel above.</p>
+                         {/* Assistant Button */}
+                        <div className="mt-2 border-t border-gray-700 pt-2">
+                             <button 
+                                onClick={handleAskAssistant}
+                                disabled={isAskingAssistant}
+                                className="w-full py-2 bg-blue-900/50 hover:bg-blue-800 border border-blue-700 text-blue-200 text-xs font-bold rounded flex items-center justify-center"
+                            >
+                                {isAskingAssistant ? "Consulting..." : "Ask Assistant Manager"}
+                            </button>
+                        </div>
                     </div>
                 );
             }
@@ -219,7 +280,6 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
             return (
                 <div className="space-y-2">
                     <p className="text-center text-green-400 font-bold text-sm">Match Paused ({minute}')</p>
-                    <p className="text-center text-gray-500 text-xs mb-2">Make substitutions now if needed.</p>
                     <div className="grid grid-cols-2 gap-2">
                         {minute < 75 && (
                              <button onClick={() => onSimulateSegment(minute + 15)} className="py-2 bg-gray-600 hover:bg-gray-500 text-white rounded font-bold">
@@ -228,6 +288,17 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
                         )}
                         <button onClick={() => onSimulateSegment(90)} className={`py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold ${minute >= 75 ? 'col-span-2' : ''}`}>
                             Play to Full Time
+                        </button>
+                    </div>
+                    
+                     {/* Assistant Button */}
+                    <div className="pt-1">
+                            <button 
+                            onClick={handleAskAssistant}
+                            disabled={isAskingAssistant}
+                            className="w-full py-2 bg-blue-900/50 hover:bg-blue-800 border border-blue-700 text-blue-200 text-xs font-bold rounded flex items-center justify-center"
+                        >
+                            {isAskingAssistant ? "Consulting..." : "Ask Assistant Manager"}
                         </button>
                     </div>
                 </div>
