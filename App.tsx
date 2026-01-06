@@ -181,6 +181,46 @@ export default function App() {
         setAppScreen(AppScreen.JOB_CENTRE);
     };
 
+    const generateKnockoutFixtures = (week: number, stage: TournamentStage) => {
+        let qualifiedTeams: string[] = [];
+        const isUCL = gameMode === 'Club' && stage !== 'Group Stage';
+
+        if (isUCL && stage === 'Play-offs') {
+            const table = leagueTable.filter(t => t.league === 'Champions League')
+                .sort((a,b) => b.points - a.points || b.goalDifference - a.goalDifference);
+            const playoffTeams = table.slice(8, 24).map(t => t.teamName);
+            
+            if (userTeamName && !playoffTeams.includes(userTeamName) && !table.slice(0, 8).some(t => t.teamName === userTeamName)) {
+                addNewsItem("Champions League Exit", "We failed to reach the knockout stages.", "tournament-result");
+                return null; 
+            }
+            qualifiedTeams = playoffTeams;
+        } else if (gameMode === 'WorldCup' && week === 4) {
+            qualifiedTeams = leagueTable.filter(t => t.league === 'International').sort((a,b) => b.points - a.points).slice(0, 32).map(t => t.name);
+            if (!qualifiedTeams.includes(userTeamName!)) { handleEndPrologue('GroupStageFail'); return null; }
+        } else {
+            // General logic for next rounds: winners of last week
+            const prevFixtures = fixtures.filter(f => f.week === week - 1 && f.played);
+            prevFixtures.forEach(f => {
+                const [h, a] = (f.score || "0-0").split('-').map(Number);
+                qualifiedTeams.push(h > a ? f.homeTeam : f.awayTeam);
+            });
+        }
+
+        const newFixtures: Fixture[] = [];
+        for (let i = 0; i < qualifiedTeams.length; i += 2) {
+            const team1 = qualifiedTeams[i];
+            const team2 = qualifiedTeams[i+1];
+            if (!team2) break;
+
+            newFixtures.push({ id: `ko-${stage}-${i}`, week, league: isUCL ? 'Champions League' : 'International', homeTeam: team1, awayTeam: team2, played: false, stage, isKnockout: true });
+            if (isUCL && stage !== 'Final') {
+                newFixtures.push({ id: `ko-${stage}-L2-${i}`, week: week + 1, league: 'Champions League', homeTeam: team2, awayTeam: team1, played: false, stage, isKnockout: true });
+            }
+        }
+        return newFixtures;
+    };
+
     const handleManagerCreation = (name: string, experience: ExperienceLevel) => generateJobs(experience);
 
     const handleTacticChange = (newTactic: Partial<Tactic>) => {
@@ -270,7 +310,7 @@ export default function App() {
             if (!h || !a) return prev;
             h.played++; a.played++;
             h.goalsFor += hG; h.goalsAgainst += aG; a.goalsFor += aG; a.goalsAgainst += hG;
-            h.goalDifference = h.goalsFor - h.goalsAgainst; a.goalDifference = a.goalsFor - a.goalsAgainst;
+            h.goalDifference = h.goalsFor - h.goalsAgainst; h.goalDifference = a.goalsFor - a.goalsAgainst;
             if (hG > aG) { h.won++; h.points += 3; a.lost++; } else if (aG > hG) { a.won++; a.points += 3; h.lost++; } else { h.drawn++; a.drawn++; h.points++; a.points++; }
             return next.sort((x, y) => y.points - x.points || y.goalDifference - x.goalDifference);
         });
@@ -310,11 +350,10 @@ export default function App() {
         if (nextW > weeksInSeason) { addNewsItem("Season Over", "Check final rankings.", "tournament-result"); setIsLoading(false); return; }
 
         let nextF: Fixture[] = fixtures.filter(f => f.week === nextW);
-        if (gameMode === 'WorldCup' && nextW > 3) {
-            // Basic knockout pairer
-            const qualified = leagueTable.filter(t => t.league === 'International').sort((a,b) => b.points - a.points).slice(0, 32).map(t => t.name);
-            if (!qualified.includes(userTeamName!)) { handleEndPrologue('GroupStageFail'); setIsLoading(false); return; }
-            for(let i=0; i<qualified.length; i+=2) nextF.push({ id: `ko-${nextW}-${i}`, week: nextW, league: 'International', homeTeam: qualified[i], awayTeam: qualified[i+1], played: false, isKnockout: true, stage: 'Round of 32' });
+        // Generation of next stages if necessary
+        if (nextW === 35 && gameMode === 'Club') {
+            const clNext = generateKnockoutFixtures(35, 'Play-offs');
+            if (clNext) nextF = [...nextF, ...clNext];
         }
 
         if (nextF.length > 0 && !fixtures.find(f => f.id === nextF[0].id)) setFixtures(prev => [...prev, ...nextF]);
@@ -375,7 +414,7 @@ export default function App() {
             case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen interview={interview} isLoading={isLoading} error={error} jobOffer={jobOffer} onAnswerSubmit={handleAnswerSubmit} onFinish={(acc) => { if(acc && jobOffer?.offer) initializeGame(interview!.teamName); setAppScreen(acc ? AppScreen.GAMEPLAY : AppScreen.JOB_CENTRE); }} />;
             case AppScreen.TRANSFERS: return <TransfersScreen targets={TRANSFER_TARGETS} onApproachPlayer={p => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.SCOUTING: return <ScoutingScreen onScout={handleScoutRequest} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={p => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
-            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen questions={pressQuestions} onFinish={() => { setAppScreen(AppScreen.GAMEPLAY); proceedToNextWeek(); }} />;
+            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen questions={pressQuestions} onFinish={() => { setAppScreen(AppScreen.GAMEPLAY); handleAdvanceWeek(); }} />;
             case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={() => { if(talkResult?.convinced && playerTalk) { if(playerTalk.context === 'renewal') { setTeams(prev => { const t = prev[userTeamName!]; return { ...prev, [userTeamName!]: { ...t, players: t.players.map(pl => pl.name === playerTalk.player.name ? { ...pl, contractExpires: pl.contractExpires + 3 } : pl) }}; }); } else { setTeams(prev => { const t = prev[userTeamName!]; return { ...prev, [userTeamName!]: { ...t, players: [...t.players, { ...playerTalk.player, isStarter: false }] }}; }); } } setAppScreen(AppScreen.GAMEPLAY); }} />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.GAMEPLAY:

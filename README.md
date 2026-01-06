@@ -8,6 +8,8 @@
 
 Forget canned commentary. Every result, every board interaction, and every contract negotiation is a unique narrative outcome powered by the context-aware reasoning of Google’s Gemini API.
 
+**[🚀 Play the Alpha Demo Here](https://github.com/your-repo-link)**
+
 ---
 
 ## 🚀 The Narrative Engine
@@ -36,9 +38,9 @@ Create your persona from a Sunday League amateur to a former legend. Use the **L
 
 ## 🛠️ How It Works (Dev Notes)
 
-*   **Simulation Hybrid:** We use deterministic logic for background league games to ensure speed and statistical stability, while Gemini powers all user-facing interactions (Matches, Interviews, Press).
-*   **State Machine:** Custom tournament logic handles the complex Swiss Format and multi-tier knockout brackets.
-*   **Validation:** Every AI response passes through a "Hawk-Eye" validator to ensure the LLM respects the game state (e.g., no scoring if a player was sent off).
+*   **Simulation Hybrid:** To ensure statistical stability and performance, background league games run on a deterministic math engine. Gemini is reserved exclusively for high-stakes, user-facing interactions (Matches, Interviews, Press) where narrative nuance matters.
+*   **State Machine:** Custom tournament logic handles the complex Swiss Format and multi-tier knockout brackets, ensuring the AI respects the rules of the competition.
+*   **Validation:** Every AI response passes through a "Hawk-Eye" validator to ensure the LLM respects the game state (e.g., preventing goals from players who were sent off).
 
 ---
 
@@ -50,4 +52,4 @@ Create your persona from a Sunday League amateur to a former legend. Use the **L
 
 ---
 
-**License:** MIT | *Not affiliated with any official football leagues.*
+**License:** MIT | *Not affiliated with or endorsed by any official football leagues or organizations.*
