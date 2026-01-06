@@ -50,6 +50,26 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     const [view, setView] = useState<'squad' | 'tactics'>('squad');
     const starters = team.players.filter(p => p.isStarter);
     const isInternational = team.league === 'International';
+
+    const formationNumbers = useMemo(() => {
+        const parts = team.tactic.formation.split('-').map(n => parseInt(n.trim(), 10));
+        return parts.length === 3 && parts.every(n => !Number.isNaN(n)) ? parts : [0, 0, 0];
+    }, [team.tactic.formation]);
+
+    const warnings = useMemo(() => {
+        const issues: string[] = [];
+        const def = starters.filter(p => ['LB','RB','CB','LWB','RWB'].includes(p.position)).length;
+        const mid = starters.filter(p => ['DM','CM','AM','LM','RM'].includes(p.position)).length;
+        const fwd = starters.filter(p => ['LW','RW','ST','CF'].includes(p.position)).length;
+        const gk = starters.filter(p => p.position === 'GK').length;
+
+        if (starters.length !== 11) issues.push(`Starting XI has ${starters.length}/11 players.`);
+        if (gk !== 1) issues.push(`Formation needs exactly 1 GK (currently ${gk}).`);
+        if (formationNumbers[0] !== 0 && def !== formationNumbers[0]) issues.push(`Defense mismatch: formation calls for ${formationNumbers[0]}, you have ${def}.`);
+        if (formationNumbers[1] !== 0 && mid !== formationNumbers[1]) issues.push(`Midfield mismatch: formation calls for ${formationNumbers[1]}, you have ${mid}.`);
+        if (formationNumbers[2] !== 0 && fwd !== formationNumbers[2]) issues.push(`Attack mismatch: formation calls for ${formationNumbers[2]}, you have ${fwd}.`);
+        return issues;
+    }, [starters, formationNumbers]);
     
     return (
         <div className="bg-gray-800/50 rounded-lg shadow-lg p-4 border border-gray-700 flex flex-col h-full">
@@ -90,6 +110,15 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                     </select>
                 </div>
             </div>
+
+            {warnings.length > 0 && (
+                <div className="mb-3 bg-red-900/40 border border-red-700 text-red-200 text-[10px] p-2 rounded space-y-1">
+                    <p className="font-black uppercase tracking-widest text-[9px]">Tactical Warnings</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                        {warnings.map((w, idx) => <li key={idx}>{w}</li>)}
+                    </ul>
+                </div>
+            )}
 
             <div className="flex-grow overflow-y-auto pr-1">
                 {view === 'tactics' ? (
