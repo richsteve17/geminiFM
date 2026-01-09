@@ -4,7 +4,7 @@ import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team } from
 import { GameState } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
 import { TOUCHLINE_SHOUTS } from '../constants';
-import { getAssistantAnalysis } from '../services/geminiService';
+import { getAssistantAnalysis, detectCriticalErrors, getContextAwareShouts, type CriticalError, type TacticalShout } from '../services/geminiService';
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 
@@ -32,6 +32,14 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
     const [assistantAdvice, setAssistantAdvice] = useState<string | null>(null);
     const [isAskingAssistant, setIsAskingAssistant] = useState(false);
 
+    // Critical Error Detection State ("Salah at GK" Protocol)
+    const [criticalErrors, setCriticalErrors] = useState<CriticalError[]>([]);
+    const [errorsAcknowledged, setErrorsAcknowledged] = useState(false);
+
+    // Context-Aware Shouts State
+    const [dynamicShouts, setDynamicShouts] = useState<TacticalShout[] | null>(null);
+    const [loadingShouts, setLoadingShouts] = useState(false);
+
     useEffect(() => {
         if (feedRef.current) {
             feedRef.current.scrollTop = feedRef.current.scrollHeight;
@@ -40,6 +48,50 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
 
     useEffect(() => {
         setAssistantAdvice(null);
+    }, [gameState]);
+
+    // *** CRITICAL ERROR DETECTION - "Salah at GK" Protocol ***
+    useEffect(() => {
+        if (gameState === GameState.PRE_MATCH && fixture && userTeamName && teams[userTeamName]) {
+            const userTeam = teams[userTeamName];
+            const errors = detectCriticalErrors(userTeam, userTeam.tactic.formation);
+            setCriticalErrors(errors);
+            setErrorsAcknowledged(false); // Reset acknowledgment for new match
+        } else {
+            setCriticalErrors([]);
+        }
+    }, [gameState, fixture, userTeamName, teams]);
+
+    // *** CONTEXT-AWARE SHOUTS - Fetch at Halftime ***
+    useEffect(() => {
+        const fetchDynamicShouts = async () => {
+            if (gameState === GameState.PAUSED && matchState?.currentMinute === 45 && fixture && userTeamName) {
+                setLoadingShouts(true);
+                const homeTeam = teams[fixture.homeTeam];
+                const awayTeam = teams[fixture.awayTeam];
+                const isHome = userTeamName === fixture.homeTeam;
+                const userTeam = isHome ? homeTeam : awayTeam;
+                const oppTeam = isHome ? awayTeam : homeTeam;
+
+                try {
+                    const shouts = await getContextAwareShouts(userTeam, oppTeam, matchState, isHome);
+                    setDynamicShouts(shouts);
+                } catch (e) {
+                    console.error("Failed to fetch dynamic shouts", e);
+                    setDynamicShouts(null); // Fallback to static
+                }
+                setLoadingShouts(false);
+            }
+        };
+
+        fetchDynamicShouts();
+    }, [gameState, matchState?.currentMinute, fixture, userTeamName, teams]);
+
+    // Reset dynamic shouts when match ends
+    useEffect(() => {
+        if (gameState === GameState.PRE_MATCH) {
+            setDynamicShouts(null);
+        }
     }, [gameState]);
 
     const handleAskAssistant = async () => {
@@ -230,10 +282,53 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
         if (isLoading) return <div className="text-center text-gray-500 text-sm">Simulating...</div>;
         
         if (gameState === GameState.PRE_MATCH && fixture) {
-            return ( 
-                <button onClick={onPlayFirstHalf} className="w-full py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700 transition-colors flex items-center justify-center"> 
-                    <FootballIcon className="w-5 h-5 mr-2" /> Kick Off 
-                </button> 
+            const hasCriticalErrors = criticalErrors.some(e => e.severity === 'critical');
+            const hasWarnings = criticalErrors.some(e => e.severity === 'warning');
+
+            return (
+                <div className="space-y-3">
+                    {/* Critical Error Warnings */}
+                    {criticalErrors.length > 0 && !errorsAcknowledged && (
+                        <div className="space-y-2">
+                            {criticalErrors.filter(e => e.severity === 'critical').map((err, i) => (
+                                <div key={`crit-${i}`} className="bg-red-900/80 border-2 border-red-500 rounded-lg p-3 animate-pulse">
+                                    <p className="text-red-200 text-sm font-bold">{err.message}</p>
+                                </div>
+                            ))}
+                            {criticalErrors.filter(e => e.severity === 'warning').map((err, i) => (
+                                <div key={`warn-${i}`} className="bg-yellow-900/60 border border-yellow-600 rounded-lg p-2">
+                                    <p className="text-yellow-200 text-xs">{err.message}</p>
+                                </div>
+                            ))}
+                            {hasCriticalErrors && (
+                                <button
+                                    onClick={() => setErrorsAcknowledged(true)}
+                                    className="w-full py-2 bg-red-800 hover:bg-red-700 text-red-100 text-sm font-bold rounded border border-red-500"
+                                >
+                                    I Know What I'm Doing
+                                </button>
+                            )}
+                            {!hasCriticalErrors && hasWarnings && (
+                                <button
+                                    onClick={() => setErrorsAcknowledged(true)}
+                                    className="w-full py-1 text-yellow-400 text-xs underline hover:text-yellow-300"
+                                >
+                                    Dismiss Warnings
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Kick Off Button */}
+                    {(criticalErrors.length === 0 || errorsAcknowledged) && (
+                        <button
+                            onClick={onPlayFirstHalf}
+                            className="w-full py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700 transition-colors flex items-center justify-center"
+                        >
+                            <FootballIcon className="w-5 h-5 mr-2" /> Kick Off
+                        </button>
+                    )}
+                </div>
             );
         }
 
@@ -243,20 +338,54 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
 
         if (gameState === GameState.PAUSED) {
             if (minute === 45) {
-                 return (
+                // Loading state while fetching context-aware shouts
+                if (loadingShouts) {
+                    return (
+                        <div className="text-center py-4">
+                            <FootballIcon className="w-6 h-6 text-yellow-500 animate-spin mx-auto mb-2" />
+                            <p className="text-yellow-400 text-sm">Reading the game...</p>
+                        </div>
+                    );
+                }
+
+                return (
                     <div>
                         <div className="mb-3 text-center">
                             <h4 className="text-yellow-400 font-bold text-sm uppercase mb-2">Half Time Team Talk</h4>
-                            <div className="grid grid-cols-2 gap-2">
-                                {(Object.keys(TOUCHLINE_SHOUTS) as TouchlineShout[]).map(shout => (
-                                    <button key={shout} onClick={() => onPlaySecondHalf(shout)} className="py-2 text-xs bg-gray-700 text-white font-semibold rounded hover:bg-green-700">
-                                        {shout}
-                                    </button>
-                                ))}
-                            </div>
+
+                            {/* Dynamic Context-Aware Shouts */}
+                            {dynamicShouts && dynamicShouts.length > 0 ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    {dynamicShouts.map((shout) => (
+                                        <button
+                                            key={shout.id}
+                                            onClick={() => onPlaySecondHalf(shout.description as TouchlineShout)}
+                                            className="py-2 px-2 text-xs bg-gray-700 text-white font-semibold rounded hover:bg-green-700 transition-colors text-left group relative"
+                                            title={shout.effect}
+                                        >
+                                            <span className="font-bold text-green-400">{shout.label}</span>
+                                            <span className="block text-gray-300 text-[10px] mt-1 leading-tight truncate">
+                                                "{shout.description}"
+                                            </span>
+                                            {shout.risk && (
+                                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" title={`Risk: ${shout.risk}`}></span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                /* Fallback to Static Shouts */
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(Object.keys(TOUCHLINE_SHOUTS) as TouchlineShout[]).map(shout => (
+                                        <button key={shout} onClick={() => onPlaySecondHalf(shout)} className="py-2 text-xs bg-gray-700 text-white font-semibold rounded hover:bg-green-700">
+                                            {shout}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         <div className="mt-2 border-t border-gray-700 pt-2">
-                             <button 
+                            <button
                                 onClick={handleAskAssistant}
                                 disabled={isAskingAssistant}
                                 className="w-full py-2 bg-blue-900/50 hover:bg-blue-800 border border-blue-700 text-blue-200 text-xs font-bold rounded flex items-center justify-center"
