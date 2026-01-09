@@ -9,7 +9,9 @@ import { FORMATIONS, MENTALITIES, CHAIRMAN_PERSONALITIES, PLAYER_PERSONALITIES }
 import { BrokenLinkIcon } from './icons/BrokenLinkIcon';
 import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
 import { UserGroupIcon } from './icons/UserGroupIcon';
+import { BriefcaseIcon } from './icons/BriefcaseIcon'; // Reusing for finance
 import TacticsBoard from './TacticsBoard';
+import { analyzeTactics, TacticalAssignment, FORMATION_SLOTS } from '../utils';
 
 interface TeamDetailsProps {
     team: Team;
@@ -21,6 +23,7 @@ interface TeamDetailsProps {
     gameState: GameState;
     subsUsed: number;
     onSubstitute: (playerIn: Player, playerOut: Player) => void;
+    onReorderPlayers?: (players: Player[]) => void;
 }
 
 const getPositionColor = (position: string) => {
@@ -45,13 +48,21 @@ const getPersonalityBadgeColor = (p: PlayerPersonality) => {
     }
 }
 
-const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onStartContractTalk, onToggleStarter, gameState, subsUsed, onSubstitute }) => {
-    const [view, setView] = useState<'squad' | 'tactics'>('squad');
+const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onStartContractTalk, onToggleStarter, gameState, subsUsed, onSubstitute, onReorderPlayers }) => {
+    const [view, setView] = useState<'squad' | 'tactics' | 'finance'>('tactics'); 
     const [showContracts, setShowContracts] = useState(false);
-    const [subSelection, setSubSelection] = useState<Player | null>(null);
+    
+    // Board Selection State (for click-to-swap)
+    const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
 
     const isNationalTeam = team.league === 'International';
     const isMatchLive = gameState === 'PAUSED'; 
+
+    // Financial Calcs
+    const totalWageBill = team.players.reduce((sum, p) => sum + p.wage, 0);
+    const wageBudget = Math.floor(team.balance * 0.005) + totalWageBill; // Simple heuristic: Budget is current bill + small % of balance
+    const highestEarner = [...team.players].sort((a,b) => b.wage - a.wage)[0];
+    const averageWage = Math.floor(totalWageBill / team.players.length);
 
     const playersWithContractIssues = !isNationalTeam ? team.players
         .filter(p => p.contractExpires < 2)
@@ -60,22 +71,44 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     const starters = team.players.filter(p => p.isStarter);
     const bench = team.players.filter(p => !p.isStarter);
 
-    const handlePlayerClick = (player: Player, isBench: boolean) => {
-        if (isMatchLive) {
-            if (subsUsed >= 5) return; 
-            if (isBench) {
-                if (subSelection?.name === player.name) setSubSelection(null); 
-                else setSubSelection(player);
-            } else {
-                if (subSelection) {
-                    onSubstitute(subSelection, player);
-                    setSubSelection(null);
+    // Run Tactical Analysis
+    const tacticalAnalysis = useMemo(() => analyzeTactics(starters, team.tactic.formation), [starters, team.tactic.formation]);
+
+    // Handle "Swap" on the board
+    const handleSlotClick = (clickedSlotIndex: number) => {
+        if (selectedSlot === null) {
+            // Select first player
+            setSelectedSlot(clickedSlotIndex);
+        } else {
+            // Swap logic
+            if (selectedSlot === clickedSlotIndex) {
+                setSelectedSlot(null); // Deselect
+                return;
+            }
+
+            // We need to reorder the team.players array to reflect this swap in the 'starters' subset.
+            // 1. Get current starters list
+            const currentStarters = [...starters];
+            
+            // 2. Perform swap in the local starters copy
+            if (currentStarters[selectedSlot] && currentStarters[clickedSlotIndex]) {
+                const temp = currentStarters[selectedSlot];
+                currentStarters[selectedSlot] = currentStarters[clickedSlotIndex];
+                currentStarters[clickedSlotIndex] = temp;
+                
+                // 3. Reconstruct full player list: New Starters + Existing Bench
+                if (onReorderPlayers) {
+                     onReorderPlayers([...currentStarters, ...bench]);
                 }
             }
-        } else if (gameState === 'PRE_MATCH') {
-            onToggleStarter(player.name);
+            setSelectedSlot(null);
         }
     };
+
+    // Helper for the list view interaction
+    const handleListClick = (player: Player) => {
+        onToggleStarter(player.name);
+    }
 
     const renderPlayerItem = (player: Player, isBench: boolean) => {
         const personalityColor = getPersonalityBadgeColor(player.personality);
@@ -96,12 +129,13 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
             }
         });
 
-        const isSelectedSub = subSelection?.name === player.name && isMatchLive;
+        // Check if out of position (only relevant for starters list if we want to show it there too)
+        const assignment = !isBench ? tacticalAnalysis.assignments.find(a => a.player.name === player.name) : null;
+        const outOfPosition = assignment?.isOutOfPosition;
 
         return (
-            <li key={player.name} onClick={() => handlePlayerClick(player, isBench)} className={`p-2 rounded border cursor-pointer flex items-center gap-2 transition-all group ${
+            <li key={player.name} onClick={() => handleListClick(player)} className={`p-2 rounded border cursor-pointer flex items-center gap-2 transition-all group ${
                 player.status.type === 'Injured' ? 'bg-red-900/30 border-red-500' :
-                isSelectedSub ? 'bg-green-900/40 border-green-500 opacity-100 animate-pulse' :
                 isBench ? 'bg-gray-900/50 border-gray-700 hover:bg-gray-700 opacity-80 hover:opacity-100' :
                 'bg-gray-800 border-gray-700 hover:bg-gray-700'
             }`}>
@@ -111,6 +145,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                     <div className="flex items-center gap-2">
                         <p className="text-xs font-bold truncate text-gray-200">{player.name}</p>
                         <div className="flex gap-1">{effects}</div>
+                        {outOfPosition && <span className="text-[10px] text-orange-400" title={`Playing as ${assignment?.formationRole}`}>⚠️</span>}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                         <span className={`text-[9px] font-bold px-1.5 rounded border ${personalityColor} uppercase tracking-wider`}>
@@ -118,7 +153,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         </span>
                         {!isNationalTeam && (
                             <span className="text-[9px] text-gray-500">
-                                {player.contractExpires === 0 ? <span className="text-red-400 font-bold">Expiring!</span> : `${player.contractExpires}y`}
+                                {player.contractExpires === 0 ? <span className="text-red-400 font-bold">Expiring!</span> : `${player.contractExpires}y`} · £{player.wage.toLocaleString()}/wk
                             </span>
                         )}
                     </div>
@@ -135,54 +170,81 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 <div>
                     <h2 className="text-xl font-bold text-green-400">{team.name}</h2>
                     {!isNationalTeam && (
-                        <p className="text-xs text-blue-400 font-mono font-bold uppercase">£{team.balance.toLocaleString()}</p>
+                        <p className="text-xs text-blue-400 font-mono font-bold uppercase">Balance: £{team.balance.toLocaleString()}</p>
                     )}
                 </div>
                 <div className="flex bg-gray-900 rounded p-1 border border-gray-700 shadow-inner">
-                    <button onClick={() => setView('squad')} className={`p-1.5 rounded transition-all ${view === 'squad' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`}><UserGroupIcon className="w-4 h-4" /></button>
-                    <button onClick={() => setView('tactics')} className={`p-1.5 rounded transition-all ${view === 'tactics' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`}><GlobeAltIcon className="w-4 h-4" /></button>
+                    <button onClick={() => setView('squad')} className={`p-1.5 rounded transition-all ${view === 'squad' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`} title="Squad List"><UserGroupIcon className="w-4 h-4" /></button>
+                    <button onClick={() => setView('tactics')} className={`p-1.5 rounded transition-all ${view === 'tactics' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`} title="Tactics Board"><GlobeAltIcon className="w-4 h-4" /></button>
+                    {!isNationalTeam && (
+                        <button onClick={() => setView('finance')} className={`p-1.5 rounded transition-all ${view === 'finance' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`} title="Finances"><BriefcaseIcon className="w-4 h-4" /></button>
+                    )}
                 </div>
             </div>
 
-            <div className="mb-4">
-                <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">{isNationalTeam ? 'Federation Goals' : 'Board Focus'}</p>
-                <div className="bg-gray-900/50 p-2 rounded border border-gray-700 group relative">
-                    <p className="text-xs font-bold text-gray-300">{team.chairmanPersonality}</p>
-                    <div className="hidden group-hover:block absolute top-full left-0 right-0 z-50 bg-black border border-gray-600 p-2 text-[10px] text-white rounded mt-1 shadow-2xl w-64">
-                        {CHAIRMAN_PERSONALITIES[team.chairmanPersonality]}
-                    </div>
-                </div>
-                {team.objectives && team.objectives.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                        {team.objectives.map((obj, i) => (
-                            <div key={i} className="text-[10px] font-bold text-blue-300 bg-blue-900/20 px-2 py-1 rounded border border-blue-900/50">
-                                • {obj}
+            {view !== 'finance' && (
+                <>
+                    <div className="mb-4">
+                        <div className="bg-gray-900/50 p-2 rounded border border-gray-700 group relative">
+                            <p className="text-xs font-bold text-gray-300">{team.chairmanPersonality}</p>
+                            <div className="hidden group-hover:block absolute top-full left-0 right-0 z-50 bg-black border border-gray-600 p-2 text-[10px] text-white rounded mt-1 shadow-2xl w-64">
+                                {CHAIRMAN_PERSONALITIES[team.chairmanPersonality]}
                             </div>
-                        ))}
+                        </div>
                     </div>
-                )}
-            </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-4">
-                <div>
-                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Formation</label>
-                    <select value={team.tactic.formation} onChange={e => onTacticChange({ formation: e.target.value as Formation })} className="w-full bg-gray-700 text-xs rounded p-2 border border-gray-600 focus:ring-1 focus:ring-green-500 outline-none">
-                        {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Style</label>
-                    <select value={team.tactic.mentality} onChange={e => onTacticChange({ mentality: e.target.value as Mentality })} className="w-full bg-gray-700 text-xs rounded p-2 border border-gray-600 focus:ring-1 focus:ring-green-500 outline-none">
-                        {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                </div>
-            </div>
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                        <div>
+                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Formation</label>
+                            <select value={team.tactic.formation} onChange={e => onTacticChange({ formation: e.target.value as Formation })} className="w-full bg-gray-700 text-xs rounded p-2 border border-gray-600 focus:ring-1 focus:ring-green-500 outline-none">
+                                {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Style</label>
+                            <select value={team.tactic.mentality} onChange={e => onTacticChange({ mentality: e.target.value as Mentality })} className="w-full bg-gray-700 text-xs rounded p-2 border border-gray-600 focus:ring-1 focus:ring-green-500 outline-none">
+                                {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* View Content */}
             <div className="flex-grow overflow-y-auto pr-1">
-                {view === 'tactics' ? (
-                    <TacticsBoard starters={starters} formation={team.tactic.formation} onPlayerClick={p => onToggleStarter(p.name)} />
-                ) : (
+                {view === 'tactics' && (
+                    <div>
+                        <TacticsBoard 
+                            assignments={tacticalAnalysis.assignments} 
+                            formation={team.tactic.formation} 
+                            onSlotClick={handleSlotClick} 
+                            selectedSlotIndex={selectedSlot}
+                        />
+                        
+                        {/* Tactical Report Panel */}
+                        <div className="mt-4 bg-gray-900/80 rounded border border-gray-700 p-3">
+                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tactical Report</h4>
+                                <span className={`text-xs font-black ${tacticalAnalysis.score > 80 ? 'text-green-400' : tacticalAnalysis.score > 50 ? 'text-yellow-400' : 'text-red-500'}`}>
+                                    {tacticalAnalysis.score}% Efficiency
+                                </span>
+                            </div>
+                            <div className="space-y-1">
+                                {tacticalAnalysis.feedback.length > 0 ? (
+                                    tacticalAnalysis.feedback.map((msg, i) => (
+                                        <p key={i} className="text-[10px] text-gray-300 flex items-start gap-1">
+                                            <span>•</span> {msg}
+                                        </p>
+                                    ))
+                                ) : (
+                                    <p className="text-[10px] text-gray-500 italic">No issues detected.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )} 
+                
+                {view === 'squad' && (
                     <div className="space-y-4">
                         <div>
                             <div className="flex justify-between items-center mb-1 pl-1">
@@ -223,15 +285,57 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         </div>
                     </div>
                 )}
-            </div>
 
-            {/* Legend - Added per feedback */}
-            <div className="mt-2 py-2 px-3 bg-gray-900/50 rounded border border-gray-800 flex flex-wrap gap-3 justify-center text-[9px] text-gray-400">
-                <span className="flex items-center gap-1"><span className="text-xs">🔥</span> On Fire</span>
-                <span className="flex items-center gap-1"><span className="text-xs">🏆</span> Winner</span>
-                <span className="flex items-center gap-1"><span className="text-xs">😔</span> Sad</span>
-                <span className="flex items-center gap-1"><BrokenLinkIcon className="w-3 h-3 text-orange-500" /> Clash</span>
-                <span className="flex items-center gap-1"><span className="text-xs">🚑</span> Injured</span>
+                {view === 'finance' && (
+                    <div className="space-y-4 pt-2">
+                        {/* Wage Budget Summary */}
+                        <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Weekly Wage Budget</h4>
+                            <div className="flex justify-between items-end mb-1">
+                                <span className={`text-2xl font-mono font-bold ${totalWageBill > wageBudget ? 'text-red-400' : 'text-green-400'}`}>
+                                    £{totalWageBill.toLocaleString()}
+                                </span>
+                                <span className="text-sm text-gray-500 font-mono mb-1"> / £{wageBudget.toLocaleString()}</span>
+                            </div>
+                            <div className="w-full h-2 bg-gray-900 rounded-full overflow-hidden">
+                                <div 
+                                    className={`h-full ${totalWageBill > wageBudget ? 'bg-red-500' : 'bg-green-500'}`} 
+                                    style={{ width: `${Math.min((totalWageBill / wageBudget) * 100, 100)}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-2">
+                                {totalWageBill > wageBudget ? '⚠️ You are overspending. Board confidence is falling.' : '✅ You are within financial fair play limits.'}
+                            </p>
+                        </div>
+
+                        {/* Salary Context */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
+                                <p className="text-[10px] text-gray-500 uppercase">Squad Average</p>
+                                <p className="text-lg font-bold text-white">£{averageWage.toLocaleString()}</p>
+                            </div>
+                            <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
+                                <p className="text-[10px] text-gray-500 uppercase">Highest Earner</p>
+                                <p className="text-lg font-bold text-yellow-400">£{highestEarner?.wage.toLocaleString()}</p>
+                                <p className="text-[10px] text-gray-400 truncate">{highestEarner?.name}</p>
+                            </div>
+                        </div>
+
+                        {/* Contract Status Overview */}
+                        <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Payroll Distribution</h4>
+                            <div className="space-y-1">
+                                {team.players.sort((a,b) => b.wage - a.wage).slice(0, 5).map(p => (
+                                    <div key={p.name} className="flex justify-between items-center text-xs border-b border-gray-800 pb-1 last:border-0">
+                                        <span className="text-gray-300">{p.name}</span>
+                                        <span className="font-mono text-gray-400">£{p.wage.toLocaleString()}</span>
+                                    </div>
+                                ))}
+                                <p className="text-[10px] text-center text-gray-500 pt-1 italic">...and {team.players.length - 5} others</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-700">

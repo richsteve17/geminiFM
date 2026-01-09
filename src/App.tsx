@@ -1,7 +1,7 @@
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, TournamentStage, GameMode } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode } from './types';
 import { AppScreen, GameState } from './types';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
@@ -20,10 +20,9 @@ import CreateManagerScreen from './components/CreateManagerScreen';
 import TutorialOverlay from './components/TutorialOverlay';
 import ScoutingScreen from './components/ScoutingScreen';
 import PressConferenceScreen from './components/PressConferenceScreen';
+import MechanicsGuide from './components/MechanicsGuide';
 import { generateWorldCupStructure, NATIONAL_TEAMS } from './international';
 import { getChampionsLeagueParticipants } from './europe';
-
-const INTERNATIONAL_BREAK_WEEKS = [10, 20];
 
 const convertNationalTeam = (nt: NationalTeam): Team => ({
     name: nt.name,
@@ -43,6 +42,7 @@ export default function App() {
     const [gameMode, setGameMode] = useState<GameMode>('Club');
     const [isPrologue, setIsPrologue] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
+    const [showMechanicsGuide, setShowMechanicsGuide] = useState(false);
     const [tutorialStep, setTutorialStep] = useState(0);
     const [currentWeek, setCurrentWeek] = useState(1);
     const [weeksInSeason, setWeeksInSeason] = useState(38); 
@@ -60,42 +60,50 @@ export default function App() {
     const [jobOffer, setJobOffer] = useState<{ offer: boolean; reasoning: string } | null>(null);
     const [playerTalk, setPlayerTalk] = useState<PlayerTalk | null>(null);
     const [talkResult, setTalkResult] = useState<{ convinced: boolean; reasoning: string } | null>(null);
+    
+    // Store pending agreement terms temporarily
+    const [pendingContractTerms, setPendingContractTerms] = useState<{ wage: number, length: number } | null>(null);
+
     const [scoutResults, setScoutResults] = useState<Player[]>([]);
     const [pressQuestions, setPressQuestions] = useState<string[]>([]);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
+    
+    // Persistent Manager Reputation
+    const [managerReputation, setManagerReputation] = useState<number>(0);
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
 
     // --- SAVE / LOAD SYSTEM ---
-    useEffect(() => {
-        // Load on Mount
-        const savedData = localStorage.getItem('gfm_save_v1');
-        if (savedData && appScreen === AppScreen.START_SCREEN) {
-            // Optional: Auto-load or show "Continue" button. 
-            // For now, we will just log it exists.
-            console.log("Save game found.");
+    const saveGame = () => {
+        if (userTeamName) {
+            const stateToSave = {
+                userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason,
+                teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
+                managerReputation
+            };
+            localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
+            alert("Game Saved Successfully!");
         }
-    }, []);
+    };
 
     useEffect(() => {
-        // Auto-Save on State Change (Debounced ideally, but simple here)
+        // Auto-save on critical state changes
         if (userTeamName && appScreen !== AppScreen.START_SCREEN) {
             const stateToSave = {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason,
-                teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState
+                teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
+                managerReputation
             };
             localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
         }
-    }, [userTeamName, currentWeek, teams, fixtures, news, gameState, appScreen]);
+    }, [currentWeek, gameState, managerReputation]);
 
     const handleQuit = () => {
-        if (window.confirm("Are you sure you want to quit to the main menu? Unsaved progress in the current match will be lost.")) {
-            setAppScreen(AppScreen.START_SCREEN);
-            setGameState(GameState.PRE_MATCH);
-            setMatchState(null);
-            setUserTeamName(null);
-            // We don't clear localStorage so they can continue later if they want
-        }
+        setAppScreen(AppScreen.START_SCREEN);
+        setGameState(GameState.PRE_MATCH);
+        setMatchState(null);
+        setUserTeamName(null);
+        setTeams(allTeams); // Reset teams to initial state
     };
 
     const handleContinue = () => {
@@ -114,15 +122,14 @@ export default function App() {
                 setNews(parsed.news);
                 setWeeklyResults(parsed.weeklyResults);
                 setGameState(parsed.gameState);
+                setManagerReputation(parsed.managerReputation || 50);
                 
-                // Restore screen but ensure we don't get stuck in a transient state
                 if (parsed.appScreen === AppScreen.GAMEPLAY || parsed.appScreen === AppScreen.JOB_CENTRE) {
                     setAppScreen(parsed.appScreen);
                 } else {
                     setAppScreen(AppScreen.GAMEPLAY);
                 }
 
-                // Restore current fixture logic
                 const f = parsed.fixtures.find((fx: Fixture) => 
                     (fx.homeTeam === parsed.userTeamName || fx.awayTeam === parsed.userTeamName) && fx.week === parsed.currentWeek
                 );
@@ -141,13 +148,11 @@ export default function App() {
     const initializeWorldCup = (selectedNationalTeamName: string) => {
         setGameMode('WorldCup');
         setIsPrologue(true);
+        setManagerReputation(90); // World Class Rep for WC
         
-        // Generate a 48-team World Cup Structure
-        // Crucial: The generator handles unique names (e.g. "France", "France (E)")
         const wcTeamsRecord = generateWorldCupStructure();
         setTeams(wcTeamsRecord);
 
-        // Find the actual key for the user's team. 
         let actualTeamName = selectedNationalTeamName;
         if (!wcTeamsRecord[actualTeamName]) {
             const found = Object.keys(wcTeamsRecord).find(k => k.startsWith(selectedNationalTeamName));
@@ -155,7 +160,6 @@ export default function App() {
         }
         setUserTeamName(actualTeamName);
 
-        // Generate Group Stage Fixtures (Weeks 1-3)
         const allWcTeams = Object.values(wcTeamsRecord);
         const groupFixtures: Fixture[] = [];
         const groups: Record<string, string[]> = {};
@@ -167,7 +171,6 @@ export default function App() {
             }
         });
 
-        // 12 Groups * 3 Rounds * 2 Matches = 72 Group Matches
         Object.entries(groups).forEach(([groupName, teamNames]) => {
             if (teamNames.length === 4) {
                  groupFixtures.push({ id: `g-${groupName}-1-1`, week: 1, league: 'International', homeTeam: teamNames[0], awayTeam: teamNames[1], played: false, stage: 'Group Stage' });
@@ -192,7 +195,6 @@ export default function App() {
         setNews([{ id: Date.now(), week: 1, title: 'World Cup 2026 Begins', body: '48 teams. 12 Groups. 104 Matches. The road to glory starts now.', type: 'tournament-result' }]);
         setAppScreen(AppScreen.GAMEPLAY);
         
-        // Find first match for the ACTUAL team name
         const week1Fixtures = groupFixtures.filter(f => f.week === 1);
         const userMatch = week1Fixtures.find(f => f.homeTeam === actualTeamName || f.awayTeam === actualTeamName);
         setCurrentFixture(userMatch);
@@ -204,6 +206,7 @@ export default function App() {
     // --- STANDARD: Club Initialization ---
     const initializeGame = useCallback((selectedTeamName: string) => {
         setGameMode('Club'); setIsPrologue(false);
+        setManagerReputation(70); // Standard start for club mode unless unemployed
         let finalTeamsState = { ...allTeams };
         const domesticFixtures = generateFixtures(Object.values(allTeams));
         const { participants, newTeams } = getChampionsLeagueParticipants(allTeams);
@@ -242,33 +245,46 @@ export default function App() {
         setUserTeamName(selectedTeamName);
         setAppScreen(AppScreen.GAMEPLAY);
         setCurrentFixture(finalFixtures.find(f => (f.homeTeam === selectedTeamName || f.awayTeam === selectedTeamName) && f.week === 1));
+        
         startTutorial();
     }, []);
 
-    const generateJobs = (experience: ExperienceLevel) => {
+    const handleCreateManager = (name: string, exp: ExperienceLevel) => {
+        // Initialize reputation based on background
+        let initialRep = 15;
+        if (exp.id === 'semi-pro') initialRep = 40;
+        if (exp.id === 'pro') initialRep = 60;
+        if (exp.id === 'international') initialRep = 80;
+        if (exp.id === 'legend') initialRep = 95;
+        
+        setManagerReputation(initialRep);
+        generateJobs(initialRep);
+    };
+
+    const generateJobs = (currentRep: number | ExperienceLevel) => {
+        // If passing from create screen, it's a number (via handleCreateManager logic above)
+        // If calling later, we use currentRep state
+        
+        const rep = typeof currentRep === 'number' ? currentRep : managerReputation;
+
         const allTeamList: Team[] = Object.values(allTeams);
         const shuffle = (array: Team[]) => array.sort(() => 0.5 - Math.random());
         let vacancies: Team[] = [];
 
-        if (experience.id === 'legend') {
-             vacancies = shuffle(allTeamList.filter(t => t.prestige >= 85)).slice(0, 8);
-        } else {
-            // Relaxed filtering for Sunday League to ensure options appear
-            const prestigeMax = experience.prestigeCap;
-            const prestigeMin = experience.prestigeMin;
-            
-            const feasible = allTeamList.filter(t => t.prestige <= prestigeMax && t.prestige >= prestigeMin);
-            const reach = allTeamList.filter(t => t.prestige > prestigeMax && t.prestige <= prestigeMax + 10);
-            
-            vacancies = [
-                ...shuffle(feasible).slice(0, 4),
-                ...shuffle(reach).slice(0, 2),
-            ];
-            
-            // If still empty (edge case), force some low tier teams
-            if (vacancies.length === 0) {
-                vacancies = shuffle(allTeamList.filter(t => t.prestige < 65)).slice(0, 3);
-            }
+        // Dynamic Job generation based on current reputation
+        const feasible = allTeamList.filter(t => t.prestige <= rep && t.prestige >= rep - 20);
+        const reach = allTeamList.filter(t => t.prestige > rep && t.prestige <= rep + 10);
+        const safety = allTeamList.filter(t => t.prestige < rep - 20);
+        
+        vacancies = [
+            ...shuffle(feasible).slice(0, 4),
+            ...shuffle(reach).slice(0, 2),
+            ...shuffle(safety).slice(0, 1),
+        ];
+        
+        // Failsafe
+        if (vacancies.length === 0) {
+             vacancies = shuffle(allTeamList.filter(t => t.prestige < 60)).slice(0, 3);
         }
 
         const jobs: Job[] = vacancies.map(t => ({
@@ -291,6 +307,17 @@ export default function App() {
             const updated = team.players.map(p => p.name === pName ? { ...p, isStarter: !p.isStarter } : p);
             return { ...prev, [userTeamName]: { ...team, players: updated } };
         });
+    };
+
+    const handleReorderPlayers = (newPlayerOrder: Player[]) => {
+        if (!userTeamName) return;
+        setTeams(prev => ({
+            ...prev,
+            [userTeamName]: {
+                ...prev[userTeamName],
+                players: newPlayerOrder
+            }
+        }));
     };
 
     const handleAdvanceWeek = async () => {
@@ -318,9 +345,121 @@ export default function App() {
         setMatchState(null); setGameState(GameState.PRE_MATCH); setIsLoading(false);
     };
 
+    // --- MATCH ENGINE HOOKS ---
+    const handlePlayFirstHalf = async () => {
+        if (!currentFixture || !userTeam) return;
+        setGameState(GameState.SIMULATING); setIsLoading(true);
+        const home = teams[currentFixture.homeTeam];
+        const away = teams[currentFixture.awayTeam];
+        
+        const startState = matchState || {
+            currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off."
+        };
+
+        const result = await simulateMatchSegment(home, away, startState, 45, {});
+        
+        setMatchState(prev => ({
+            ...startState,
+            currentMinute: 45,
+            homeScore: (prev?.homeScore || 0) + result.homeScoreAdded,
+            awayScore: (prev?.awayScore || 0) + result.awayScoreAdded,
+            events: [...(prev?.events || []), ...result.events],
+            momentum: result.momentum,
+            tacticalAnalysis: result.tacticalAnalysis
+        }));
+        
+        setGameState(GameState.PAUSED); setIsLoading(false);
+    };
+
+    const handlePlaySecondHalf = async (shout: TouchlineShout) => {
+        handleSimulateSegment(60);
+    };
+
+    const handleSimulateSegment = async (targetMinute: number) => {
+        if (!currentFixture || !matchState || !userTeam) return;
+        setGameState(GameState.SIMULATING); setIsLoading(true);
+        const home = teams[currentFixture.homeTeam];
+        const away = teams[currentFixture.awayTeam];
+
+        const result = await simulateMatchSegment(home, away, matchState, targetMinute, {});
+        
+        const newState = {
+            ...matchState,
+            currentMinute: targetMinute,
+            homeScore: matchState.homeScore + result.homeScoreAdded,
+            awayScore: matchState.awayScore + result.awayScoreAdded,
+            events: [...matchState.events, ...result.events],
+            momentum: result.momentum,
+            tacticalAnalysis: result.tacticalAnalysis,
+            isFinished: targetMinute >= 90
+        };
+
+        setMatchState(newState);
+        
+        if (targetMinute >= 90) {
+            setGameState(GameState.POST_MATCH);
+            
+            // Reputation Logic
+            const isHome = currentFixture.homeTeam === userTeamName;
+            const userGoals = isHome ? newState.homeScore : newState.awayScore;
+            const oppGoals = isHome ? newState.awayScore : newState.homeScore;
+            
+            if (userGoals > oppGoals) setManagerReputation(r => Math.min(100, r + 2));
+            else if (userGoals === oppGoals) setManagerReputation(r => Math.min(100, r + 1));
+            else setManagerReputation(r => Math.max(0, r - 1));
+
+            setLeagueTable(prev => {
+                const newTable = [...prev];
+                const updateTeam = (name: string, goalsFor: number, goalsAgainst: number) => {
+                    const idx = newTable.findIndex(t => t.teamName === name);
+                    if (idx !== -1) {
+                        const t = newTable[idx];
+                        t.played++;
+                        t.goalsFor += goalsFor;
+                        t.goalsAgainst += goalsAgainst;
+                        t.goalDifference = t.goalsFor - t.goalsAgainst;
+                        if (goalsFor > goalsAgainst) { t.won++; t.points += 3; }
+                        else if (goalsFor === goalsAgainst) { t.drawn++; t.points += 1; }
+                        else { t.lost++; }
+                    }
+                };
+                updateTeam(currentFixture.homeTeam, newState.homeScore, newState.awayScore);
+                updateTeam(currentFixture.awayTeam, newState.awayScore, newState.homeScore);
+                return newTable;
+            });
+        } else {
+            setGameState(GameState.PAUSED);
+        }
+        setIsLoading(false);
+    };
+
+    const handleSubstitute = (playerIn: Player, playerOut: Player) => {
+        if (!userTeamName || !matchState) return;
+        const isHome = currentFixture?.homeTeam === userTeamName;
+        
+        setTeams(prev => {
+            const t = prev[userTeamName];
+            const updatedPlayers = t.players.map(p => {
+                if (p.name === playerIn.name) return { ...p, isStarter: true };
+                if (p.name === playerOut.name) return { ...p, isStarter: false };
+                return p;
+            });
+            return { ...prev, [userTeamName]: { ...t, players: updatedPlayers } };
+        });
+
+        setMatchState(prev => prev ? ({
+            ...prev,
+            subsUsed: {
+                home: isHome ? prev.subsUsed.home + 1 : prev.subsUsed.home,
+                away: !isHome ? prev.subsUsed.away + 1 : prev.subsUsed.away
+            },
+            events: [...prev.events, { id: Date.now(), minute: prev.currentMinute, type: 'sub', description: `SUB: ${playerIn.name} ON, ${playerOut.name} OFF`, teamName: userTeamName }]
+        }) : null);
+    };
+
     const handleStartPlayerTalk = async (player: Player, context: 'transfer' | 'renewal') => {
         if (!userTeamName) return;
-        setIsLoading(true); setTalkResult(null); setPlayerTalk(null); setError(null);
+        setIsLoading(true); setTalkResult(null); setPlayerTalk(null); setError(null); setPendingContractTerms(null);
         setAppScreen(AppScreen.PLAYER_TALK);
         try {
             const questions = await getPlayerTalkQuestions(player, teams[userTeamName], context);
@@ -328,27 +467,68 @@ export default function App() {
         } catch (e) { setError("Negotiations failed."); setAppScreen(AppScreen.GAMEPLAY); } finally { setIsLoading(false); }
     };
 
-    const handlePlayerTalkAnswer = async (answer: string) => {
+    const handlePlayerTalkAnswer = async (answer: string, offer?: { wage: number, length: number }) => {
         if (!playerTalk || !userTeamName) return;
         const newAnswers = [...playerTalk.answers, answer];
-        if (playerTalk.currentQuestionIndex < playerTalk.questions.length - 1) {
-            setPlayerTalk({ ...playerTalk, answers: newAnswers, currentQuestionIndex: playerTalk.currentQuestionIndex + 1 });
-        } else {
+        
+        // If this is an offer step, we store the terms and evaluate
+        if (offer) {
+            setPendingContractTerms(offer);
             setIsLoading(true);
             try {
-                const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context);
+                // Pass offer to evaluation
+                const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context, offer);
                 setTalkResult(result);
             } catch (e) { setError("Evaluation failed."); } finally { setIsLoading(false); }
+        } else if (playerTalk.currentQuestionIndex < playerTalk.questions.length - 1) {
+            // Just advancing the chat
+            setPlayerTalk({ ...playerTalk, answers: newAnswers, currentQuestionIndex: playerTalk.currentQuestionIndex + 1 });
         }
     };
 
     const handlePlayerTalkFinish = () => {
-        if (talkResult?.convinced && playerTalk && userTeamName) {
-            const newPlayer = { ...playerTalk.player, isStarter: false, contractExpires: 3, status: { type: 'Available' as const }, effects: [] };
-            setTeams(prev => ({ ...prev, [userTeamName]: { ...prev[userTeamName], players: [...prev[userTeamName].players, newPlayer] } }));
+        // Apply the deal if successful
+        if (talkResult?.convinced && playerTalk && userTeamName && pendingContractTerms) {
+            setTeams(prev => {
+                const team = prev[userTeamName];
+                let updatedPlayers;
+
+                if (playerTalk.context === 'renewal') {
+                    // Update existing player
+                    updatedPlayers = team.players.map(p => 
+                        p.name === playerTalk.player.name 
+                        ? { ...p, wage: pendingContractTerms.wage, contractExpires: pendingContractTerms.length } 
+                        : p
+                    );
+                } else {
+                    // Add new player
+                    const newPlayer = { 
+                        ...playerTalk.player, 
+                        isStarter: false, 
+                        contractExpires: pendingContractTerms.length, 
+                        wage: pendingContractTerms.wage,
+                        status: { type: 'Available' as const }, 
+                        effects: [] 
+                    };
+                    updatedPlayers = [...team.players, newPlayer];
+                }
+                
+                return { 
+                    ...prev, 
+                    [userTeamName]: { ...team, players: updatedPlayers } 
+                };
+            });
         }
-        setPlayerTalk(null); setTalkResult(null); setAppScreen(AppScreen.GAMEPLAY);
+        setPlayerTalk(null); setTalkResult(null); setPendingContractTerms(null); setAppScreen(AppScreen.GAMEPLAY);
     };
+
+    // Filter Logic
+    const worldCupTeams = NATIONAL_TEAMS.map(convertNationalTeam);
+    const clubTeams = Object.values(allTeams).filter(t => {
+        if (['Manchester City', 'Arsenal', 'Liverpool', 'Chelsea', 'Real Madrid', 'FC Barcelona', 'Bayern Munich', 'Juventus', 'AC Milan', 'Inter Milan', 'PSG', 'Inter Miami'].includes(t.name)) return true;
+        if (t.league === 'MLS' || t.league === 'Championship') return true;
+        return t.prestige >= 80; 
+    });
 
     const renderScreen = () => {
         switch (appScreen) {
@@ -362,9 +542,9 @@ export default function App() {
                     )}
                 </div>
             );
-            case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={gameMode === 'WorldCup' ? NATIONAL_TEAMS.map(convertNationalTeam) : Object.values(allTeams)} onTeamSelect={gameMode === 'WorldCup' ? initializeWorldCup : initializeGame} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
-            case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={NATIONAL_TEAMS.map(convertNationalTeam)} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
-            case AppScreen.CREATE_MANAGER: return <CreateManagerScreen onCreate={(name, exp) => generateJobs(exp)} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
+            case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={clubTeams} onTeamSelect={initializeGame} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
+            case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={worldCupTeams} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
+            case AppScreen.CREATE_MANAGER: return <CreateManagerScreen onCreate={handleCreateManager} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_CENTRE: return <JobCentreScreen jobs={availableJobs} onApply={(n) => { setAppScreen(AppScreen.JOB_INTERVIEW); setInterview({ teamName: n, questions: ["Tactics?", "Chemistry?"], answers:[], currentQuestionIndex:0, chairmanPersonality: allTeams[n].chairmanPersonality }); }} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen interview={interview} isLoading={isLoading} error={null} jobOffer={jobOffer} onAnswerSubmit={() => setJobOffer({ offer: true, reasoning: "Welcome." })} onFinish={(acc) => { if(acc && interview) initializeGame(interview.teamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
             case AppScreen.TRANSFERS: return <TransfersScreen targets={TRANSFER_TARGETS} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
@@ -372,10 +552,25 @@ export default function App() {
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;
                 return (
-                    <main className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <main className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
-                        <div className="lg:col-span-3"><TeamDetails team={userTeam} onTacticChange={handleTacticChange} onNavigateToTransfers={() => setAppScreen(gameMode === 'WorldCup' ? AppScreen.SCOUTING : AppScreen.TRANSFERS)} onNavigateToNews={()=>setAppScreen(AppScreen.NEWS_FEED)} onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')} onToggleStarter={handleToggleStarter} gameState={gameState} subsUsed={0} onSubstitute={()=>{}} /></div>
-                        <div className="lg:col-span-6"><MatchView fixture={currentFixture} weeklyResults={weeklyResults} matchState={matchState} gameState={gameState} onPlayFirstHalf={()=>{}} onPlaySecondHalf={()=>{}} onSimulateSegment={()=>{}} onNextMatch={handleAdvanceWeek} error={null} isSeasonOver={false} userTeamName={userTeamName} leagueTable={leagueTable} isLoading={isLoading} currentWeek={currentWeek} teams={teams} /></div>
+                        {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
+                        
+                        <div className="lg:col-span-3">
+                            <TeamDetails 
+                                team={userTeam} 
+                                onTacticChange={handleTacticChange} 
+                                onNavigateToTransfers={() => setAppScreen(AppScreen.SCOUTING)} 
+                                onNavigateToNews={()=>setAppScreen(AppScreen.NEWS_FEED)} 
+                                onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')} 
+                                onToggleStarter={handleToggleStarter} 
+                                gameState={gameState} 
+                                subsUsed={matchState?.subsUsed?.home || 0} 
+                                onSubstitute={handleSubstitute}
+                                onReorderPlayers={handleReorderPlayers}
+                            />
+                        </div>
+                        <div className="lg:col-span-6"><MatchView fixture={currentFixture} weeklyResults={weeklyResults} matchState={matchState} gameState={gameState} onPlayFirstHalf={handlePlayFirstHalf} onPlaySecondHalf={handlePlaySecondHalf} onSimulateSegment={handleSimulateSegment} onNextMatch={handleAdvanceWeek} error={null} isSeasonOver={false} userTeamName={userTeamName} leagueTable={leagueTable} isLoading={isLoading} currentWeek={currentWeek} teams={teams} /></div>
                         <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} /></div>
                     </main>
                 );
@@ -385,5 +580,16 @@ export default function App() {
         }
     };
 
-    return <div className="min-h-screen bg-gray-900 text-gray-200 p-4"><Header onQuit={appScreen !== AppScreen.START_SCREEN ? handleQuit : undefined} showQuit={appScreen !== AppScreen.START_SCREEN} />{renderScreen()}</div>;
+    return (
+        <div className="min-h-screen bg-gray-900 text-gray-200 p-4">
+            <Header 
+                onQuit={appScreen !== AppScreen.START_SCREEN ? handleQuit : undefined} 
+                showQuit={appScreen !== AppScreen.START_SCREEN} 
+                onSave={saveGame}
+                onToggleGuide={() => setShowMechanicsGuide(true)}
+                managerReputation={userTeamName ? managerReputation : undefined}
+            />
+            {renderScreen()}
+        </div>
+    );
 }

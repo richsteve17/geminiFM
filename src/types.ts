@@ -51,6 +51,7 @@ export interface Player {
   matchCard?: 'yellow' | 'red' | null;
   scoutingReport?: string;
   marketValue?: number;
+  currentClub?: string; // New field for scouting flavor
   condition: number; // 0 to 100
 }
 

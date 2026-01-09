@@ -103,6 +103,7 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                             <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
                                 <h4 className="text-xl font-bold text-white">{player.name}</h4>
                                 <span className="text-gray-400 text-sm">Age: {player.age}</span>
+                                {player.currentClub && <span className="text-gray-500 text-xs px-2 py-0.5 bg-gray-900 rounded">{player.currentClub}</span>}
                             </div>
                             <p className="text-sm text-gray-300 italic mb-2">"{player.scoutingReport || 'Available for selection.'}"</p>
                             <div className="flex flex-wrap gap-2 justify-center md:justify-start text-xs">

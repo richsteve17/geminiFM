@@ -1,7 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import type { Team, MatchState, Player, MatchEvent, TournamentStage } from '../types';
-import { PLAYER_PERSONALITIES } from '../constants';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
@@ -9,39 +8,158 @@ if (!API_KEY) throw new Error("API_KEY not set");
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 const model = 'gemini-3-flash-preview';
 
+// Helper: check if player is physically on the pitch, even if injured
+const isOnPitch = (status: Player["status"], matchCard?: Player["matchCard"]) => {
+    if (matchCard === 'red') return false; // Sent off
+    if (status.type === 'SentOff') return false; // Sent off
+    if (status.type === 'On International Duty') return false;
+    if (status.type === 'Suspended') return false;
+    // Note: 'Injured' players might still be on pitch if 0 subs left. We handle this in the prompt builder.
+    return true;
+};
+
+const cleanJson = (text?: string) => (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
+
+const parseJsonSafely = <T>(text?: string): T | null => {
+    try {
+        return JSON.parse(cleanJson(text));
+    } catch {
+        return null;
+    }
+};
+
+const validateSimulationResult = (
+    simulation: any,
+    homeName: string,
+    awayName: string,
+    allowedPlayers: string[],
+    minuteStart: number,
+    minuteEnd: number
+): boolean => {
+    if (!simulation || typeof simulation !== 'object') return false;
+    if (!Array.isArray(simulation.events)) return false;
+    if (typeof simulation.homeScoreAdded !== 'number' || typeof simulation.awayScoreAdded !== 'number') return false;
+
+    let homeGoals = 0;
+    let awayGoals = 0;
+
+    for (const ev of simulation.events) {
+        if (typeof ev.minute !== 'number' || ev.minute < minuteStart || ev.minute > minuteEnd) return false;
+        if (!['goal', 'card', 'injury', 'sub', 'commentary', 'whistle'].includes(ev.type)) return false;
+        if (ev.teamName && ev.teamName !== homeName && ev.teamName !== awayName) return false;
+        if (ev.player && !allowedPlayers.includes(ev.player)) return false; // Strict Hawk-Eye check
+        if (ev.type === 'goal') {
+            if (ev.teamName === homeName) homeGoals += 1;
+            if (ev.teamName === awayName) awayGoals += 1;
+        }
+    }
+
+    if (homeGoals !== simulation.homeScoreAdded || awayGoals !== simulation.awayScoreAdded) return false;
+    return true;
+};
+
 export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, currentMatchState: MatchState, targetMinute: number, context: any) => {
-    const prompt = `Football Match Sim: ${homeTeam.name} (${homeTeam.tactic.mentality}) vs ${awayTeam.name} (${awayTeam.tactic.mentality}). 
-    Current Minute: ${currentMatchState.currentMinute} to ${targetMinute}. 
-    Score: ${currentMatchState.homeScore}-${currentMatchState.awayScore}.
-    Respond ONLY in JSON format: { "homeScoreAdded": number, "awayScoreAdded": number, "momentum": number, "tacticalAnalysis": "string", "events": [{ "minute": number, "type": "goal"|"commentary", "teamName": "string", "description": "string" }] }`;
+    const minuteStart = currentMatchState.currentMinute;
+    const minuteEnd = targetMinute;
+
+    // Logic: Identify who is actually on the grass and their condition
+    const getPromptList = (t: Team, subsUsed: number) => {
+        return t.players
+            .filter(p => p.isStarter && isOnPitch(p.status, p.matchCard))
+            .map(p => {
+                let flags = [];
+                if (p.condition < 70) flags.push("TIRED (High Error Rate)");
+                if (p.personality === 'Leader') flags.push("LEADER");
+                if (p.personality === 'Volatile') flags.push("VOLATILE (Risk)");
+                if (p.status.type === 'Injured') flags.push("INJURED");
+                
+                const flagStr = flags.length > 0 ? `[${flags.join(',')}]` : '';
+                return `${p.name} (${p.position}, ${p.rating})${flagStr}`;
+            });
+    };
+
+    const homePromptList = getPromptList(homeTeam, currentMatchState.subsUsed.home);
+    const awayPromptList = getPromptList(awayTeam, currentMatchState.subsUsed.away);
+    
+    // For validation, we need raw names
+    const allowedPlayers = [...homeTeam.players, ...awayTeam.players].map(p => p.name);
+
+    const prompt = `
+*** FOOTBALL MATCH CONTRACT ***
+You are simulating a football match segment. Return ONLY JSON.
+
+*** STATE SNAPSHOT (AUTHORITATIVE) ***
+Minute: ${minuteStart} -> ${minuteEnd}
+Score: ${homeTeam.name} ${currentMatchState.homeScore} - ${currentMatchState.awayScore} ${awayTeam.name}
+Players on Pitch (Home): ${homePromptList.join(', ')}
+Players on Pitch (Away): ${awayPromptList.join(', ')}
+Subs Remaining (home/away): ${5 - currentMatchState.subsUsed.home}/5 , ${5 - currentMatchState.subsUsed.away}/5
+Momentum (current): ${currentMatchState.momentum}
+
+*** TRAIT LOGIC RULES (MUST FOLLOW) ***
+1) **TIRED players**: If involved in an event, they MUST make a mistake, lose a race, or get injured. Mention fatigue in commentary.
+2) **LEADER players**: If team is losing after 75', increase chance of them assisting or scoring. Mention them "driving the team on".
+3) **VOLATILE players**: If team is losing, high chance of Yellow/Red card for arguing or rash tackle.
+4) **INJURED players**: If still on pitch, opponent MUST target them for an easy goal.
+
+*** REQUIRED JSON FORMAT ***
+{
+  "homeScoreAdded": number,
+  "awayScoreAdded": number,
+  "momentum": number,
+  "tacticalAnalysis": "short string, mention specific player traits influencing game",
+  "events": [
+     { "minute": number, "type": "goal"|"card"|"injury"|"sub"|"commentary"|"whistle", "teamName": "${homeTeam.name}"|"${awayTeam.name}", "player": "string optional", "description": "string" }
+  ]
+}
+`;
 
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
             model: model, contents: prompt, config: { responseMimeType: "application/json" }
         });
-        return JSON.parse(response.text);
+        const parsed = JSON.parse(cleanJson(response.text));
+        const isValid = validateSimulationResult(parsed, homeTeam.name, awayTeam.name, allowedPlayers, minuteStart, minuteEnd);
+        if (!isValid) throw new Error("Simulation failed validation");
+        return parsed;
     } catch (error) {
-        return { homeScoreAdded: 0, awayScoreAdded: 0, momentum: 0, tacticalAnalysis: "Steady game.", events: [] };
+        return {
+            homeScoreAdded: 0,
+            awayScoreAdded: 0,
+            momentum: currentMatchState.momentum,
+            tacticalAnalysis: "The game steadies as both sides probe without breakthrough.",
+            events: []
+        };
     }
 };
 
 export const scoutPlayers = async (request: string): Promise<Player[]> => {
-    const prompt = `You are a world-class football scout. The user asks: "${request}". 
-    Generate 3 unique, realistic football players fitting this exact description.
-    JSON format: { "players": [{ "name": "string", "position": "LB"|"CB"|"ST"|..., "rating": number, "age": number, "nationality": "Emoji", "scoutingReport": "string", "wage": number, "marketValue": number, "personality": "Ambitious"|"Loyal"|"Mercenary"|"Young Prospect"|"Leader"|"Professional"|"Volatile" }] }`;
+    // Enhanced prompt to include 'currentClub'
+    const prompt = `Scout report for: "${request}". Generate 3 players who fit this description. 
+    JSON format: { "players": [{ "name": "string", "position": "LB"|"CB"|"ST"|..., "rating": number, "age": number, "nationality": "Emoji", "scoutingReport": "string", "wage": number, "marketValue": number, "currentClub": "string" }] }
+    Invent a realistic 'currentClub' for each player (e.g. 'Napoli', 'Boca Juniors', 'Ajax').`;
+    
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
             model: model, contents: prompt, config: { responseMimeType: "application/json" }
         });
         const res = JSON.parse(response.text);
-        return res.players.map((p: any) => ({ ...p, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 }));
+        // Ensure valid defaults
+        return res.players.map((p: any) => ({ 
+            ...p, 
+            status: { type: 'Available' }, 
+            effects: [], 
+            contractExpires: 3, 
+            isStarter: false, 
+            condition: 100,
+            // Fallback if AI misses the field
+            currentClub: p.currentClub || "Free Agent"
+        }));
     } catch (e) { return []; }
 };
 
 export const generatePressConference = async (context: string): Promise<string[]> => {
-    const prompt = `You are a hostile sports journalist at a press conference. Context: ${context}. 
-    Ask 3 provocative, specific questions about the match result or incidents. Do not be generic. 
-    JSON: { "questions": [] }`;
+    const prompt = `Press conference. Context: ${context}. Ask 3 questions. JSON: { "questions": [] }`;
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
              model: model, contents: prompt, config: { responseMimeType: "application/json" }
@@ -51,72 +169,99 @@ export const generatePressConference = async (context: string): Promise<string[]
 };
 
 export const getInterviewQuestions = async (teamName: string, personality: string) => {
-    const prompt = `You are the chairman of ${teamName}. Your personality is: ${personality}. 
-    You are interviewing a new manager. 
-    Ask 3 distinct, difficult, roleplay-heavy questions about their philosophy, past experience, and financial management. 
-    Do NOT ask generic questions like "What are your tactics?". Be specific to the club's situation.
-    JSON: { "questions": ["string", "string", "string"] }`;
+    const prompt = `Board Interview for ${teamName} (Chairman: ${personality}). Return JSON: { "questions": [string,string,string] }`;
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(response.text).questions;
+    const parsed = parseJsonSafely<{ questions: string[] }>(response.text);
+    return parsed?.questions ?? ["What is your tactical vision?", "How will you handle the budget?", "What are your expectations this season?"];
 };
 
-export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], p: string) => {
-    const prompt = `Evaluate job interview for ${teamName} (Chairman: ${p}). 
-    Questions: ${JSON.stringify(qs)}. Answers: ${JSON.stringify(ans)}.
-    Did they get the job? Be strict.
-    JSON: { "offer": boolean, "reasoning": "string" }`;
+export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], personality: string) => {
+    const prompt = `Evaluate answers for ${teamName}. Chairman personality: ${personality}. Return JSON: { "offer": boolean, "reasoning": "string" }`;
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(response.text);
+    const parsed = parseJsonSafely<{ offer: boolean; reasoning: string }>(response.text);
+    return parsed ?? { offer: false, reasoning: "Unable to evaluate answers." };
 };
 
-export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string, teammates: string[] = []) => {
-    const personalityDesc = PLAYER_PERSONALITIES[p.personality] || "A professional football player.";
-    
-    // Provide context about specific teammates, but let the AI decide if it matters
-    const squadContext = teammates.length > 0 
-        ? `Squad Context: There is uncertainty around other key players like ${teammates.join(', ')}.` 
-        : '';
-
-    const prompt = `Roleplay as the agent of ${p.name} (${p.nationality}, ${p.age}yo).
-    Client Personality: "${p.personality}" - ${personalityDesc}.
-    Club: ${t.name} (Prestige: ${t.prestige}).
-    Situation: Manager wants to ${c} contract.
-    ${squadContext}
-
-    Task: Ask 3 questions to the manager.
-    CRITICAL INSTRUCTION: The questions MUST reflect the client's specific personality.
-    - If "Mercenary": Focus purely on money, bonuses, and release clauses. IGNORE the Squad Context.
-    - If "Ambitious": Ask about trophies and specifically use the Squad Context to ask who else is staying/signing.
-    - If "Leader": Ask about the squad harmony and direction (use Squad Context).
-    - If "Loyal": Ask about long-term role and club stability.
-    - If "Volatile": Ask about playing time guarantees and media protection.
-
-    Do not act generic. Be the agent of THIS specific archetype.
-    JSON: { "questions": ["string", "string", "string"] }`;
-
+export const getPlayerTalkQuestions = async (p: Player, t: Team, context: string) => {
+    const prompt = `You are ${p.name}'s agent. Personality: ${p.personality}. Context: ${context}. Team: ${t.name} (prestige ${t.prestige}). Return JSON: { "questions": [string,string,string] }`;
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(response.text).questions;
+    const parsed = parseJsonSafely<{ questions: string[] }>(response.text);
+    return parsed?.questions ?? ["What role will I have?", "How competitive is the squad?", "What salary are you offering?"];
 };
 
-export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string) => {
-    const prompt = `Evaluate negotiation between Agent of ${p.name} (${p.personality}) and Manager of ${t.name}.
-    Questions: ${JSON.stringify(qs)}. Answers: ${JSON.stringify(ans)}.
+export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, context: string, offer?: { wage: number, length: number }) => {
     
-    Did the manager's answers satisfy the specific needs of a ${p.personality} player?
-    - Mercenaries need money promises.
-    - Ambitious players need ambition/signing promises.
-    - Loyal players need respect.
+    // Financial logic prompt
+    let offerPrompt = "";
+    if (offer) {
+        offerPrompt = `
+        **CONTRACT OFFER DETAILS**
+        Offered Wage: £${offer.wage.toLocaleString()}/week
+        Offered Length: ${offer.length} years
+        
+        **PLAYER VALUATION**
+        Current/Expected Wage: £${p.wage.toLocaleString()}/week
+        Player Age: ${p.age}
+        Player Rating: ${p.rating}
+        Personality: ${p.personality}
+        
+        **RULES**
+        1. "Mercenary" players demand 20%+ wage increase.
+        2. "Loyal" players accept matching wages or slight cuts if term is long (4+ yrs).
+        3. If Offered Wage is < 80% of Current Wage, reject immediately unless "Loyal".
+        4. If Player is old (>32), they prioritize length (2+ years) over high wage.
+        `;
+    }
+
+    const prompt = `
+    You are ${p.name}'s agent.
+    Context: ${context}. Club: ${t.name}.
+    Previous Negotiation Chat Answers: ${ans.join(" | ")}
     
-    Is the agent convinced?
-    JSON: { "convinced": boolean, "reasoning": "string" }`;
+    ${offerPrompt}
+
+    Evaluate the deal based on the RULES above.
+    Return JSON: { "convinced": boolean, "reasoning": "string (speak as the agent)" }
+    `;
+    
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(response.text);
+    const parsed = parseJsonSafely<{ convinced: boolean; reasoning: string }>(response.text);
+    return parsed ?? { convinced: false, reasoning: "We are too far apart on the numbers." };
 };
 
 export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: string): Promise<string> => {
-    const prompt = `You are the Assistant Manager of ${u}. The score is ${s.homeScore}-${s.awayScore}. 
-    Opponent: ${h.name === u ? a.name : h.name}.
-    Give specific tactical advice based on the scoreline. Should we push up? Sit back?`;
+    const prompt = `Tactical advice for ${u}. Score ${s.homeScore}-${s.awayScore}.`;
     const response = await ai.models.generateContent({ model, contents: prompt });
     return response.text || "No advice.";
+};
+
+export const getTournamentResult = async (stage: string, team1: string, team2: string) => {
+    const prompt = `Simulate international match: ${team1} vs ${team2} in ${stage}. Return JSON: { "winner": "${team1}"|"${team2}", "score": "X-Y", "summary": "string" }`;
+    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
+    const parsed = parseJsonSafely<{ winner: string; score: string; summary: string }>(response.text);
+    return parsed ?? { winner: team1, score: "1-0", summary: "A tight contest decided by a single goal." };
+};
+
+export const getTeammateTournamentRivalry = async (playerA: Player, playerB: Player, matchContext: string) => {
+    const prompt = `
+    Two club teammates just played against each other internationally: ${playerA.name} (${playerA.nationality}) vs ${playerB.name} (${playerB.nationality}).
+    Match Context: ${matchContext}.
+    Did a "Grudge" or "Chemistry Rift" form? 
+    High stakes (Finals) or incidents (Red cards/PK misses) increase chance.
+    Return JSON: { "riftFormed": boolean, "reason": "string", "durationWeeks": number }
+    `;
+    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
+    const parsed = parseJsonSafely<{ riftFormed: boolean; reason: string; durationWeeks: number }>(response.text);
+    return parsed ?? { riftFormed: false, reason: "", durationWeeks: 0 };
+};
+
+export const getPlayerPostTournamentMorale = async (player: Player, performance: string) => {
+    const prompt = `
+    Player ${player.name} just finished a tournament. Result: ${performance}.
+    Determine morale effect.
+    Return JSON: { "morale": "Fired Up" | "Happy" | "Content" | "Disappointed" | "Depressed", "reason": "string" }
+    `;
+    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
+    const parsed = parseJsonSafely<{ morale: string; reason: string }>(response.text);
+    return parsed ?? { morale: "Content", reason: "returned from duty." };
 };

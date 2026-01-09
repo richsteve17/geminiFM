@@ -99,10 +99,6 @@ const TacticsBoard: React.FC<TacticsBoardProps> = ({ starters, formation, onPlay
 
     return (
         <div className="relative w-full aspect-[4/5] bg-green-800 rounded-lg overflow-hidden border-2 border-green-900/50 shadow-inner">
-            <div className="absolute top-2 left-2 bg-black/60 text-white text-[9px] px-2 py-1 rounded shadow">
-                <p className="font-black uppercase tracking-widest">Formation {formation}</p>
-                <p className="text-[9px]">Numbers = DEF - MID - FWD</p>
-            </div>
             {/* Pitch markings */}
             <div className="absolute inset-0 opacity-20 pointer-events-none">
                 <div className="absolute inset-x-4 top-0 h-px bg-white"></div>

@@ -18,7 +18,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
         <div className="flex flex-col items-center justify-center mt-6 md:mt-12 px-4 max-w-6xl mx-auto">
             <div className="text-center mb-10">
                 <h2 className="text-4xl font-bold text-white mb-2 italic tracking-tighter">GEMINI FOOTBALL MANAGER <span className="text-green-500">'27</span></h2>
-                <p className="text-lg text-gray-400">Where the match engine is the story engine.</p>
+                <p className="text-lg text-gray-400">The world's first LLM-driven sports simulation.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full mb-12">
@@ -69,7 +69,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                         </span>
-                        <h4 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Build Status: Alpha v0.9.6</h4>
+                        <h4 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Build Status: v1.4 (Roster Fixes)</h4>
                     </div>
                     <button 
                         onClick={() => setShowDevlog(!showDevlog)}
@@ -83,25 +83,22 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     <div className="space-y-4 animate-in fade-in duration-500">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-3">
-                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Hotfix 0.9.6</h5>
+                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Core Engine v1.4</h5>
                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">Data Fidelity:</span> Overhauled UK name generation to respect regional naming conventions.
+                                    <span className="text-green-500 font-bold">Roster Fidelity:</span> Database restored to reflect 2026/27 timeline. Wirtz added to Liverpool.
                                 </p>
                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">Job Market:</span> Rebalanced lower league prestige to ensure Sunday League managers can find work.
-                                </p>
-                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">System:</span> Added Auto-Save and Quit to Menu functionality.
+                                    <span className="text-green-500 font-bold">International Logic:</span> Major nations now use authentic rosters in World Cup mode. Fixed issue where bench players were generated as starters.
                                 </p>
                             </div>
                             <div className="space-y-3">
-                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Features</h5>
+                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">UI/UX</h5>
                                 <ul className="text-sm text-gray-400 space-y-2">
                                     <li className="flex items-start gap-2">
-                                        <span className="text-green-500">✓</span> <span>World Cup: Real generated names & morale effects</span>
+                                        <span className="text-green-500">✓</span> <span>Manual Save Button Restored</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <span className="text-green-500">✓</span> <span>National Pool Selection (Beta)</span>
+                                        <span className="text-green-500">✓</span> <span>Quit Button Hardened</span>
                                     </li>
                                 </ul>
                             </div>
@@ -109,7 +106,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     </div>
                 ) : (
                     <p className="text-sm text-gray-500 italic">
-                        "The simulation is live. Liverpool's board is panicking about renewals. The press is waiting."
+                        "The goal of GFM '27 is to prove that AI can handle the narrative weight of football management, turning spreadsheet data into tangible story arcs."
                     </p>
                 )}
             </div>
