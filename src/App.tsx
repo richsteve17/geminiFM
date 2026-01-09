@@ -1,6 +1,5 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
 import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode } from './types';
 import { AppScreen, GameState } from './types';
@@ -9,7 +8,7 @@ import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
 import AtmosphereWidget from './components/AtmosphereWidget';
-import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary, detectCriticalErrors, type CriticalError } from './services/geminiService';
+import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
 import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures } from './utils';
 import StartScreen from './components/StartScreen';
@@ -66,86 +65,41 @@ export default function App() {
     const [playerTalk, setPlayerTalk] = useState<PlayerTalk | null>(null);
     const [talkResult, setTalkResult] = useState<{ convinced: boolean; reasoning: string } | null>(null);
     
-    // Store pending agreement terms temporarily
     const [pendingContractTerms, setPendingContractTerms] = useState<{ wage: number, length: number } | null>(null);
-
-    // Active Tactical Shout
     const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
 
     const [scoutResults, setScoutResults] = useState<Player[]>([]);
     const [pressQuestions, setPressQuestions] = useState<string[]>([]);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     
-    // Persistent Manager Reputation
     const [managerReputation, setManagerReputation] = useState<number>(0);
-
-    // Terrace Chant System
+    
+    // --- CHANT STATE ---
     const [currentChant, setCurrentChant] = useState<Chant | null>(null);
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
 
-    // --- SAVE / LOAD SYSTEM with lz-string compression ---
-    const SAVE_KEY = 'gfm_save_v2_compressed';
-
+    // --- SAVE / LOAD SYSTEM ---
     const saveGame = () => {
         if (userTeamName) {
             const stateToSave = {
-                version: 2,
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
-                managerReputation, savedAt: new Date().toISOString()
+                managerReputation
             };
-            const jsonString = JSON.stringify(stateToSave);
-            const compressed = compressToUTF16(jsonString);
-            const originalSize = new Blob([jsonString]).size;
-            const compressedSize = new Blob([compressed]).size;
-            const ratio = ((1 - compressedSize / originalSize) * 100).toFixed(1);
-
-            localStorage.setItem(SAVE_KEY, compressed);
-            alert(`Game Saved! (Compressed ${ratio}% - ${(compressedSize / 1024).toFixed(1)}KB)`);
-        }
-    };
-
-    // Copy save to clipboard for cross-device transfer
-    const copySaveToClipboard = async () => {
-        const compressed = localStorage.getItem(SAVE_KEY);
-        if (compressed) {
-            try {
-                await navigator.clipboard.writeText(compressed);
-                alert("Save copied to clipboard! Paste on another device to continue.");
-            } catch (e) {
-                alert("Failed to copy to clipboard.");
-            }
-        }
-    };
-
-    // Paste save from clipboard
-    const pasteSaveFromClipboard = async () => {
-        try {
-            const text = await navigator.clipboard.readText();
-            const decompressed = decompressFromUTF16(text);
-            if (decompressed) {
-                localStorage.setItem(SAVE_KEY, text);
-                handleContinue();
-            } else {
-                alert("Invalid save data in clipboard.");
-            }
-        } catch (e) {
-            alert("Failed to read from clipboard.");
+            localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
+            alert("Game Saved Successfully!");
         }
     };
 
     useEffect(() => {
-        // Auto-save on critical state changes with compression
         if (userTeamName && appScreen !== AppScreen.START_SCREEN) {
             const stateToSave = {
-                version: 2,
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
-                managerReputation, savedAt: new Date().toISOString()
+                managerReputation
             };
-            const compressed = compressToUTF16(JSON.stringify(stateToSave));
-            localStorage.setItem(SAVE_KEY, compressed);
+            localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
         }
     }, [currentWeek, gameState, managerReputation]);
 
@@ -154,43 +108,14 @@ export default function App() {
         setGameState(GameState.PRE_MATCH);
         setMatchState(null);
         setUserTeamName(null);
-        setTeams(allTeams); // Reset teams to initial state
+        setTeams(allTeams); 
     };
 
     const handleContinue = () => {
-        // Try new compressed format first, fallback to legacy
-        let savedData = localStorage.getItem(SAVE_KEY);
-        let parsed: any = null;
-
+        const savedData = localStorage.getItem('gfm_save_v1');
         if (savedData) {
             try {
-                const decompressed = decompressFromUTF16(savedData);
-                if (decompressed) {
-                    parsed = JSON.parse(decompressed);
-                }
-            } catch (e) {
-                console.error("Failed to decompress save", e);
-            }
-        }
-
-        // Fallback to legacy uncompressed save
-        if (!parsed) {
-            const legacySave = localStorage.getItem('gfm_save_v1');
-            if (legacySave) {
-                try {
-                    parsed = JSON.parse(legacySave);
-                    // Migrate to new format
-                    const compressed = compressToUTF16(legacySave);
-                    localStorage.setItem(SAVE_KEY, compressed);
-                    localStorage.removeItem('gfm_save_v1');
-                } catch (e) {
-                    console.error("Failed to load legacy save", e);
-                }
-            }
-        }
-
-        if (parsed) {
-            try {
+                const parsed = JSON.parse(savedData);
                 setUserTeamName(parsed.userTeamName);
                 setGameMode(parsed.gameMode);
                 setIsPrologue(parsed.isPrologue);
@@ -203,14 +128,14 @@ export default function App() {
                 setWeeklyResults(parsed.weeklyResults);
                 setGameState(parsed.gameState);
                 setManagerReputation(parsed.managerReputation || 50);
-
+                
                 if (parsed.appScreen === AppScreen.GAMEPLAY || parsed.appScreen === AppScreen.JOB_CENTRE) {
                     setAppScreen(parsed.appScreen);
                 } else {
                     setAppScreen(AppScreen.GAMEPLAY);
                 }
 
-                const f = parsed.fixtures.find((fx: Fixture) =>
+                const f = parsed.fixtures.find((fx: Fixture) => 
                     (fx.homeTeam === parsed.userTeamName || fx.awayTeam === parsed.userTeamName) && fx.week === parsed.currentWeek
                 );
                 setCurrentFixture(f);
@@ -219,23 +144,15 @@ export default function App() {
                 console.error("Failed to load save", e);
                 alert("Save file corrupted.");
             }
-        } else {
-            alert("No save file found.");
         }
-    };
-
-    // Check for save on mount
-    const hasSave = () => {
-        return !!(localStorage.getItem(SAVE_KEY) || localStorage.getItem('gfm_save_v1'));
     };
 
     const startTutorial = () => { setTutorialStep(0); setShowTutorial(true); };
 
-    // --- PROLOGUE: World Cup Initialization ---
     const initializeWorldCup = (selectedNationalTeamName: string) => {
         setGameMode('WorldCup');
         setIsPrologue(true);
-        setManagerReputation(90); // World Class Rep for WC
+        setManagerReputation(90); 
         
         const wcTeamsRecord = generateWorldCupStructure();
         setTeams(wcTeamsRecord);
@@ -290,10 +207,9 @@ export default function App() {
         startTutorial();
     };
 
-    // --- STANDARD: Club Initialization ---
     const initializeGame = useCallback((selectedTeamName: string) => {
         setGameMode('Club'); setIsPrologue(false);
-        setManagerReputation(70); // Standard start for club mode unless unemployed
+        setManagerReputation(70); 
         let finalTeamsState = { ...allTeams };
         const domesticFixtures = generateFixtures(Object.values(allTeams));
         const { participants, newTeams } = getChampionsLeagueParticipants(allTeams);
@@ -337,28 +253,21 @@ export default function App() {
     }, []);
 
     const handleCreateManager = (name: string, exp: ExperienceLevel) => {
-        // Initialize reputation based on background
         let initialRep = 15;
         if (exp.id === 'semi-pro') initialRep = 40;
         if (exp.id === 'pro') initialRep = 60;
         if (exp.id === 'international') initialRep = 80;
         if (exp.id === 'legend') initialRep = 95;
-        
         setManagerReputation(initialRep);
         generateJobs(initialRep);
     };
 
     const generateJobs = (currentRep: number | ExperienceLevel) => {
-        // If passing from create screen, it's a number (via handleCreateManager logic above)
-        // If calling later, we use currentRep state
-        
         const rep = typeof currentRep === 'number' ? currentRep : managerReputation;
-
         const allTeamList: Team[] = Object.values(allTeams);
         const shuffle = (array: Team[]) => array.sort(() => 0.5 - Math.random());
         let vacancies: Team[] = [];
 
-        // Dynamic Job generation based on current reputation
         const feasible = allTeamList.filter(t => t.prestige <= rep && t.prestige >= rep - 20);
         const reach = allTeamList.filter(t => t.prestige > rep && t.prestige <= rep + 10);
         const safety = allTeamList.filter(t => t.prestige < rep - 20);
@@ -369,7 +278,6 @@ export default function App() {
             ...shuffle(safety).slice(0, 1),
         ];
         
-        // Failsafe
         if (vacancies.length === 0) {
              vacancies = shuffle(allTeamList.filter(t => t.prestige < 60)).slice(0, 3);
         }
@@ -427,7 +335,6 @@ export default function App() {
             results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
         });
         
-        // --- International Break Logic ---
         if (gameMode === 'Club' && INTERNATIONAL_BREAK_WEEKS.includes(nextW)) {
             const summary = await getInternationalBreakSummary(nextW);
             setNews(prev => [{
@@ -438,8 +345,6 @@ export default function App() {
                 type: 'call-up' 
             }, ...prev]);
             
-            // Randomly assign a 'Chemistry Rift' if the AI generated names that match our players
-            // For simplicity in this lightweight version, we just pick 2 random players from the user's team to have a "minor rift"
             if (userTeamName && Math.random() > 0.5) {
                 const userPlayers = teams[userTeamName].players;
                 const p1 = userPlayers[Math.floor(Math.random() * userPlayers.length)];
@@ -465,11 +370,10 @@ export default function App() {
         setMatchState(null); setGameState(GameState.PRE_MATCH); setIsLoading(false);
     };
 
-    // --- MATCH ENGINE HOOKS ---
     const handlePlayFirstHalf = async () => {
         if (!currentFixture || !userTeam) return;
         setGameState(GameState.SIMULATING); setIsLoading(true);
-        setActiveShout(undefined); // Reset shout
+        setActiveShout(undefined); 
         const home = teams[currentFixture.homeTeam];
         const away = teams[currentFixture.awayTeam];
         
@@ -493,7 +397,7 @@ export default function App() {
     };
 
     const handlePlaySecondHalf = async (shout: TouchlineShout) => {
-        setActiveShout(shout); // Store the shout
+        setActiveShout(shout); 
         handleSimulateSegment(60);
     };
 
@@ -503,7 +407,6 @@ export default function App() {
         const home = teams[currentFixture.homeTeam];
         const away = teams[currentFixture.awayTeam];
 
-        // Pass activeShout to the AI
         const result = await simulateMatchSegment(home, away, matchState, targetMinute, { shout: activeShout, userTeamName });
         
         const newState = {
@@ -519,31 +422,8 @@ export default function App() {
 
         setMatchState(newState);
 
-        // *** TERRACE CHANT TRIGGER ***
-        const goals = result.events.filter((e: any) => e.type === 'goal');
-        if (goals.length > 0 && userTeamName) {
-            const lastGoal = goals[goals.length - 1];
-            const isUserGoal = lastGoal.teamName === userTeamName;
-
-            // Generate the Chant
-            generatePunkChant(
-                userTeamName,
-                isUserGoal ? 'goal' : 'losing',
-                lastGoal.player
-            ).then(chant => setCurrentChant(chant));
-
-            // Clear chant after 8 seconds
-            setTimeout(() => setCurrentChant(null), 8000);
-        } else if (newState.momentum < -3 && userTeamName) {
-            // Generate hostile chant when momentum is against us
-            generatePunkChant(userTeamName, 'bad_call').then(chant => setCurrentChant(chant));
-            setTimeout(() => setCurrentChant(null), 6000);
-        }
-
         if (targetMinute >= 90) {
             setGameState(GameState.POST_MATCH);
-            
-            // Reputation Logic
             const isHome = currentFixture.homeTeam === userTeamName;
             const userGoals = isHome ? newState.homeScore : newState.awayScore;
             const oppGoals = isHome ? newState.awayScore : newState.homeScore;
@@ -615,37 +495,31 @@ export default function App() {
         if (!playerTalk || !userTeamName) return;
         const newAnswers = [...playerTalk.answers, answer];
         
-        // If this is an offer step, we store the terms and evaluate
         if (offer) {
             setPendingContractTerms(offer);
             setIsLoading(true);
             try {
-                // Pass offer to evaluation
                 const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context, offer);
                 setTalkResult(result);
             } catch (e) { setError("Evaluation failed."); } finally { setIsLoading(false); }
         } else if (playerTalk.currentQuestionIndex < playerTalk.questions.length - 1) {
-            // Just advancing the chat
             setPlayerTalk({ ...playerTalk, answers: newAnswers, currentQuestionIndex: playerTalk.currentQuestionIndex + 1 });
         }
     };
 
     const handlePlayerTalkFinish = () => {
-        // Apply the deal if successful
         if (talkResult?.convinced && playerTalk && userTeamName && pendingContractTerms) {
             setTeams(prev => {
                 const team = prev[userTeamName];
                 let updatedPlayers;
 
                 if (playerTalk.context === 'renewal') {
-                    // Update existing player
                     updatedPlayers = team.players.map(p => 
                         p.name === playerTalk.player.name 
                         ? { ...p, wage: pendingContractTerms.wage, contractExpires: pendingContractTerms.length } 
                         : p
                     );
                 } else {
-                    // Add new player
                     const newPlayer = { 
                         ...playerTalk.player, 
                         isStarter: false, 
@@ -666,7 +540,6 @@ export default function App() {
         setPlayerTalk(null); setTalkResult(null); setPendingContractTerms(null); setAppScreen(AppScreen.GAMEPLAY);
     };
 
-    // Filter Logic
     const worldCupTeams = NATIONAL_TEAMS.map(convertNationalTeam);
     const clubTeams = Object.values(allTeams).filter(t => {
         if (['Manchester City', 'Arsenal', 'Liverpool', 'Chelsea', 'Real Madrid', 'FC Barcelona', 'Bayern Munich', 'Juventus', 'AC Milan', 'Inter Milan', 'PSG', 'Inter Miami'].includes(t.name)) return true;
@@ -696,15 +569,18 @@ export default function App() {
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;
                 return (
-                    <div>
-                        {/* ATMOSPHERE WIDGET - Shows during matches */}
+                    <div className="relative">
+                        {/* ATMOSPHERE WIDGET INJECTED HERE */}
                         {gameState !== GameState.PRE_MATCH && matchState && userTeamName && (
-                            <AtmosphereWidget
-                                chant={currentChant}
-                                momentum={matchState.momentum || 0}
-                                teamName={userTeamName}
-                            />
+                            <div className="mb-4">
+                                <AtmosphereWidget
+                                    chant={currentChant}
+                                    momentum={matchState.momentum || 0}
+                                    teamName={userTeamName}
+                                />
+                            </div>
                         )}
+                        
                         <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
                         {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
@@ -728,7 +604,7 @@ export default function App() {
                         </main>
                     </div>
                 );
-            case AppScreen.SCOUTING: return <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async r=>{ setIsLoading(true); const res=await scoutPlayers(r); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
+            case AppScreen.SCOUTING: return <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async (r, useReal) => { setIsLoading(true); const res = await scoutPlayers(r, useReal); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} />;
             default: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
         }

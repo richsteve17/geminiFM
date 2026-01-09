@@ -1,19 +1,21 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team } from '../types';
+import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team, MatchEvent } from '../types';
 import { GameState } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
 import { TOUCHLINE_SHOUTS } from '../constants';
-import { getAssistantAnalysis, detectCriticalErrors, getContextAwareShouts, type CriticalError, type TacticalShout } from '../services/geminiService';
+import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getContextAwareShouts, TacticalShout } from '../services/geminiService';
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
+import AtmosphereWidget from './AtmosphereWidget';
+import { generatePunkChant, Chant } from '../services/chantService'; 
 
 interface MatchViewProps {
     fixture: Fixture | undefined;
     weeklyResults: Fixture[];
     matchState: MatchState | null;
     gameState: GameState;
-    onPlayFirstHalf: () => void; 
+    onPlayFirstHalf: () => void;
     onPlaySecondHalf: (shout: TouchlineShout) => void;
     onSimulateSegment: (targetMinute: number) => void;
     onNextMatch: () => void;
@@ -26,98 +28,105 @@ interface MatchViewProps {
     teams: Record<string, Team>;
 }
 
-const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchState, gameState, onPlayFirstHalf, onPlaySecondHalf, onSimulateSegment, onNextMatch, error, isSeasonOver, userTeamName, isLoading, currentWeek, teams }) => {
-
+export default function MatchView({ 
+    fixture, weeklyResults, matchState, gameState, 
+    onPlayFirstHalf, onPlaySecondHalf, onSimulateSegment, onNextMatch, 
+    userTeamName, teams, isLoading, currentWeek, error, isSeasonOver 
+}: MatchViewProps) {
+    
     const feedRef = useRef<HTMLDivElement>(null);
     const [assistantAdvice, setAssistantAdvice] = useState<string | null>(null);
     const [isAskingAssistant, setIsAskingAssistant] = useState(false);
+    
+    // Feature States
+    const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
+    const [generatingVideoId, setGeneratingVideoId] = useState<number | null>(null);
+    const [videoUrl, setVideoUrl] = useState<string | null>(null);
+    const [mediaError, setMediaError] = useState<string | null>(null);
 
-    // Critical Error Detection State ("Salah at GK" Protocol)
-    const [criticalErrors, setCriticalErrors] = useState<CriticalError[]>([]);
-    const [errorsAcknowledged, setErrorsAcknowledged] = useState(false);
+    // Atmosphere
+    const [availableShouts, setAvailableShouts] = useState<TacticalShout[]>([]);
+    const [selectedShout, setSelectedShout] = useState<TacticalShout | null>(null);
+    const [currentChant, setCurrentChant] = useState<Chant | null>(null);
 
-    // Context-Aware Shouts State
-    const [dynamicShouts, setDynamicShouts] = useState<TacticalShout[] | null>(null);
-    const [loadingShouts, setLoadingShouts] = useState(false);
-
+    // Auto-scroll feed
     useEffect(() => {
         if (feedRef.current) {
             feedRef.current.scrollTop = feedRef.current.scrollHeight;
         }
     }, [matchState?.events.length]);
 
+    // Load Shouts at Halftime
     useEffect(() => {
-        setAssistantAdvice(null);
-    }, [gameState]);
-
-    // *** CRITICAL ERROR DETECTION - "Salah at GK" Protocol ***
-    useEffect(() => {
-        if (gameState === GameState.PRE_MATCH && fixture && userTeamName && teams[userTeamName]) {
+        if (gameState === GameState.PAUSED && matchState?.currentMinute === 45 && userTeamName && fixture) {
             const userTeam = teams[userTeamName];
-            const errors = detectCriticalErrors(userTeam, userTeam.tactic.formation);
-            setCriticalErrors(errors);
-            setErrorsAcknowledged(false); // Reset acknowledgment for new match
-        } else {
-            setCriticalErrors([]);
+            const isHome = fixture.homeTeam === userTeamName;
+            getContextAwareShouts(userTeam, isHome, matchState).then(setAvailableShouts);
         }
-    }, [gameState, fixture, userTeamName, teams]);
+    }, [gameState, matchState, userTeamName, fixture, teams]);
 
-    // *** CONTEXT-AWARE SHOUTS - Fetch at Halftime ***
+    // Chant Trigger Logic
     useEffect(() => {
-        const fetchDynamicShouts = async () => {
-            if (gameState === GameState.PAUSED && matchState?.currentMinute === 45 && fixture && userTeamName) {
-                setLoadingShouts(true);
-                const homeTeam = teams[fixture.homeTeam];
-                const awayTeam = teams[fixture.awayTeam];
-                const isHome = userTeamName === fixture.homeTeam;
-                const userTeam = isHome ? homeTeam : awayTeam;
-                const oppTeam = isHome ? awayTeam : homeTeam;
-
-                try {
-                    const shouts = await getContextAwareShouts(userTeam, oppTeam, matchState, isHome);
-                    setDynamicShouts(shouts);
-                } catch (e) {
-                    console.error("Failed to fetch dynamic shouts", e);
-                    setDynamicShouts(null); // Fallback to static
-                }
-                setLoadingShouts(false);
+        if (matchState?.events.length) {
+            const lastEvent = matchState.events[matchState.events.length - 1];
+            if (lastEvent.type === 'goal') {
+                const isUserGoal = lastEvent.teamName === userTeamName;
+                const player = lastEvent.player || "Unknown";
+                generatePunkChant(userTeamName || "Team", isUserGoal ? 'goal' : 'losing', player).then(chant => {
+                    setCurrentChant(chant);
+                    setTimeout(() => setCurrentChant(null), 8000);
+                });
+            } else if (matchState.momentum && matchState.momentum < -4 && userTeamName) {
+                generatePunkChant(userTeamName, 'bad_call').then(chant => setCurrentChant(chant));
+                setTimeout(() => setCurrentChant(null), 6000);
             }
-        };
-
-        fetchDynamicShouts();
-    }, [gameState, matchState?.currentMinute, fixture, userTeamName, teams]);
-
-    // Reset dynamic shouts when match ends
-    useEffect(() => {
-        if (gameState === GameState.PRE_MATCH) {
-            setDynamicShouts(null);
         }
-    }, [gameState]);
+    }, [matchState?.events.length, userTeamName, matchState?.momentum]);
 
     const handleAskAssistant = async () => {
         if (!fixture || !matchState || !userTeamName) return;
         setIsAskingAssistant(true);
-        
-        const fallbackTeam = (name: string): Team => ({
-            name,
-            league: 'Premier League',
-            players: [],
-            tactic: { formation: '4-4-2', mentality: 'Balanced' },
-            prestige: 50,
-            chairmanPersonality: 'Traditionalist',
-            balance: 0,
-            objectives: []
-        });
-
-        const homeTeam = teams[fixture.homeTeam] || fallbackTeam(fixture.homeTeam);
-        const awayTeam = teams[fixture.awayTeam] || fallbackTeam(fixture.awayTeam);
-
+        const homeTeam = teams[fixture.homeTeam] || { name: fixture.homeTeam } as Team;
+        const awayTeam = teams[fixture.awayTeam] || { name: fixture.awayTeam } as Team;
         const advice = await getAssistantAnalysis(homeTeam, awayTeam, matchState, userTeamName);
         setAssistantAdvice(advice);
         setIsAskingAssistant(false);
     }
 
-    const renderEvent = (event: any) => {
+    // --- MEDIA HANDLERS ---
+    const handlePlayAudio = async (event: MatchEvent) => {
+        setPlayingAudioId(event.id);
+        setMediaError(null);
+        const commentary = `${event.minute}th minute. ${event.description}`;
+        try {
+            await playMatchCommentary(commentary, event.id); // Pass ID for caching
+            // Reset icon after a reasonable duration if audio plays fire-and-forget
+            setTimeout(() => setPlayingAudioId(null), 5000); 
+        } catch (e) {
+            setMediaError("Audio unavailable.");
+            setPlayingAudioId(null);
+        }
+    };
+
+    const handleGenerateVideo = async (event: MatchEvent) => {
+        setGeneratingVideoId(event.id);
+        setMediaError(null);
+        const description = `${event.teamName} scores a goal. ${event.description}`;
+        try {
+            const url = await generateReplayVideo(description, event.id); // Pass ID for caching
+            if (url) {
+                setVideoUrl(url);
+            } else {
+                setMediaError("Replay generation timed out.");
+            }
+        } catch (e) {
+            setMediaError("Video generation failed.");
+        } finally {
+            setGeneratingVideoId(null);
+        }
+    };
+
+    const renderEvent = (event: MatchEvent) => {
         let color = 'text-gray-300';
         let icon = '•';
         
@@ -131,7 +140,7 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
         if (event.type === 'whistle') { color = 'text-gray-500 italic'; icon = '📢'; }
 
         return (
-            <div key={event.id} className={`flex gap-3 items-start py-1 ${event.type === 'goal' ? 'bg-green-900/20 rounded p-1' : ''}`}>
+            <div key={event.id} className={`flex gap-3 items-start py-2 border-b border-gray-800 ${event.type === 'goal' ? 'bg-green-900/10' : ''}`}>
                 <span className="w-8 text-right font-mono text-gray-500 text-xs pt-1">{event.minute}'</span>
                 <div className="flex-1">
                      <p className={`text-sm ${color}`}>
@@ -140,298 +149,158 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
                         {event.scoreAfter && <span className="ml-2 text-white border border-gray-600 px-1 rounded bg-gray-800">{event.scoreAfter}</span>}
                     </p>
                 </div>
-            </div>
-        );
-    }
-
-    const renderWeeklyResults = () => {
-        if (weeklyResults.length === 0) return null;
-        return (
-            <div className="mt-6 bg-gray-900/50 p-4 rounded-lg">
-                <h3 className="text-gray-400 text-sm font-bold uppercase mb-2">Around the Grounds</h3>
-                <ul className="space-y-2">
-                    {weeklyResults.map(res => (
-                         <li key={res.id} className="flex justify-between text-sm">
-                            <span className="text-right w-5/12 text-gray-300">{res.homeTeam}</span>
-                            <span className="w-2/12 text-center font-bold text-white bg-gray-800 rounded px-1">{res.score}</span>
-                            <span className="text-left w-5/12 text-gray-300">{res.awayTeam}</span>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        );
-    }
-
-    const renderTacticalMonitor = () => {
-        if (gameState === GameState.PRE_MATCH) return null;
-        
-        const momentum = matchState?.momentum || 0;
-        const lastEvent = matchState?.events && matchState.events.length > 0 
-            ? matchState.events[matchState.events.length - 1] 
-            : null;
-
-        return (
-            <div className="mb-2">
-                <PitchView 
-                    momentum={momentum} 
-                    homeTeamName={fixture?.homeTeam || 'Home'} 
-                    awayTeamName={fixture?.awayTeam || 'Away'} 
-                    lastEvent={lastEvent}
-                />
-                <div className="text-xs text-gray-300 italic text-center mt-1">
-                    "{matchState?.tacticalAnalysis || "The match is underway."}"
-                </div>
-            </div>
-        );
-    }
-
-    const renderContent = () => {
-        if (isSeasonOver) {
-             return (
-                <div className="text-center p-8">
-                    <h2 className="text-3xl font-bold text-green-400 mb-4">Season Over!</h2>
-                    <p className="text-xl text-white">Check the final league table.</p>
-                </div>
-            );
-        }
-
-        if (gameState === GameState.PRE_MATCH && !fixture) {
-             return (
-                <div className="text-center p-8">
-                    <h2 className="text-xl font-bold mb-2 text-green-400">Week {currentWeek}</h2>
-                    <div className="bg-gray-800/50 p-4 rounded-lg my-4">
-                        <p className="text-gray-300">No match for your team this week.</p>
-                    </div>
-                    {renderWeeklyResults()}
-                </div>
-            );
-        }
-
-        const currentMinute = matchState?.currentMinute || 0;
-        const score = matchState ? `${matchState.homeScore}-${matchState.awayScore}` : 'v';
-        
-        return (
-            <div className="flex flex-col h-full relative">
-                 {assistantAdvice && (
-                    <div className="absolute inset-0 bg-black/80 z-20 flex items-center justify-center p-6 backdrop-blur-sm">
-                        <div className="bg-gray-800 border-2 border-blue-500 rounded-lg p-6 max-w-md w-full shadow-2xl">
-                             <div className="flex items-center gap-3 mb-4 border-b border-gray-700 pb-2">
-                                <div className="p-2 bg-blue-900 rounded-full">
-                                    <UserIcon className="w-6 h-6 text-blue-300" />
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-blue-400 text-lg">Assistant Manager</h4>
-                                    <p className="text-xs text-gray-400">Tactical Analysis</p>
-                                </div>
-                             </div>
-                             <div className="space-y-2 text-gray-200 text-sm font-medium leading-relaxed whitespace-pre-line">
-                                {assistantAdvice}
-                             </div>
-                             <button 
-                                onClick={() => setAssistantAdvice(null)}
-                                className="mt-6 w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-white font-bold"
-                             >
-                                Got it, Boss.
-                             </button>
-                        </div>
+                
+                {/* MEDIA BUTTONS FOR GOALS */}
+                {event.type === 'goal' && (
+                    <div className="flex gap-2 mr-2">
+                        <button 
+                            onClick={() => handlePlayAudio(event)}
+                            disabled={playingAudioId === event.id}
+                            className={`p-1 rounded hover:bg-gray-700 transition-colors ${playingAudioId === event.id ? 'text-green-400 animate-pulse' : 'text-gray-500'}`}
+                            title="Listen to Radio Commentary (TTS)"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 1 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z" />
+                                <path d="M15.932 7.757a.75.75 0 0 1 1.061 0 6 6 0 0 1 0 8.486.75.75 0 0 1-1.06-1.061 4.5 4.5 0 0 0 0-6.364.75.75 0 0 1 0-1.06Z" />
+                            </svg>
+                        </button>
+                        
+                        <button 
+                            onClick={() => handleGenerateVideo(event)}
+                            disabled={generatingVideoId === event.id}
+                            className={`p-1 rounded hover:bg-gray-700 transition-colors ${generatingVideoId === event.id ? 'text-yellow-400 animate-spin' : 'text-gray-500'}`}
+                            title="Generate Replay (Video)"
+                        >
+                            {generatingVideoId === event.id ? (
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                    <path d="M4.5 4.5a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h8.25a3 3 0 0 0 3-3v-9a3 3 0 0 0-3-3H4.5ZM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06Z" />
+                                </svg>
+                            )}
+                        </button>
                     </div>
                 )}
-
-                <div className="bg-gray-900/80 p-4 rounded-t-lg border-b border-gray-700">
-                     <div className="flex justify-between items-center text-xs uppercase text-gray-500 mb-1">
-                        <span>{fixture?.league}</span>
-                        <span>{fixture?.stage || `Week ${currentWeek}`}</span>
-                        <span>{isLoading ? 'Simulating...' : (matchState?.isFinished ? 'Full Time' : `${currentMinute}'`)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                         <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-right">{fixture?.homeTeam}</h3>
-                         <div className="px-4 py-1 bg-black/50 rounded text-2xl font-mono font-bold text-white mx-2">
-                            {score}
-                         </div>
-                         <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-left">{fixture?.awayTeam}</h3>
-                    </div>
-                    {error && <p className="text-red-500 text-center text-sm mt-2">{error}</p>}
-                </div>
-
-                <div className="flex-grow bg-black/20 p-4 flex flex-col min-h-[300px] max-h-[400px]">
-                    {renderTacticalMonitor()}
-                    
-                    <div ref={feedRef} className="overflow-y-auto space-y-1 scroll-smooth flex-1">
-                        {matchState?.events.length === 0 && (
-                            <div className="text-center text-gray-500 italic mt-10">Match is about to start...</div>
-                        )}
-                        {matchState?.events.map(renderEvent)}
-                        {isLoading && (
-                            <div className="flex justify-center py-4">
-                                <FootballIcon className="w-6 h-6 text-green-500 animate-spin" />
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="bg-gray-800 p-3 rounded-b-lg border-t border-gray-700">
-                    {renderControls(currentMinute)}
-                </div>
-                
-                {gameState === GameState.POST_MATCH && renderWeeklyResults()}
             </div>
         );
-    };
+    }
 
-    const renderControls = (minute: number) => {
-        if (isLoading) return <div className="text-center text-gray-500 text-sm">Simulating...</div>;
-        
-        if (gameState === GameState.PRE_MATCH && fixture) {
-            const hasCriticalErrors = criticalErrors.some(e => e.severity === 'critical');
-            const hasWarnings = criticalErrors.some(e => e.severity === 'warning');
+    // Render Logic...
+    if (isSeasonOver) return <div className="text-center p-8"><h2 className="text-3xl font-bold text-green-400 mb-4">Season Over!</h2></div>;
+    
+    if (gameState === GameState.PRE_MATCH && !fixture) {
+         return <div className="text-center p-8"><h2 className="text-xl font-bold mb-2 text-green-400">Week {currentWeek}</h2><p>No match scheduled.</p></div>;
+    }
 
-            return (
-                <div className="space-y-3">
-                    {/* Critical Error Warnings */}
-                    {criticalErrors.length > 0 && !errorsAcknowledged && (
-                        <div className="space-y-2">
-                            {criticalErrors.filter(e => e.severity === 'critical').map((err, i) => (
-                                <div key={`crit-${i}`} className="bg-red-900/80 border-2 border-red-500 rounded-lg p-3 animate-pulse">
-                                    <p className="text-red-200 text-sm font-bold">{err.message}</p>
-                                </div>
-                            ))}
-                            {criticalErrors.filter(e => e.severity === 'warning').map((err, i) => (
-                                <div key={`warn-${i}`} className="bg-yellow-900/60 border border-yellow-600 rounded-lg p-2">
-                                    <p className="text-yellow-200 text-xs">{err.message}</p>
-                                </div>
-                            ))}
-                            {hasCriticalErrors && (
-                                <button
-                                    onClick={() => setErrorsAcknowledged(true)}
-                                    className="w-full py-2 bg-red-800 hover:bg-red-700 text-red-100 text-sm font-bold rounded border border-red-500"
-                                >
-                                    I Know What I'm Doing
-                                </button>
-                            )}
-                            {!hasCriticalErrors && hasWarnings && (
-                                <button
-                                    onClick={() => setErrorsAcknowledged(true)}
-                                    className="w-full py-1 text-yellow-400 text-xs underline hover:text-yellow-300"
-                                >
-                                    Dismiss Warnings
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Kick Off Button */}
-                    {(criticalErrors.length === 0 || errorsAcknowledged) && (
-                        <button
-                            onClick={onPlayFirstHalf}
-                            className="w-full py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700 transition-colors flex items-center justify-center"
-                        >
-                            <FootballIcon className="w-5 h-5 mr-2" /> Kick Off
-                        </button>
-                    )}
-                </div>
-            );
-        }
-
-        if (gameState === GameState.POST_MATCH || (gameState === GameState.PRE_MATCH && !fixture)) {
-            return ( <button onClick={onNextMatch} className="w-full py-3 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition-colors"> Continue </button> );
-        }
-
-        if (gameState === GameState.PAUSED) {
-            if (minute === 45) {
-                // Loading state while fetching context-aware shouts
-                if (loadingShouts) {
-                    return (
-                        <div className="text-center py-4">
-                            <FootballIcon className="w-6 h-6 text-yellow-500 animate-spin mx-auto mb-2" />
-                            <p className="text-yellow-400 text-sm">Reading the game...</p>
-                        </div>
-                    );
-                }
-
-                return (
-                    <div>
-                        <div className="mb-3 text-center">
-                            <h4 className="text-yellow-400 font-bold text-sm uppercase mb-2">Half Time Team Talk</h4>
-
-                            {/* Dynamic Context-Aware Shouts */}
-                            {dynamicShouts && dynamicShouts.length > 0 ? (
-                                <div className="grid grid-cols-2 gap-2">
-                                    {dynamicShouts.map((shout) => (
-                                        <button
-                                            key={shout.id}
-                                            onClick={() => onPlaySecondHalf(shout.description as TouchlineShout)}
-                                            className="py-2 px-2 text-xs bg-gray-700 text-white font-semibold rounded hover:bg-green-700 transition-colors text-left group relative"
-                                            title={shout.effect}
-                                        >
-                                            <span className="font-bold text-green-400">{shout.label}</span>
-                                            <span className="block text-gray-300 text-[10px] mt-1 leading-tight truncate">
-                                                "{shout.description}"
-                                            </span>
-                                            {shout.risk && (
-                                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" title={`Risk: ${shout.risk}`}></span>
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                            ) : (
-                                /* Fallback to Static Shouts */
-                                <div className="grid grid-cols-2 gap-2">
-                                    {(Object.keys(TOUCHLINE_SHOUTS) as TouchlineShout[]).map(shout => (
-                                        <button key={shout} onClick={() => onPlaySecondHalf(shout)} className="py-2 text-xs bg-gray-700 text-white font-semibold rounded hover:bg-green-700">
-                                            {shout}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        <div className="mt-2 border-t border-gray-700 pt-2">
-                            <button
-                                onClick={handleAskAssistant}
-                                disabled={isAskingAssistant}
-                                className="w-full py-2 bg-blue-900/50 hover:bg-blue-800 border border-blue-700 text-blue-200 text-xs font-bold rounded flex items-center justify-center"
-                            >
-                                {isAskingAssistant ? "Consulting..." : "Ask Assistant Manager"}
-                            </button>
-                        </div>
-                    </div>
-                );
-            }
-            
-            return (
-                <div className="space-y-2">
-                    <p className="text-center text-green-400 font-bold text-sm">Match Paused ({minute}')</p>
-                    <div className="grid grid-cols-2 gap-2">
-                        {minute < 75 && (
-                             <button onClick={() => onSimulateSegment(minute + 15)} className="py-2 bg-gray-600 hover:bg-gray-500 text-white rounded font-bold">
-                                Play to {minute + 15}'
-                            </button>
-                        )}
-                        <button onClick={() => onSimulateSegment(90)} className={`py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold ${minute >= 75 ? 'col-span-2' : ''}`}>
-                            Play to Full Time
-                        </button>
-                    </div>
-                    
-                    <div className="pt-1">
-                            <button 
-                            onClick={handleAskAssistant}
-                            disabled={isAskingAssistant}
-                            className="w-full py-2 bg-blue-900/50 hover:bg-blue-800 border border-blue-700 text-blue-200 text-xs font-bold rounded flex items-center justify-center"
-                        >
-                            {isAskingAssistant ? "Consulting..." : "Ask Assistant Manager"}
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-
-        return null;
-    };
+    const currentMinute = matchState?.currentMinute || 0;
+    const score = matchState ? `${matchState.homeScore}-${matchState.awayScore}` : 'v';
 
     return (
-        <div className="h-full">
-            {renderContent()}
+        <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden min-h-[600px] flex flex-col relative">
+            
+            {/* VIDEO MODAL */}
+            {videoUrl && (
+                <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in">
+                    <button onClick={() => setVideoUrl(null)} className="absolute top-4 right-4 text-white hover:text-gray-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    </button>
+                    <h3 className="text-green-400 font-bold mb-4 text-xl tracking-widest uppercase">Instant Replay (AI Generated)</h3>
+                    <video src={videoUrl} controls autoPlay className="max-w-full max-h-[80vh] rounded border-2 border-green-600 shadow-2xl" />
+                </div>
+            )}
+
+            {/* ATMOSPHERE */}
+            {gameState !== GameState.PRE_MATCH && (
+                <AtmosphereWidget chant={currentChant} momentum={matchState?.momentum || 0} teamName={userTeamName || "Home"} />
+            )}
+
+            {/* SCOREBOARD */}
+            <div className="bg-black p-4 rounded-t-lg border-b border-gray-700">
+                 <div className="flex justify-between items-center text-xs uppercase text-gray-500 mb-1">
+                    <span>{fixture?.league}</span>
+                    <span>{isLoading ? 'Simulating...' : (matchState?.isFinished ? 'Full Time' : `${currentMinute}'`)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                     <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-right text-white">{fixture?.homeTeam}</h3>
+                     <div className="px-4 py-1 bg-gray-800 rounded text-3xl font-mono font-bold text-yellow-500 mx-2">
+                        {score}
+                     </div>
+                     <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-left text-white">{fixture?.awayTeam}</h3>
+                </div>
+                {/* Media Error Toast */}
+                {mediaError && <div className="text-center text-red-400 text-xs mt-2 animate-pulse font-bold">{mediaError}</div>}
+            </div>
+
+            {/* LIVE FEED */}
+            <div className="flex-grow bg-gray-900/50 p-4 flex flex-col min-h-[300px] max-h-[400px]">
+                {gameState !== GameState.PRE_MATCH && (
+                    <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events[matchState.events.length-1] || null} />
+                )}
+                
+                <div ref={feedRef} className="overflow-y-auto space-y-1 scroll-smooth flex-1 pr-2">
+                    {matchState?.events.length === 0 && <div className="text-center text-gray-500 italic mt-10">Match is about to start...</div>}
+                    {matchState?.events.map(renderEvent)}
+                    {isLoading && <div className="flex justify-center py-4"><FootballIcon className="w-6 h-6 text-green-500 animate-spin" /></div>}
+                </div>
+            </div>
+
+            {/* CONTROLS */}
+            <div className="bg-gray-800 p-4 border-t border-gray-700">
+                {isLoading ? (
+                    <div className="text-center text-yellow-400 font-mono text-sm animate-pulse">ASSISTANT MANAGER IS THINKING...</div>
+                ) : (
+                    <>
+                        {gameState === GameState.PRE_MATCH && fixture && (
+                            <button onClick={onPlayFirstHalf} className="w-full py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700 flex items-center justify-center gap-2"> 
+                                <FootballIcon className="w-5 h-5" /> KICK OFF 
+                            </button> 
+                        )}
+
+                        {gameState === GameState.PAUSED && (
+                            <div className="space-y-3">
+                                {currentMinute === 45 && (
+                                    <div className="flex flex-col items-center space-y-2">
+                                        <h4 className="text-gray-400 text-xs uppercase font-bold">Team Talk</h4>
+                                        <div className="flex gap-2">
+                                            {availableShouts.map(shout => (
+                                                <button key={shout.id} onClick={() => setSelectedShout(shout)} className={`px-3 py-1 text-xs rounded border ${selectedShout?.id === shout.id ? 'bg-blue-600 border-blue-400' : 'bg-gray-700 border-gray-600'}`}>{shout.label}</button>
+                                            ))}
+                                        </div>
+                                        <button onClick={() => onPlaySecondHalf(selectedShout || { id: 'none', label: 'None', description: '', effect: '' })} className="w-full py-2 bg-green-600 text-white font-bold rounded">Start 2nd Half</button>
+                                    </div>
+                                )}
+                                {currentMinute > 45 && currentMinute < 90 && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {currentMinute < 75 && <button onClick={() => onSimulateSegment(currentMinute + 15)} className="py-2 bg-gray-600 text-white rounded font-bold">Sim 15m</button>}
+                                        <button onClick={() => onSimulateSegment(90)} className="py-2 bg-green-600 text-white rounded font-bold col-span-2">To Full Time</button>
+                                    </div>
+                                )}
+                                <button onClick={handleAskAssistant} disabled={isAskingAssistant} className="w-full py-2 border border-blue-600 text-blue-400 text-xs font-bold rounded hover:bg-blue-900/30">
+                                    {isAskingAssistant ? "Consulting..." : "Ask Assistant"}
+                                </button>
+                            </div>
+                        )}
+
+                        {(gameState === GameState.POST_MATCH || (gameState === GameState.PRE_MATCH && !fixture)) && (
+                            <button onClick={onNextMatch} className="w-full py-3 bg-blue-600 text-white font-bold rounded hover:bg-blue-700">CONTINUE</button>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* Assistant Overlay */}
+            {assistantAdvice && (
+                <div className="absolute inset-0 bg-black/80 z-40 flex items-center justify-center p-6 backdrop-blur-sm">
+                    <div className="bg-gray-800 border-2 border-blue-500 rounded-lg p-6 max-w-md w-full shadow-2xl">
+                            <div className="flex items-center gap-3 mb-4 border-b border-gray-700 pb-2">
+                            <div className="p-2 bg-blue-900 rounded-full"><UserIcon className="w-6 h-6 text-blue-300" /></div>
+                            <div><h4 className="font-bold text-blue-400 text-lg">Assistant Manager</h4></div>
+                            </div>
+                            <div className="space-y-2 text-gray-200 text-sm font-medium leading-relaxed whitespace-pre-line">{assistantAdvice}</div>
+                            <button onClick={() => setAssistantAdvice(null)} className="mt-6 w-full py-2 bg-gray-700 hover:bg-gray-600 rounded text-white font-bold">Got it, Boss.</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
-};
-
-export default MatchView;
+}

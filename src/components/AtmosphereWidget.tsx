@@ -1,111 +1,115 @@
+
 import React, { useEffect, useState } from 'react';
-import { Chant } from '../services/chantService';
+import type { Chant } from '../services/chantService';
 
 interface Props {
     chant: Chant | null;
-    momentum: number; // From matchState (-5 to 5)
+    momentum: number; // From matchState (-10 to 10)
     teamName: string;
 }
 
 export default function AtmosphereWidget({ chant, momentum, teamName }: Props) {
     const [bars, setBars] = useState<number[]>([20, 30, 25, 35, 20]);
 
-    // Animate the decibel bars
+    // Animate the decibel bars based on momentum intensity
     useEffect(() => {
         const interval = setInterval(() => {
-            setBars(prev => prev.map(() =>
-                Math.random() * (20 + (Math.abs(momentum) * 15)) + 10
+            const intensityMultiplier = 1 + (Math.abs(momentum) * 0.2);
+            setBars(prev => prev.map(() => 
+                Math.random() * (30 * intensityMultiplier) + 10
             ));
-        }, 150);
+        }, 100);
         return () => clearInterval(interval);
     }, [momentum]);
 
-    // Calculate color based on momentum (Red = Hostile, Green = Party)
+    // Calculate color based on momentum (Red = Hostile/Pressure, Green = Dominance)
     const getBarColor = () => {
-        if (momentum < -2) return 'bg-red-600'; // Toxic atmosphere
-        if (momentum > 2) return 'bg-green-500'; // Party atmosphere
+        if (momentum < -3) return 'bg-red-600'; // Toxic atmosphere
+        if (momentum > 3) return 'bg-green-500'; // Party atmosphere
         return 'bg-blue-600'; // Standard
     };
 
     const getMoodText = () => {
-        if (momentum < -3) return '😤 HOSTILE';
-        if (momentum < -1) return '😠 TENSE';
-        if (momentum > 3) return '🎉 BOUNCING';
-        if (momentum > 1) return '🔥 ELECTRIC';
+        if (momentum < -5) return '🤬 TOXIC';
+        if (momentum < -2) return '😤 TENSE';
+        if (momentum > 5) return '🎉 BOUNCING';
+        if (momentum > 2) return '🔥 ELECTRIC';
         return '👏 STEADY';
     };
 
-    // The Decibel Bar Animation
+    if (!teamName) return null;
+
     return (
-        <div className="bg-gray-800 border-b-4 border-black p-4 mb-4 shadow-lg relative overflow-hidden rounded-lg">
-            {/* BACKGROUND PULSE */}
-            <div
-                className={`absolute inset-0 opacity-20 ${getBarColor()} transition-all duration-500`}
-                style={{ transform: `scale(${1 + Math.abs(momentum) * 0.05})` }}
+        <div className="bg-gray-900 border-b-2 border-gray-700 p-3 mb-4 shadow-lg relative overflow-hidden rounded-lg">
+            {/* BACKGROUND PULSE EFFECT */}
+            <div 
+                className={`absolute inset-0 opacity-10 ${getBarColor()} transition-colors duration-500`}
+                style={{ 
+                    animation: Math.abs(momentum) > 4 ? 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none' 
+                }}
             />
 
-            <div className="relative z-10 flex justify-between items-center">
-                {/* DECIBEL METER */}
-                <div className="flex flex-col items-center mr-4">
-                    <span className="text-xs font-mono text-gray-400 uppercase tracking-wider">
-                        {teamName.split(' ')[0]} End
+            <div className="relative z-10 flex justify-between items-center gap-4">
+                
+                {/* DECIBEL METER (Left) */}
+                <div className="flex flex-col items-center min-w-[80px]">
+                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">
+                        Home End
                     </span>
-                    <div className="flex items-end space-x-1 h-12 mt-1">
+                    <div className="flex items-end space-x-1 h-8">
                         {bars.map((height, i) => (
                             <div
                                 key={i}
-                                className={`w-2 transition-all duration-100 rounded-t ${getBarColor()}`}
-                                style={{ height: `${height}%` }}
+                                className={`w-1.5 transition-all duration-75 rounded-t ${getBarColor()}`}
+                                style={{ height: `${Math.min(height, 100)}%` }}
                             />
                         ))}
                     </div>
-                    <span className="text-xs font-bold mt-1 text-gray-300">{getMoodText()}</span>
+                    <span className={`text-[10px] font-bold mt-1 ${momentum < -2 ? 'text-red-400' : momentum > 2 ? 'text-green-400' : 'text-gray-400'}`}>
+                        {getMoodText()}
+                    </span>
                 </div>
 
-                {/* LYRICS DISPLAY */}
-                <div className="flex-1 text-center px-4">
+                {/* LYRICS DISPLAY (Center) */}
+                <div className="flex-1 bg-black/30 rounded border border-gray-700/50 p-2 min-h-[80px] flex flex-col justify-center items-center text-center">
                     {chant ? (
-                        <div className="animate-pulse">
-                            <p className="text-xs text-yellow-400 font-mono mb-2 tracking-widest">
-                                🎵 TUNE: {chant.tune.toUpperCase()} 🎵
+                        <div className="animate-in fade-in zoom-in duration-300">
+                            <p className="text-[9px] text-yellow-500 font-mono mb-1 tracking-widest uppercase">
+                                🎵 Tune: {chant.tune}
                             </p>
-                            <div className="space-y-1">
+                            <div className="space-y-0.5">
                                 {chant.lyrics.map((line, idx) => (
                                     <p
                                         key={idx}
-                                        className={`text-lg md:text-xl font-black italic text-white transform -skew-x-6 ${
-                                            idx === chant.lyrics.length - 1 ? 'text-yellow-300' : ''
+                                        className={`font-black italic text-gray-100 transform ${idx % 2 === 0 ? '-skew-x-3' : 'skew-x-3'} ${
+                                            idx === chant.lyrics.length - 1 ? 'text-yellow-200 text-sm' : 'text-xs'
                                         }`}
                                     >
                                         "{line.toUpperCase()}"
                                     </p>
                                 ))}
                             </div>
-                            <p className="text-xs text-gray-500 mt-2 font-mono">
-                                INTENSITY: {chant.intensity.toUpperCase()}
-                            </p>
                         </div>
                     ) : (
-                        <div className="py-2">
-                            <p className="text-lg text-gray-600 font-bold italic">
-                                (CROWD MURMURING...)
+                        <div className="py-2 opacity-50">
+                            <p className="text-xs text-gray-500 font-bold italic animate-pulse">
+                                ( Crowd murmuring... )
                             </p>
-                            <p className="text-xs text-gray-700 mt-1">Waiting for something to sing about</p>
                         </div>
                     )}
                 </div>
 
-                {/* MOMENTUM INDICATOR */}
-                <div className="flex flex-col items-center ml-4">
-                    <span className="text-xs font-mono text-gray-400 uppercase">Momentum</span>
-                    <div className="h-12 w-4 bg-gray-700 rounded-full overflow-hidden mt-1 relative">
-                        <div
-                            className={`absolute bottom-0 w-full transition-all duration-300 ${getBarColor()}`}
-                            style={{ height: `${((momentum + 5) / 10) * 100}%` }}
+                {/* MOMENTUM GAUGE (Right) */}
+                <div className="flex flex-col items-center min-w-[80px]">
+                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Momentum</span>
+                    <div className="h-8 w-3 bg-gray-800 rounded-full overflow-hidden relative border border-gray-600">
+                        <div 
+                            className={`absolute bottom-0 w-full transition-all duration-500 ease-out ${momentum > 0 ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{ height: `${((momentum + 10) / 20) * 100}%` }}
                         />
-                        <div className="absolute top-1/2 w-full h-0.5 bg-gray-500" />
+                        <div className="absolute top-1/2 w-full h-px bg-white/50" />
                     </div>
-                    <span className="text-xs font-bold mt-1 text-gray-300">
+                    <span className="text-[10px] font-bold mt-1 text-gray-300">
                         {momentum > 0 ? '+' : ''}{momentum}
                     </span>
                 </div>

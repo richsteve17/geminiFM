@@ -1,7 +1,10 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 const API_KEY = process.env.API_KEY;
-const ai = new GoogleGenAI({ apiKey: API_KEY || "" });
+if (!API_KEY) throw new Error("API_KEY not set");
+
+const ai = new GoogleGenAI({ apiKey: API_KEY });
 const model = 'gemini-2.0-flash-exp';
 
 export interface Chant {
@@ -23,20 +26,21 @@ export const generatePunkChant = async (
     if (trigger === 'losing') context = `We are losing badly. Depression. Dark humor. "Sack the board".`;
 
     const prompt = `
-    You are the Capo of the ${teamName} Ultras. You love Ska-Punk (Rancid, Pennywise, Dropkick Murphys, The Specials).
+    You are the Capo of the ${teamName} Ultras. You love Ska-Punk and Oi! music (Cock Sparrer, The Specials, Dropkick Murphys).
 
     Generate a 4-line terrace chant based on: ${context}
 
     RULES:
-    1. Must rhyme.
-    2. Must fit a fast 4/4 punk beat.
+    1. Must rhyme (AABB or ABAB).
+    2. Must have a catchy, stomping rhythm.
     3. If losing, be cynical/funny.
     4. If winning, be rowdy.
+    5. Do not use generic "Olé Olé". Make it specific to the situation.
 
     Return JSON ONLY:
     {
         "lyrics": ["Line 1", "Line 2", "Line 3", "Line 4 (Punchline)"],
-        "tune": "Name of a classic Punk/Ska song it sounds like",
+        "tune": "Name of a classic song it sounds like (e.g. Yellow Submarine, Anarchy in the UK)",
         "intensity": "high"
     }
     `;
@@ -47,7 +51,9 @@ export const generatePunkChant = async (
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
-        return JSON.parse(response.text || "{}");
+        const text = response.text || "{}";
+        const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        return JSON.parse(cleanText);
     } catch (e) {
         // Fallback if AI fails (The "Offline Mode" Setlist)
         return {
