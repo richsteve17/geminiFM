@@ -7,7 +7,7 @@ import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
-import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference } from './services/geminiService';
+import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
@@ -23,6 +23,8 @@ import PressConferenceScreen from './components/PressConferenceScreen';
 import MechanicsGuide from './components/MechanicsGuide';
 import { generateWorldCupStructure, NATIONAL_TEAMS } from './international';
 import { getChampionsLeagueParticipants } from './europe';
+
+const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
 
 const convertNationalTeam = (nt: NationalTeam): Team => ({
     name: nt.name,
@@ -63,6 +65,9 @@ export default function App() {
     
     // Store pending agreement terms temporarily
     const [pendingContractTerms, setPendingContractTerms] = useState<{ wage: number, length: number } | null>(null);
+
+    // Active Tactical Shout
+    const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
 
     const [scoutResults, setScoutResults] = useState<Player[]>([]);
     const [pressQuestions, setPressQuestions] = useState<string[]>([]);
@@ -332,13 +337,46 @@ export default function App() {
         proceedToNextWeek();
     };
 
-    const proceedToNextWeek = () => {
+    const proceedToNextWeek = async () => {
         const nextW = currentWeek + 1;
         const results: Fixture[] = [];
         fixtures.filter(f => f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName).forEach(f => {
             const res = simulateQuickMatch(teams[f.homeTeam], teams[f.awayTeam]);
             results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
         });
+        
+        // --- International Break Logic ---
+        if (gameMode === 'Club' && INTERNATIONAL_BREAK_WEEKS.includes(nextW)) {
+            const summary = await getInternationalBreakSummary(nextW);
+            setNews(prev => [{
+                id: Date.now(), 
+                week: nextW, 
+                title: summary.newsTitle, 
+                body: summary.newsBody, 
+                type: 'call-up' 
+            }, ...prev]);
+            
+            // Randomly assign a 'Chemistry Rift' if the AI generated names that match our players
+            // For simplicity in this lightweight version, we just pick 2 random players from the user's team to have a "minor rift"
+            if (userTeamName && Math.random() > 0.5) {
+                const userPlayers = teams[userTeamName].players;
+                const p1 = userPlayers[Math.floor(Math.random() * userPlayers.length)];
+                const p2 = userPlayers[Math.floor(Math.random() * userPlayers.length)];
+                if (p1 && p2 && p1 !== p2) {
+                    setTeams(prev => {
+                        const t = prev[userTeamName];
+                        const updated = t.players.map(p => {
+                            if (p.name === p1.name) return { ...p, effects: [...p.effects, { type: 'BadChemistry', with: p2.name, message: 'International Grudge', until: 4 } as any] };
+                            if (p.name === p2.name) return { ...p, effects: [...p.effects, { type: 'BadChemistry', with: p1.name, message: 'International Grudge', until: 4 } as any] };
+                            return p;
+                        });
+                        return { ...prev, [userTeamName]: { ...t, players: updated } };
+                    });
+                    setNews(prev => [{ id: Date.now()+1, week: nextW, title: 'Training Ground Bust-up', body: `${p1.name} and ${p2.name} have returned from international duty on bad terms.`, type: 'chemistry-rift' }, ...prev]);
+                }
+            }
+        }
+
         setWeeklyResults(results);
         setCurrentWeek(nextW);
         setCurrentFixture(fixtures.find(f => (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && f.week === nextW));
@@ -349,6 +387,7 @@ export default function App() {
     const handlePlayFirstHalf = async () => {
         if (!currentFixture || !userTeam) return;
         setGameState(GameState.SIMULATING); setIsLoading(true);
+        setActiveShout(undefined); // Reset shout
         const home = teams[currentFixture.homeTeam];
         const away = teams[currentFixture.awayTeam];
         
@@ -356,7 +395,7 @@ export default function App() {
             currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off."
         };
 
-        const result = await simulateMatchSegment(home, away, startState, 45, {});
+        const result = await simulateMatchSegment(home, away, startState, 45, { userTeamName });
         
         setMatchState(prev => ({
             ...startState,
@@ -372,6 +411,7 @@ export default function App() {
     };
 
     const handlePlaySecondHalf = async (shout: TouchlineShout) => {
+        setActiveShout(shout); // Store the shout
         handleSimulateSegment(60);
     };
 
@@ -381,7 +421,8 @@ export default function App() {
         const home = teams[currentFixture.homeTeam];
         const away = teams[currentFixture.awayTeam];
 
-        const result = await simulateMatchSegment(home, away, matchState, targetMinute, {});
+        // Pass activeShout to the AI
+        const result = await simulateMatchSegment(home, away, matchState, targetMinute, { shout: activeShout, userTeamName });
         
         const newState = {
             ...matchState,

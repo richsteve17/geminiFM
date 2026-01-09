@@ -58,7 +58,7 @@ const validateSimulationResult = (
     return true;
 };
 
-export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, currentMatchState: MatchState, targetMinute: number, context: any) => {
+export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, currentMatchState: MatchState, targetMinute: number, context: { shout?: string, userTeamName?: string }) => {
     const minuteStart = currentMatchState.currentMinute;
     const minuteEnd = targetMinute;
 
@@ -72,6 +72,9 @@ export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, curre
                 if (p.personality === 'Leader') flags.push("LEADER");
                 if (p.personality === 'Volatile') flags.push("VOLATILE (Risk)");
                 if (p.status.type === 'Injured') flags.push("INJURED");
+                // Check if this player is impacted by a chemistry rift with someone ON THE PITCH
+                const rift = p.effects.find(e => e.type === 'BadChemistry');
+                if (rift && rift.type === 'BadChemistry') flags.push(`HATES ${rift.with} (Poor Communication)`);
                 
                 const flagStr = flags.length > 0 ? `[${flags.join(',')}]` : '';
                 return `${p.name} (${p.position}, ${p.rating})${flagStr}`;
@@ -83,6 +86,22 @@ export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, curre
     
     // For validation, we need raw names
     const allowedPlayers = [...homeTeam.players, ...awayTeam.players].map(p => p.name);
+
+    // Inject Manager Shout
+    let tacticalContext = "";
+    if (context.shout && context.userTeamName) {
+        const isHome = context.userTeamName === homeTeam.name;
+        tacticalContext = `
+        *** MANAGER INTERVENTION ***
+        The ${context.userTeamName} manager has shouted: "${context.shout}".
+        
+        IMPACT RULES:
+        - "Demand More": Increase event frequency. Slightly higher chance of goals for BOTH sides.
+        - "Tighten Up": Decrease goal probability for ${context.userTeamName}. Lower entertainment value.
+        - "Encourage": Boost morale of players with rating < 80.
+        - "Push Forward": ${context.userTeamName} takes huge risks. High chance of scoring OR conceding on counter.
+        `;
+    }
 
     const prompt = `
 *** FOOTBALL MATCH CONTRACT ***
@@ -96,11 +115,14 @@ Players on Pitch (Away): ${awayPromptList.join(', ')}
 Subs Remaining (home/away): ${5 - currentMatchState.subsUsed.home}/5 , ${5 - currentMatchState.subsUsed.away}/5
 Momentum (current): ${currentMatchState.momentum}
 
+${tacticalContext}
+
 *** TRAIT LOGIC RULES (MUST FOLLOW) ***
 1) **TIRED players**: If involved in an event, they MUST make a mistake, lose a race, or get injured. Mention fatigue in commentary.
 2) **LEADER players**: If team is losing after 75', increase chance of them assisting or scoring. Mention them "driving the team on".
 3) **VOLATILE players**: If team is losing, high chance of Yellow/Red card for arguing or rash tackle.
 4) **INJURED players**: If still on pitch, opponent MUST target them for an easy goal.
+5) **CHEMISTRY RIFTS**: If two players hate each other, they should fail to pass to each other or collide.
 
 *** REQUIRED JSON FORMAT ***
 {
@@ -123,6 +145,7 @@ Momentum (current): ${currentMatchState.momentum}
         if (!isValid) throw new Error("Simulation failed validation");
         return parsed;
     } catch (error) {
+        console.error("Match Sim Error", error);
         return {
             homeScoreAdded: 0,
             awayScoreAdded: 0,
@@ -235,33 +258,16 @@ export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: s
     return response.text || "No advice.";
 };
 
-export const getTournamentResult = async (stage: string, team1: string, team2: string) => {
-    const prompt = `Simulate international match: ${team1} vs ${team2} in ${stage}. Return JSON: { "winner": "${team1}"|"${team2}", "score": "X-Y", "summary": "string" }`;
-    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = parseJsonSafely<{ winner: string; score: string; summary: string }>(response.text);
-    return parsed ?? { winner: team1, score: "1-0", summary: "A tight contest decided by a single goal." };
-};
-
-export const getTeammateTournamentRivalry = async (playerA: Player, playerB: Player, matchContext: string) => {
+export const getInternationalBreakSummary = async (week: number) => {
     const prompt = `
-    Two club teammates just played against each other internationally: ${playerA.name} (${playerA.nationality}) vs ${playerB.name} (${playerB.nationality}).
-    Match Context: ${matchContext}.
-    Did a "Grudge" or "Chemistry Rift" form? 
-    High stakes (Finals) or incidents (Red cards/PK misses) increase chance.
-    Return JSON: { "riftFormed": boolean, "reason": "string", "durationWeeks": number }
+    Simulate an international break for Week ${week} of the 2026/27 season.
+    1. Invent a major upset in the Qualifiers/Nations League.
+    2. Identify a "Player of the Week".
+    3. Create a short news headline about a player returning with high morale.
+    
+    Return JSON: { "newsTitle": "string", "newsBody": "string", "riftPlayer1": "string (Generic Name)", "riftPlayer2": "string (Generic Name)" }
     `;
     const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = parseJsonSafely<{ riftFormed: boolean; reason: string; durationWeeks: number }>(response.text);
-    return parsed ?? { riftFormed: false, reason: "", durationWeeks: 0 };
-};
-
-export const getPlayerPostTournamentMorale = async (player: Player, performance: string) => {
-    const prompt = `
-    Player ${player.name} just finished a tournament. Result: ${performance}.
-    Determine morale effect.
-    Return JSON: { "morale": "Fired Up" | "Happy" | "Content" | "Disappointed" | "Depressed", "reason": "string" }
-    `;
-    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = parseJsonSafely<{ morale: string; reason: string }>(response.text);
-    return parsed ?? { morale: "Content", reason: "returned from duty." };
+    const parsed = parseJsonSafely<{ newsTitle: string; newsBody: string; riftPlayer1: string; riftPlayer2: string }>(response.text);
+    return parsed ?? { newsTitle: "International Break Concludes", newsBody: "Players return to their clubs.", riftPlayer1: "", riftPlayer2: "" };
 };
