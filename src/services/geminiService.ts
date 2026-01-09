@@ -6,7 +6,7 @@ const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
-const model = 'gemini-3-flash-preview';
+const model = 'gemini-2.0-flash-exp';
 
 // Helper: check if player is physically on the pitch, even if injured
 const isOnPitch = (status: Player["status"], matchCard?: Player["matchCard"]) => {
