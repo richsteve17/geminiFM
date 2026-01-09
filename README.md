@@ -2,68 +2,95 @@
 # ⚽ Gemini Football Manager '27
 **The World's First LLM-Driven Sports Simulation**
 
-Gemini Football Manager '27 redefines the sports strategy genre by replacing rigid decision trees with a Generative AI engine. Every match, interview, and negotiation is unique, context-aware, and driven by Google's Gemini API.
+> **Built with:** React 19 · TypeScript · Google Gemini API · Tailwind CSS
 
-> **Current Build:** v1.5 (Roster Update & Stability Patch)
-> **Engine:** React 19 + TypeScript + Google GenAI SDK
+Gemini Football Manager '27 (GFM '27) is a paradigm shift in sports strategy games. Unlike traditional simulators that rely on static database lookups and rigid decision trees, GFM '27 uses a **Hybrid AI Architecture** to generate a living, breathing football world. Every match report, press conference, transfer negotiation, and tactical analysis is generated in real-time by Google's Gemini models, ensuring no two careers are ever the same.
 
-## 🚀 Quick Start
+---
 
-1.  **Clone the repository**
-2.  **Install dependencies:**
+## 🧠 The Architecture: "Hawk-Eye" Hybrid Engine
+
+GFM '27 solves the "hallucination" problem common in AI games by separating **State** from **Narrative**.
+
+### 1. The Deterministic Layer (The Referee)
+Behind the scenes, a hard-coded TypeScript engine manages the laws of physics and the rules of the game.
+*   **Validation:** It is impossible for the AI to hallucinate a goal by a player who is on the bench.
+*   **State Management:** Tracks Condition (0-100%), Contract Lengths, Yellow Cards, and League Tables with mathematical precision.
+*   **Swiss Model Logic:** The Champions League fixtures are generated using a mathematically accurate Swiss-system pairing algorithm.
+
+### 2. The Generative Layer (The Color Commentator)
+We feed the deterministic state into Google Gemini 3.5/Flash via strict JSON schemas.
+*   **Context Injection:** The AI is told: *"Liverpool is losing 0-1 at home. It is the 88th minute. Trent Alexander-Arnold has the 'Leader' trait."*
+*   **Narrative Output:** The AI generates the specific event description: *"Trent screams at his teammates to push forward, whipping a desperate cross into the box..."*
+*   **Logic Influencer:** The AI *decides* the probability of events based on semantic understanding of traits (e.g., a "Volatile" player is more likely to get sent off in a derby).
+
+---
+
+## 🛠️ Technical Stack
+
+*   **Frontend Framework:** [React 19](https://react.dev/) (utilizing new Hooks and Server Actions patterns where applicable).
+*   **Language:** TypeScript (Strict Mode).
+*   **Build Tool:** Vite.
+*   **Styling:** Tailwind CSS (Utility-first for rapid UI iteration).
+*   **AI Integration:** `@google/genai` SDK (v1.34+).
+*   **State Persistence:** LocalStorage API (Serialized JSON state for Save/Load functionality).
+*   **Visuals:** Custom CSS-based 2D Pitch Physics engine.
+
+---
+
+## 🚀 Installation & Setup
+
+### Prerequisites
+*   Node.js (v18+)
+*   npm or yarn
+*   A Google AI Studio API Key
+
+### Steps
+
+1.  **Clone the Repository**
+    ```bash
+    git clone https://github.com/your-username/gemini-football-manager.git
+    cd gemini-football-manager
+    ```
+
+2.  **Install Dependencies**
     ```bash
     npm install
     ```
-3.  **Configure API Key:**
-    Create a `.env` file in the root directory:
+
+3.  **Environment Configuration**
+    Create a `.env` file in the root directory. You must provide a valid API key for the game to function.
     ```env
-    VITE_GEMINI_API_KEY=your_google_ai_studio_key
+    VITE_GEMINI_API_KEY=your_google_ai_studio_key_here
     ```
-4.  **Kick Off:**
+
+4.  **Run Development Server**
     ```bash
     npm run dev
     ```
 
 ---
 
-## 🎮 Game Modes
+## 🎮 Game Modes Overview
 
-### 1. 🏆 Club Career (The Core Experience)
-Take charge of a club in one of the world's top 7 leagues.
+### 1. Club Career (The Sandbox)
 *   **Leagues:** Premier League, La Liga, Bundesliga, Serie A, Ligue 1, Championship, MLS.
-*   **Champions League:** Fully simulated 36-team Swiss Model tournament integrated into the season.
-*   **Goal:** Balance board expectations, finances, and tactical evolutions to build a dynasty.
+*   **Scope:** Infinite seasons. Players age, contracts expire, and young prospects emerge via the scouting network.
+*   **Economy:** Manage a weekly wage budget. Overspending reduces Board Confidence.
 
-### 2. 🌍 World Cup 2026 (Prologue)
-A standalone tournament mode featuring the expanded 48-team format.
-*   **High Stakes:** Lead a nation to glory. Winning boosts your manager reputation significantly for future saves.
-*   **Authentic Groups:** 12 Groups (A-L) with realistic seeding.
-*   **Rosters:** 2026-projected squads for major nations (France, Brazil, England, etc.).
+### 2. World Cup 2026 (The Prologue)
+*   **Format:** Authentic 48-team tournament structure.
+*   **Groups:** 12 Groups (A-L). Top 2 + 8 Best 3rd place teams advance to the Round of 32.
+*   **Rosters:** 2026-projected squads for top nations (France, Brazil, England, Germany, Spain, Argentina).
+*   **Objective:** Win the trophy to earn "Legend" reputation status for your subsequent club career.
 
-### 3. 💼 Road to Glory (Unemployed)
-Start from the bottom with a custom manager profile.
-*   **RPG Elements:** Choose your background (Sunday League vs Legend).
-*   **Job Hunt:** Apply for vacancies via the dynamic Job Centre.
-*   **Interviews:** Face grilling questions from chairmen with different personalities (Tycoon vs Traditionalist).
+### 3. Road to Glory (RPG Mode)
+*   **Start Unemployed:** Create a manager avatar and define your backstory (Sunday League Amateur vs. Ex-International Pro).
+*   **Reputation System:** Your starting reputation determines which clubs will grant you an interview.
+*   **The Job Market:** A dynamic "Job Centre" updates weekly as AI managers are sacked or move clubs.
 
 ---
 
-## 🧠 The "Gemini" Difference
-
-Unlike traditional managers, GFM '27 uses AI to generate logic, not just text.
-
-*   **Hawk-Eye Validation:** A deterministic layer ensures the AI adheres to the laws of physics and football (e.g., a player cannot score if they aren't on the pitch).
-*   **Narrative Engine:** The commentary adapts to the stakes. A 90th-minute winner in a derby feels different than a friendly.
-*   **Natural Language Scouting:** Don't filter by stats. Tell your scout: *"Find me a cheap replacement for Salah who is fast and left-footed."*
-
-## 🛠️ Tech Stack
-
-*   **Frontend:** React 19, TypeScript, Vite
-*   **Styling:** Tailwind CSS
-*   **AI:** @google/genai (Gemini 2.5/3.0 Models)
-*   **State:** Complex React Hooks & Context-free State Management
-*   **Icons:** Heroicons (SVG)
-
 ## 📝 License
 
-MIT License. Created as an experimental showcase of LLM capabilities in complex simulation environments.
+This project is MIT Licensed. It is an experimental showcase of Large Language Models (LLMs) applied to complex simulation logic.
