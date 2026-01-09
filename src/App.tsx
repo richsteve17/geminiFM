@@ -1,5 +1,6 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
 import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode } from './types';
 import { AppScreen, GameState } from './types';
@@ -7,7 +8,7 @@ import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
-import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
+import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary, detectCriticalErrors, type CriticalError } from './services/geminiService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
@@ -78,28 +79,68 @@ export default function App() {
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
 
-    // --- SAVE / LOAD SYSTEM ---
+    // --- SAVE / LOAD SYSTEM with lz-string compression ---
+    const SAVE_KEY = 'gfm_save_v2_compressed';
+
     const saveGame = () => {
         if (userTeamName) {
             const stateToSave = {
+                version: 2,
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
-                managerReputation
+                managerReputation, savedAt: new Date().toISOString()
             };
-            localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
-            alert("Game Saved Successfully!");
+            const jsonString = JSON.stringify(stateToSave);
+            const compressed = compressToUTF16(jsonString);
+            const originalSize = new Blob([jsonString]).size;
+            const compressedSize = new Blob([compressed]).size;
+            const ratio = ((1 - compressedSize / originalSize) * 100).toFixed(1);
+
+            localStorage.setItem(SAVE_KEY, compressed);
+            alert(`Game Saved! (Compressed ${ratio}% - ${(compressedSize / 1024).toFixed(1)}KB)`);
+        }
+    };
+
+    // Copy save to clipboard for cross-device transfer
+    const copySaveToClipboard = async () => {
+        const compressed = localStorage.getItem(SAVE_KEY);
+        if (compressed) {
+            try {
+                await navigator.clipboard.writeText(compressed);
+                alert("Save copied to clipboard! Paste on another device to continue.");
+            } catch (e) {
+                alert("Failed to copy to clipboard.");
+            }
+        }
+    };
+
+    // Paste save from clipboard
+    const pasteSaveFromClipboard = async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            const decompressed = decompressFromUTF16(text);
+            if (decompressed) {
+                localStorage.setItem(SAVE_KEY, text);
+                handleContinue();
+            } else {
+                alert("Invalid save data in clipboard.");
+            }
+        } catch (e) {
+            alert("Failed to read from clipboard.");
         }
     };
 
     useEffect(() => {
-        // Auto-save on critical state changes
+        // Auto-save on critical state changes with compression
         if (userTeamName && appScreen !== AppScreen.START_SCREEN) {
             const stateToSave = {
+                version: 2,
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
-                managerReputation
+                managerReputation, savedAt: new Date().toISOString()
             };
-            localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
+            const compressed = compressToUTF16(JSON.stringify(stateToSave));
+            localStorage.setItem(SAVE_KEY, compressed);
         }
     }, [currentWeek, gameState, managerReputation]);
 
@@ -112,10 +153,39 @@ export default function App() {
     };
 
     const handleContinue = () => {
-        const savedData = localStorage.getItem('gfm_save_v1');
+        // Try new compressed format first, fallback to legacy
+        let savedData = localStorage.getItem(SAVE_KEY);
+        let parsed: any = null;
+
         if (savedData) {
             try {
-                const parsed = JSON.parse(savedData);
+                const decompressed = decompressFromUTF16(savedData);
+                if (decompressed) {
+                    parsed = JSON.parse(decompressed);
+                }
+            } catch (e) {
+                console.error("Failed to decompress save", e);
+            }
+        }
+
+        // Fallback to legacy uncompressed save
+        if (!parsed) {
+            const legacySave = localStorage.getItem('gfm_save_v1');
+            if (legacySave) {
+                try {
+                    parsed = JSON.parse(legacySave);
+                    // Migrate to new format
+                    const compressed = compressToUTF16(legacySave);
+                    localStorage.setItem(SAVE_KEY, compressed);
+                    localStorage.removeItem('gfm_save_v1');
+                } catch (e) {
+                    console.error("Failed to load legacy save", e);
+                }
+            }
+        }
+
+        if (parsed) {
+            try {
                 setUserTeamName(parsed.userTeamName);
                 setGameMode(parsed.gameMode);
                 setIsPrologue(parsed.isPrologue);
@@ -128,14 +198,14 @@ export default function App() {
                 setWeeklyResults(parsed.weeklyResults);
                 setGameState(parsed.gameState);
                 setManagerReputation(parsed.managerReputation || 50);
-                
+
                 if (parsed.appScreen === AppScreen.GAMEPLAY || parsed.appScreen === AppScreen.JOB_CENTRE) {
                     setAppScreen(parsed.appScreen);
                 } else {
                     setAppScreen(AppScreen.GAMEPLAY);
                 }
 
-                const f = parsed.fixtures.find((fx: Fixture) => 
+                const f = parsed.fixtures.find((fx: Fixture) =>
                     (fx.homeTeam === parsed.userTeamName || fx.awayTeam === parsed.userTeamName) && fx.week === parsed.currentWeek
                 );
                 setCurrentFixture(f);
@@ -144,7 +214,14 @@ export default function App() {
                 console.error("Failed to load save", e);
                 alert("Save file corrupted.");
             }
+        } else {
+            alert("No save file found.");
         }
+    };
+
+    // Check for save on mount
+    const hasSave = () => {
+        return !!(localStorage.getItem(SAVE_KEY) || localStorage.getItem('gfm_save_v1'));
     };
 
     const startTutorial = () => { setTutorialStep(0); setShowTutorial(true); };
