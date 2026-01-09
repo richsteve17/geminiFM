@@ -2,7 +2,7 @@
 # ⚽ Gemini Football Manager '27
 **The World's First LLM-Driven Sports Simulation**
 
-> **Current Build:** v2.1 (Atmosphere & Roster Update)
+> **Current Build:** v2.2 (Tactical Intelligence Update)
 > **Engine:** React 19 · TypeScript · Google Gemini 2.0 Flash · Tailwind CSS
 
 **Gemini Football Manager '27 (GFM '27)** is a paradigm shift in sports strategy games. Unlike traditional simulators (like Football Manager) that rely on static database lookups and rigid decision trees, GFM '27 uses a **Hybrid AI Architecture** to generate a living, breathing football world.

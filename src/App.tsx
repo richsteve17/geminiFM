@@ -7,9 +7,9 @@ import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
-import AtmosphereWidget from './components/AtmosphereWidget'; // IMPORT ADDED
+import AtmosphereWidget from './components/AtmosphereWidget';
 import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
-import { generatePunkChant, type Chant } from './services/chantService'; // IMPORT ADDED
+import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
@@ -74,7 +74,7 @@ export default function App() {
     
     const [managerReputation, setManagerReputation] = useState<number>(0);
     
-    // --- NEW CHANT STATE ---
+    // --- CHANT STATE ---
     const [currentChant, setCurrentChant] = useState<Chant | null>(null);
 
     const userTeam = userTeamName ? teams[userTeamName] : null;

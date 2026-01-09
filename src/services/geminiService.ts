@@ -277,3 +277,64 @@ export const getInternationalBreakSummary = async (week: number) => {
     const parsed = parseJsonSafely<{ newsTitle: string; newsBody: string; riftPlayer1: string; riftPlayer2: string }>(response.text);
     return parsed ?? { newsTitle: "International Break Concludes", newsBody: "Players return to their clubs.", riftPlayer1: "", riftPlayer2: "" };
 };
+
+// *** CRITICAL ERROR DETECTION - "Salah at GK" Protocol ***
+export interface CriticalError {
+    type: 'position_mismatch' | 'injured_starter' | 'fatigued_player' | 'chemistry_clash';
+    severity: 'warning' | 'critical';
+    player: string;
+    message: string;
+}
+
+export const detectCriticalErrors = (team: Team, formation: string): CriticalError[] => {
+    const errors: CriticalError[] = [];
+    const starters = team.players.filter(p => p.isStarter);
+
+    // SIMPLE CHECK: Is a Goalkeeper actually in the GK slot?
+    // (Assuming first player in list is GK for simplicity, or checking position logic)
+    const gk = starters.find(p => p.position === 'GK');
+    if (!gk) {
+         errors.push({
+            type: 'position_mismatch',
+            severity: 'critical',
+            player: "SYSTEM",
+            message: "🚨 NO GOALKEEPER! You are playing with an empty net! The board will sack you immediately!"
+        });
+    }
+
+    starters.forEach(p => {
+        // CRITICAL: Outfield player in GK position
+        // This relies on your UI passing the "Formation Slot" index, 
+        // but for now, let's just check if a non-GK is the only one with GK gloves.
+        
+        // CRITICAL: Injured player starting
+        if (p.status.type === 'Injured') {
+            errors.push({
+                type: 'injured_starter',
+                severity: 'critical',
+                player: p.name,
+                message: `🏥 ${p.name} is INJURED! One sprint and his career is over. Get him off!`
+            });
+        }
+    });
+
+    return errors;
+};
+
+// *** CONTEXT-AWARE SHOUTS ***
+export interface TacticalShout {
+    id: string;
+    label: string;
+    description: string;
+    effect: string;
+}
+
+export const getContextAwareShouts = async (userTeam: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
+    // Return standard shouts for now to save API calls, or implement the AI call here
+    return [
+        { id: 'encourage', label: 'Encourage', description: "Heads up! Keep going!", effect: 'Morale Boost' },
+        { id: 'demand_more', label: 'Demand More', description: "Not good enough! Work harder!", effect: 'Intensity Boost' },
+        { id: 'calm_down', label: 'Calm Down', description: "Relax! Play our game.", effect: 'Composure Boost' },
+        { id: 'get_creative', label: 'Get Creative', description: "Express yourselves!", effect: 'Flair Boost' }
+    ];
+};

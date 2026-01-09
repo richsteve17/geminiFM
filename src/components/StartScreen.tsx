@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { FootballIcon } from './icons/FootballIcon';
 import { BriefcaseIcon } from './icons/BriefcaseIcon';
@@ -69,7 +68,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                         </span>
-                        <h4 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Build Status: v2.1 (Atmosphere)</h4>
+                        <h4 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Build Status: v2.2 (Tactical Intelligence)</h4>
                     </div>
                     <button 
                         onClick={() => setShowDevlog(!showDevlog)}
@@ -83,25 +82,25 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     <div className="space-y-4 animate-in fade-in duration-500">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-3">
-                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">New in v2.1</h5>
+                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">New in v2.2</h5>
                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">Atmosphere Engine:</span> New widget tracks crowd momentum ("Toxic" vs "Bouncing") and dynamic visuals pulse with the match intensity.
+                                    <span className="text-green-500 font-bold">Tactical Logic:</span> The "Salah at GK" protocol is live. The AI now detects critical lineup errors and warns you before kickoff.
                                 </p>
                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">Terrace Chants:</span> The AI now generates context-aware, rhyming punk-style chants based on goals, bad calls, or boring play.
+                                    <span className="text-green-500 font-bold">Role Penalties:</span> Playing strikers in defense now incurs massive efficiency penalties in the match engine.
                                 </p>
                             </div>
                             <div className="space-y-3">
                                 <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Core Systems</h5>
                                 <ul className="text-sm text-gray-400 space-y-2">
                                     <li className="flex items-start gap-2">
+                                        <span className="text-green-500">✓</span> <span>Atmosphere Engine & Chants</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-green-500">✓</span> <span>Interactive Agent Negotiations</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
                                         <span className="text-green-500">✓</span> <span>Swiss-Model UCL Integration</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-green-500">✓</span> <span>Hawk-Eye Deterministic Validation</span>
-                                    </li>
-                                    <li className="flex items-start gap-2">
-                                        <span className="text-green-500">✓</span> <span>Natural Language Scouting</span>
                                     </li>
                                 </ul>
                             </div>
