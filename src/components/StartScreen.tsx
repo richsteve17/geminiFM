@@ -69,7 +69,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                         </span>
-                        <h4 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Build Status: v1.4 (Roster Fixes)</h4>
+                        <h4 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Build Status: v2.1 (Atmosphere)</h4>
                     </div>
                     <button 
                         onClick={() => setShowDevlog(!showDevlog)}
@@ -83,22 +83,25 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     <div className="space-y-4 animate-in fade-in duration-500">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-3">
-                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Core Engine v1.4</h5>
+                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">New in v2.1</h5>
                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">Roster Fidelity:</span> Database restored to reflect 2026/27 timeline. Wirtz added to Liverpool.
+                                    <span className="text-green-500 font-bold">Atmosphere Engine:</span> New widget tracks crowd momentum ("Toxic" vs "Bouncing") and dynamic visuals pulse with the match intensity.
                                 </p>
                                 <p className="text-sm text-gray-400 leading-relaxed">
-                                    <span className="text-green-500 font-bold">International Logic:</span> Major nations now use authentic rosters in World Cup mode. Fixed issue where bench players were generated as starters.
+                                    <span className="text-green-500 font-bold">Terrace Chants:</span> The AI now generates context-aware, rhyming punk-style chants based on goals, bad calls, or boring play.
                                 </p>
                             </div>
                             <div className="space-y-3">
-                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">UI/UX</h5>
+                                <h5 className="text-xs font-black text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-1">Core Systems</h5>
                                 <ul className="text-sm text-gray-400 space-y-2">
                                     <li className="flex items-start gap-2">
-                                        <span className="text-green-500">✓</span> <span>Manual Save Button Restored</span>
+                                        <span className="text-green-500">✓</span> <span>Swiss-Model UCL Integration</span>
                                     </li>
                                     <li className="flex items-start gap-2">
-                                        <span className="text-green-500">✓</span> <span>Quit Button Hardened</span>
+                                        <span className="text-green-500">✓</span> <span>Hawk-Eye Deterministic Validation</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-green-500">✓</span> <span>Natural Language Scouting</span>
                                     </li>
                                 </ul>
                             </div>

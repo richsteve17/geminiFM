@@ -7,7 +7,9 @@ import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
+import AtmosphereWidget from './components/AtmosphereWidget'; // IMPORT ADDED
 import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
+import { generatePunkChant, type Chant } from './services/chantService'; // IMPORT ADDED
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
@@ -63,18 +65,17 @@ export default function App() {
     const [playerTalk, setPlayerTalk] = useState<PlayerTalk | null>(null);
     const [talkResult, setTalkResult] = useState<{ convinced: boolean; reasoning: string } | null>(null);
     
-    // Store pending agreement terms temporarily
     const [pendingContractTerms, setPendingContractTerms] = useState<{ wage: number, length: number } | null>(null);
-
-    // Active Tactical Shout
     const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
 
     const [scoutResults, setScoutResults] = useState<Player[]>([]);
     const [pressQuestions, setPressQuestions] = useState<string[]>([]);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     
-    // Persistent Manager Reputation
     const [managerReputation, setManagerReputation] = useState<number>(0);
+    
+    // --- NEW CHANT STATE ---
+    const [currentChant, setCurrentChant] = useState<Chant | null>(null);
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
 
@@ -92,7 +93,6 @@ export default function App() {
     };
 
     useEffect(() => {
-        // Auto-save on critical state changes
         if (userTeamName && appScreen !== AppScreen.START_SCREEN) {
             const stateToSave = {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason,
@@ -108,7 +108,7 @@ export default function App() {
         setGameState(GameState.PRE_MATCH);
         setMatchState(null);
         setUserTeamName(null);
-        setTeams(allTeams); // Reset teams to initial state
+        setTeams(allTeams); 
     };
 
     const handleContinue = () => {
@@ -149,11 +149,10 @@ export default function App() {
 
     const startTutorial = () => { setTutorialStep(0); setShowTutorial(true); };
 
-    // --- PROLOGUE: World Cup Initialization ---
     const initializeWorldCup = (selectedNationalTeamName: string) => {
         setGameMode('WorldCup');
         setIsPrologue(true);
-        setManagerReputation(90); // World Class Rep for WC
+        setManagerReputation(90); 
         
         const wcTeamsRecord = generateWorldCupStructure();
         setTeams(wcTeamsRecord);
@@ -208,10 +207,9 @@ export default function App() {
         startTutorial();
     };
 
-    // --- STANDARD: Club Initialization ---
     const initializeGame = useCallback((selectedTeamName: string) => {
         setGameMode('Club'); setIsPrologue(false);
-        setManagerReputation(70); // Standard start for club mode unless unemployed
+        setManagerReputation(70); 
         let finalTeamsState = { ...allTeams };
         const domesticFixtures = generateFixtures(Object.values(allTeams));
         const { participants, newTeams } = getChampionsLeagueParticipants(allTeams);
@@ -255,28 +253,21 @@ export default function App() {
     }, []);
 
     const handleCreateManager = (name: string, exp: ExperienceLevel) => {
-        // Initialize reputation based on background
         let initialRep = 15;
         if (exp.id === 'semi-pro') initialRep = 40;
         if (exp.id === 'pro') initialRep = 60;
         if (exp.id === 'international') initialRep = 80;
         if (exp.id === 'legend') initialRep = 95;
-        
         setManagerReputation(initialRep);
         generateJobs(initialRep);
     };
 
     const generateJobs = (currentRep: number | ExperienceLevel) => {
-        // If passing from create screen, it's a number (via handleCreateManager logic above)
-        // If calling later, we use currentRep state
-        
         const rep = typeof currentRep === 'number' ? currentRep : managerReputation;
-
         const allTeamList: Team[] = Object.values(allTeams);
         const shuffle = (array: Team[]) => array.sort(() => 0.5 - Math.random());
         let vacancies: Team[] = [];
 
-        // Dynamic Job generation based on current reputation
         const feasible = allTeamList.filter(t => t.prestige <= rep && t.prestige >= rep - 20);
         const reach = allTeamList.filter(t => t.prestige > rep && t.prestige <= rep + 10);
         const safety = allTeamList.filter(t => t.prestige < rep - 20);
@@ -287,7 +278,6 @@ export default function App() {
             ...shuffle(safety).slice(0, 1),
         ];
         
-        // Failsafe
         if (vacancies.length === 0) {
              vacancies = shuffle(allTeamList.filter(t => t.prestige < 60)).slice(0, 3);
         }
@@ -345,7 +335,6 @@ export default function App() {
             results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
         });
         
-        // --- International Break Logic ---
         if (gameMode === 'Club' && INTERNATIONAL_BREAK_WEEKS.includes(nextW)) {
             const summary = await getInternationalBreakSummary(nextW);
             setNews(prev => [{
@@ -356,8 +345,6 @@ export default function App() {
                 type: 'call-up' 
             }, ...prev]);
             
-            // Randomly assign a 'Chemistry Rift' if the AI generated names that match our players
-            // For simplicity in this lightweight version, we just pick 2 random players from the user's team to have a "minor rift"
             if (userTeamName && Math.random() > 0.5) {
                 const userPlayers = teams[userTeamName].players;
                 const p1 = userPlayers[Math.floor(Math.random() * userPlayers.length)];
@@ -383,11 +370,10 @@ export default function App() {
         setMatchState(null); setGameState(GameState.PRE_MATCH); setIsLoading(false);
     };
 
-    // --- MATCH ENGINE HOOKS ---
     const handlePlayFirstHalf = async () => {
         if (!currentFixture || !userTeam) return;
         setGameState(GameState.SIMULATING); setIsLoading(true);
-        setActiveShout(undefined); // Reset shout
+        setActiveShout(undefined); 
         const home = teams[currentFixture.homeTeam];
         const away = teams[currentFixture.awayTeam];
         
@@ -411,7 +397,7 @@ export default function App() {
     };
 
     const handlePlaySecondHalf = async (shout: TouchlineShout) => {
-        setActiveShout(shout); // Store the shout
+        setActiveShout(shout); 
         handleSimulateSegment(60);
     };
 
@@ -421,7 +407,6 @@ export default function App() {
         const home = teams[currentFixture.homeTeam];
         const away = teams[currentFixture.awayTeam];
 
-        // Pass activeShout to the AI
         const result = await simulateMatchSegment(home, away, matchState, targetMinute, { shout: activeShout, userTeamName });
         
         const newState = {
@@ -436,11 +421,30 @@ export default function App() {
         };
 
         setMatchState(newState);
-        
+
+        // --- CHANT LOGIC ADDED HERE ---
+        const goals = result.events.filter((e: any) => e.type === 'goal');
+        if (goals.length > 0 && userTeamName) {
+            const lastGoal = goals[goals.length - 1];
+            const isUserGoal = lastGoal.teamName === userTeamName;
+
+            generatePunkChant(
+                userTeamName,
+                isUserGoal ? 'goal' : 'losing',
+                lastGoal.player
+            ).then(chant => setCurrentChant(chant));
+
+            // Clear chant after 8 seconds
+            setTimeout(() => setCurrentChant(null), 8000);
+        } else if (newState.momentum < -4 && userTeamName) {
+            // Generate hostile chant when momentum is VERY BAD
+            generatePunkChant(userTeamName, 'bad_call').then(chant => setCurrentChant(chant));
+            setTimeout(() => setCurrentChant(null), 6000);
+        }
+        // ------------------------------
+
         if (targetMinute >= 90) {
             setGameState(GameState.POST_MATCH);
-            
-            // Reputation Logic
             const isHome = currentFixture.homeTeam === userTeamName;
             const userGoals = isHome ? newState.homeScore : newState.awayScore;
             const oppGoals = isHome ? newState.awayScore : newState.homeScore;
@@ -512,37 +516,31 @@ export default function App() {
         if (!playerTalk || !userTeamName) return;
         const newAnswers = [...playerTalk.answers, answer];
         
-        // If this is an offer step, we store the terms and evaluate
         if (offer) {
             setPendingContractTerms(offer);
             setIsLoading(true);
             try {
-                // Pass offer to evaluation
                 const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context, offer);
                 setTalkResult(result);
             } catch (e) { setError("Evaluation failed."); } finally { setIsLoading(false); }
         } else if (playerTalk.currentQuestionIndex < playerTalk.questions.length - 1) {
-            // Just advancing the chat
             setPlayerTalk({ ...playerTalk, answers: newAnswers, currentQuestionIndex: playerTalk.currentQuestionIndex + 1 });
         }
     };
 
     const handlePlayerTalkFinish = () => {
-        // Apply the deal if successful
         if (talkResult?.convinced && playerTalk && userTeamName && pendingContractTerms) {
             setTeams(prev => {
                 const team = prev[userTeamName];
                 let updatedPlayers;
 
                 if (playerTalk.context === 'renewal') {
-                    // Update existing player
                     updatedPlayers = team.players.map(p => 
                         p.name === playerTalk.player.name 
                         ? { ...p, wage: pendingContractTerms.wage, contractExpires: pendingContractTerms.length } 
                         : p
                     );
                 } else {
-                    // Add new player
                     const newPlayer = { 
                         ...playerTalk.player, 
                         isStarter: false, 
@@ -563,7 +561,6 @@ export default function App() {
         setPlayerTalk(null); setTalkResult(null); setPendingContractTerms(null); setAppScreen(AppScreen.GAMEPLAY);
     };
 
-    // Filter Logic
     const worldCupTeams = NATIONAL_TEAMS.map(convertNationalTeam);
     const clubTeams = Object.values(allTeams).filter(t => {
         if (['Manchester City', 'Arsenal', 'Liverpool', 'Chelsea', 'Real Madrid', 'FC Barcelona', 'Bayern Munich', 'Juventus', 'AC Milan', 'Inter Milan', 'PSG', 'Inter Miami'].includes(t.name)) return true;
@@ -593,7 +590,19 @@ export default function App() {
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;
                 return (
-                    <main className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+                    <div className="relative">
+                        {/* ATMOSPHERE WIDGET INJECTED HERE */}
+                        {gameState !== GameState.PRE_MATCH && matchState && userTeamName && (
+                            <div className="mb-4">
+                                <AtmosphereWidget
+                                    chant={currentChant}
+                                    momentum={matchState.momentum || 0}
+                                    teamName={userTeamName}
+                                />
+                            </div>
+                        )}
+                        
+                        <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
                         {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
                         
@@ -613,7 +622,8 @@ export default function App() {
                         </div>
                         <div className="lg:col-span-6"><MatchView fixture={currentFixture} weeklyResults={weeklyResults} matchState={matchState} gameState={gameState} onPlayFirstHalf={handlePlayFirstHalf} onPlaySecondHalf={handlePlaySecondHalf} onSimulateSegment={handleSimulateSegment} onNextMatch={handleAdvanceWeek} error={null} isSeasonOver={false} userTeamName={userTeamName} leagueTable={leagueTable} isLoading={isLoading} currentWeek={currentWeek} teams={teams} /></div>
                         <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} /></div>
-                    </main>
+                        </main>
+                    </div>
                 );
             case AppScreen.SCOUTING: return <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async r=>{ setIsLoading(true); const res=await scoutPlayers(r); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} />;
