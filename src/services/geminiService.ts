@@ -1,178 +1,111 @@
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
 import type { Team, MatchState, Player, MatchEvent, TournamentStage } from '../types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
-// Switched to 2.0 Flash Exp for stability as requested
-const model = 'gemini-2.0-flash-exp';
 
-// Helper: check if player is physically on the pitch, even if injured
-const isOnPitch = (status: Player["status"], matchCard?: Player["matchCard"]) => {
-    if (matchCard === 'red') return false; // Sent off
-    if (status.type === 'SentOff') return false; // Sent off
-    if (status.type === 'On International Duty') return false;
-    if (status.type === 'Suspended') return false;
-    // Note: 'Injured' players might still be on pitch if 0 subs left. We handle this in the prompt builder.
-    return true;
-};
+// Models configuration
+const MODEL_TEXT = 'gemini-2.0-flash-exp'; 
+const MODEL_SEARCH = 'gemini-3-flash-preview'; 
+const MODEL_TTS = 'gemini-2.5-flash-preview-tts'; 
+const MODEL_VIDEO = 'veo-3.1-fast-generate-preview'; 
+
+// --- CACHE LAYER ---
+// Stores audio buffers for TTS and signed URLs for Video based on Event ID
+const mediaCache = new Map<string, string | AudioBuffer>();
+
+// --- MEDIA HELPERS ---
 
 const cleanJson = (text?: string) => (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
 
-const parseJsonSafely = <T>(text?: string): T | null => {
-    try {
-        return JSON.parse(cleanJson(text));
-    } catch {
-        return null;
-    }
-};
-
-// "Hawk-Eye" Validation Layer
-const validateSimulationResult = (
-    simulation: any,
-    homeName: string,
-    awayName: string,
-    allowedPlayers: string[],
-    minuteStart: number,
-    minuteEnd: number
-): boolean => {
-    if (!simulation || typeof simulation !== 'object') return false;
-    if (!Array.isArray(simulation.events)) return false;
-    if (typeof simulation.homeScoreAdded !== 'number' || typeof simulation.awayScoreAdded !== 'number') return false;
-
-    let homeGoals = 0;
-    let awayGoals = 0;
-
-    for (const ev of simulation.events) {
-        if (typeof ev.minute !== 'number' || ev.minute < minuteStart || ev.minute > minuteEnd) return false;
-        if (!['goal', 'card', 'injury', 'sub', 'commentary', 'whistle'].includes(ev.type)) return false;
-        if (ev.teamName && ev.teamName !== homeName && ev.teamName !== awayName) return false;
-        if (ev.player && !allowedPlayers.includes(ev.player)) return false; // Strict Hawk-Eye check
-        if (ev.type === 'goal') {
-            if (ev.teamName === homeName) homeGoals += 1;
-            if (ev.teamName === awayName) awayGoals += 1;
-        }
-    }
-
-    if (homeGoals !== simulation.homeScoreAdded || awayGoals !== simulation.awayScoreAdded) return false;
-    return true;
-};
-
-export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, currentMatchState: MatchState, targetMinute: number, context: { shout?: string, userTeamName?: string }) => {
-    const minuteStart = currentMatchState.currentMinute;
-    const minuteEnd = targetMinute;
-
-    // Logic: Identify who is actually on the grass and their condition
-    const getPromptList = (t: Team, subsUsed: number) => {
-        return t.players
-            .filter(p => p.isStarter && isOnPitch(p.status, p.matchCard))
-            .map(p => {
-                let flags = [];
-                if (p.condition < 70) flags.push("TIRED (High Error Rate)");
-                if (p.personality === 'Leader') flags.push("LEADER");
-                if (p.personality === 'Volatile') flags.push("VOLATILE (Risk)");
-                if (p.status.type === 'Injured') flags.push("INJURED");
-                // Check if this player is impacted by a chemistry rift with someone ON THE PITCH
-                const rift = p.effects.find(e => e.type === 'BadChemistry');
-                if (rift && rift.type === 'BadChemistry') flags.push(`HATES ${rift.with} (Poor Communication)`);
-                
-                const flagStr = flags.length > 0 ? `[${flags.join(',')}]` : '';
-                return `${p.name} (${p.position}, ${p.rating})${flagStr}`;
-            });
-    };
-
-    const homePromptList = getPromptList(homeTeam, currentMatchState.subsUsed.home);
-    const awayPromptList = getPromptList(awayTeam, currentMatchState.subsUsed.away);
-    
-    // For validation, we need raw names
-    const allowedPlayers = [...homeTeam.players, ...awayTeam.players].map(p => p.name);
-
-    // Inject Manager Shout
-    let tacticalContext = "";
-    if (context.shout && context.userTeamName) {
-        const isHome = context.userTeamName === homeTeam.name;
-        tacticalContext = `
-        *** MANAGER INTERVENTION ***
-        The ${context.userTeamName} manager has shouted: "${context.shout}".
-        
-        IMPACT RULES:
-        - "Demand More": Increase event frequency. Slightly higher chance of goals for BOTH sides.
-        - "Tighten Up": Decrease goal probability for ${context.userTeamName}. Lower entertainment value.
-        - "Encourage": Boost morale of players with rating < 80.
-        - "Push Forward": ${context.userTeamName} takes huge risks. High chance of scoring OR conceding on counter.
-        `;
-    }
-
-    const prompt = `
-*** FOOTBALL MATCH CONTRACT ***
-You are simulating a football match segment. Return ONLY JSON.
-
-*** STATE SNAPSHOT (AUTHORITATIVE) ***
-Minute: ${minuteStart} -> ${minuteEnd}
-Score: ${homeTeam.name} ${currentMatchState.homeScore} - ${currentMatchState.awayScore} ${awayTeam.name}
-Players on Pitch (Home): ${homePromptList.join(', ')}
-Players on Pitch (Away): ${awayPromptList.join(', ')}
-Subs Remaining (home/away): ${5 - currentMatchState.subsUsed.home}/5 , ${5 - currentMatchState.subsUsed.away}/5
-Momentum (current): ${currentMatchState.momentum}
-
-${tacticalContext}
-
-*** TRAIT LOGIC RULES (MUST FOLLOW) ***
-1) **TIRED players**: If involved in an event, they MUST make a mistake, lose a race, or get injured. Mention fatigue in commentary.
-2) **LEADER players**: If team is losing after 75', increase chance of them assisting or scoring. Mention them "driving the team on".
-3) **VOLATILE players**: If team is losing, high chance of Yellow/Red card for arguing or rash tackle.
-4) **INJURED players**: If still on pitch, opponent MUST target them for an easy goal.
-5) **CHEMISTRY RIFTS**: If two players hate each other, they should fail to pass to each other or collide.
-
-*** REQUIRED JSON FORMAT ***
-{
-  "homeScoreAdded": number,
-  "awayScoreAdded": number,
-  "momentum": number,
-  "tacticalAnalysis": "short string, mention specific player traits influencing game",
-  "events": [
-     { "minute": number, "type": "goal"|"card"|"injury"|"sub"|"commentary"|"whistle", "teamName": "${homeTeam.name}"|"${awayTeam.name}", "player": "string optional", "description": "string" }
-  ]
+// Decodes base64 string to Uint8Array
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
 }
-`;
+
+// Decodes audio data for playback
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number = 24000,
+  numChannels: number = 1,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
+// --- CORE SIMULATION ---
+
+export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, currentMatchState: MatchState, targetMinute: number, context: any) => {
+    const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
+    Current Minute: ${currentMatchState.currentMinute} to ${targetMinute}. 
+    Score: ${currentMatchState.homeScore}-${currentMatchState.awayScore}.
+    Respond ONLY in JSON format: { "homeScoreAdded": number, "awayScoreAdded": number, "momentum": number, "tacticalAnalysis": "string", "events": [{ "minute": number, "type": "goal"|"commentary"|"card"|"injury"|"whistle", "teamName": "string", "description": "string", "player": "string" }] }`;
 
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
-            model: model, contents: prompt, config: { responseMimeType: "application/json" }
+            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
         });
-        const parsed = JSON.parse(cleanJson(response.text));
-        // Validate against the "Hawk-Eye" rules
-        const isValid = validateSimulationResult(parsed, homeTeam.name, awayTeam.name, allowedPlayers, minuteStart, minuteEnd);
-        if (!isValid) {
-            console.warn("Simulation failed validation, falling back to safe state.");
-            throw new Error("Simulation failed validation");
-        }
-        return parsed;
+        return JSON.parse(cleanJson(response.text));
     } catch (error) {
-        console.error("Match Sim Error", error);
-        return {
-            homeScoreAdded: 0,
-            awayScoreAdded: 0,
-            momentum: currentMatchState.momentum,
-            tacticalAnalysis: "The game steadies as both sides probe without breakthrough.",
-            events: []
-        };
+        return { homeScoreAdded: 0, awayScoreAdded: 0, momentum: 0, tacticalAnalysis: "Steady game.", events: [] };
     }
 };
 
-export const scoutPlayers = async (request: string): Promise<Player[]> => {
-    // Enhanced prompt to include 'currentClub' for realism
-    const prompt = `Scout report for: "${request}". Generate 3 players who fit this description. 
-    JSON format: { "players": [{ "name": "string", "position": "LB"|"CB"|"ST"|..., "rating": number, "age": number, "nationality": "Emoji", "scoutingReport": "string", "wage": number, "marketValue": number, "currentClub": "string" }] }
-    Invent a realistic 'currentClub' for each player (e.g. 'Napoli', 'Boca Juniors', 'Ajax').`;
+// --- MEDIA FEATURES (NEW IN v2.4) ---
+
+// 1. SCOUTING (With Optional Search Grounding)
+export const scoutPlayers = async (request: string, useRealWorld: boolean = false): Promise<Player[]> => {
+    let prompt = "";
+    let config: any = { responseMimeType: "application/json" };
+    let selectedModel = MODEL_TEXT;
+
+    if (useRealWorld) {
+        selectedModel = MODEL_SEARCH;
+        prompt = `
+        You are a football scout using Google Search to find REAL players.
+        User Request: "${request}"
+        
+        Using Google Search, identify 3 REAL WORLD football players that fit this description.
+        If the request is vague (e.g. "young striker"), find current trending wonderkids.
+        
+        Return valid JSON in this exact format (do not wrap in markdown):
+        { "players": [{ "name": "string", "position": "LB"|"CB"|"ST" etc, "rating": number (estimate 60-95 based on real ability), "age": number, "nationality": "Emoji", "scoutingReport": "string (mention real stats/facts)", "wage": number, "marketValue": number, "currentClub": "string" }] }
+        `;
+        // Search tool enabled
+        config.tools = [{googleSearch: {}}];
+    } else {
+        prompt = `Scout report for: "${request}". Generate 3 fictional players who fit this description. 
+        JSON format: { "players": [{ "name": "string", "position": "LB"|"CB"|"ST"|..., "rating": number, "age": number, "nationality": "Emoji", "scoutingReport": "string", "wage": number, "marketValue": number, "currentClub": "string" }] }
+        Invent a realistic 'currentClub' for each player.`;
+    }
     
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
-            model: model, contents: prompt, config: { responseMimeType: "application/json" }
+            model: selectedModel, contents: prompt, config: config
         });
-        const res = JSON.parse(response.text);
+        
+        const jsonStr = cleanJson(response.text);
+        const res = JSON.parse(jsonStr);
+        
         // Ensure valid defaults
         return res.players.map((p: any) => ({ 
             ...p, 
@@ -181,144 +114,156 @@ export const scoutPlayers = async (request: string): Promise<Player[]> => {
             contractExpires: 3, 
             isStarter: false, 
             condition: 100,
-            // Fallback if AI misses the field
             currentClub: p.currentClub || "Free Agent"
         }));
-    } catch (e) { return []; }
+    } catch (e) { 
+        console.error("Scouting Error", e);
+        return []; 
+    }
 };
+
+// 2. TEXT TO SPEECH (Commentary) with Caching
+export const playMatchCommentary = async (text: string, eventId: number) => {
+    const cacheKey = `tts-${eventId}`;
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
+
+    // Check Cache
+    if (mediaCache.has(cacheKey)) {
+        console.log("Playing from cache");
+        const cachedBuffer = mediaCache.get(cacheKey) as AudioBuffer;
+        const source = audioContext.createBufferSource();
+        source.buffer = cachedBuffer;
+        source.connect(audioContext.destination);
+        source.start();
+        return;
+    }
+
+    try {
+        const response = await ai.models.generateContent({
+            model: MODEL_TTS,
+            contents: [{ parts: [{ text: `Passionate Football Commentator: ${text}` }] }],
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: 'Fenrir' },
+                    },
+                },
+            },
+        });
+
+        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (base64Audio) {
+            const audioBuffer = await decodeAudioData(
+                decodeBase64(base64Audio),
+                audioContext,
+                24000,
+                1
+            );
+            
+            // Store in Cache
+            mediaCache.set(cacheKey, audioBuffer);
+
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            source.start();
+        }
+    } catch (error) {
+        console.error("TTS Error", error);
+        throw error; // Re-throw to handle in UI
+    }
+};
+
+// 3. VIDEO GENERATION (Goal Replay) with Caching
+export const generateReplayVideo = async (description: string, eventId: number): Promise<string | null> => {
+    const cacheKey = `video-${eventId}`;
+    
+    // Check Cache
+    if (mediaCache.has(cacheKey)) {
+        console.log("Returning cached video URL");
+        return mediaCache.get(cacheKey) as string;
+    }
+
+    try {
+        const prompt = `A cinematic 4k football match replay. TV Broadcast style. ${description}. Realistic lighting, green grass, stadium crowd in background.`;
+        
+        let operation = await ai.models.generateVideos({
+            model: MODEL_VIDEO,
+            prompt: prompt,
+            config: {
+                numberOfVideos: 1,
+                resolution: '720p',
+                aspectRatio: '16:9'
+            }
+        });
+
+        // Poll for completion
+        while (!operation.done) {
+            await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5s
+            operation = await ai.operations.getVideosOperation({operation: operation});
+        }
+
+        const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+        if (videoUri) {
+            const fullUrl = `${videoUri}&key=${API_KEY}`;
+            mediaCache.set(cacheKey, fullUrl); // Store in cache
+            return fullUrl;
+        }
+        return null;
+    } catch (error) {
+        console.error("Video Gen Error", error);
+        throw error;
+    }
+};
+
+// --- EXISTING HELPERS ---
 
 export const generatePressConference = async (context: string): Promise<string[]> => {
     const prompt = `Press conference. Context: ${context}. Ask 3 questions. JSON: { "questions": [] }`;
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
-             model: model, contents: prompt, config: { responseMimeType: "application/json" }
+             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
         });
-        return JSON.parse(response.text).questions;
+        return JSON.parse(cleanJson(response.text)).questions;
     } catch (e) { return ["How do you feel?", "What's next?"]; }
 };
 
 export const getInterviewQuestions = async (teamName: string, personality: string) => {
-    const prompt = `Board Interview for ${teamName} (Chairman: ${personality}). Return JSON: { "questions": [string,string,string] }`;
-    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = parseJsonSafely<{ questions: string[] }>(response.text);
-    return parsed?.questions ?? ["What is your tactical vision?", "How will you handle the budget?", "What are your expectations this season?"];
+    const prompt = `Interview for ${teamName}. JSON: { "questions": [] }`;
+    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+    return JSON.parse(cleanJson(response.text)).questions;
 };
 
-export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], personality: string) => {
-    const prompt = `Evaluate answers for ${teamName}. Chairman personality: ${personality}. Return JSON: { "offer": boolean, "reasoning": "string" }`;
-    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = parseJsonSafely<{ offer: boolean; reasoning: string }>(response.text);
-    return parsed ?? { offer: false, reasoning: "Unable to evaluate answers." };
+export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], p: string) => {
+    const prompt = `Evaluate interview for ${teamName}. JSON: { "offer": boolean, "reasoning": "string" }`;
+    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+    return JSON.parse(cleanJson(response.text));
 };
 
-export const getPlayerTalkQuestions = async (p: Player, t: Team, context: string) => {
-    const prompt = `You are ${p.name}'s agent. Personality: ${p.personality}. Context: ${context}. Team: ${t.name} (prestige ${t.prestige}). Return JSON: { "questions": [string,string,string] }`;
-    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = parseJsonSafely<{ questions: string[] }>(response.text);
-    return parsed?.questions ?? ["What role will I have?", "How competitive is the squad?", "What salary are you offering?"];
+export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
+    const prompt = `Negotiation with ${p.name}. JSON: { "questions": [] }`;
+    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+    return JSON.parse(cleanJson(response.text)).questions;
 };
 
-export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, context: string, offer?: { wage: number, length: number }) => {
-    
-    // Financial logic prompt
-    let offerPrompt = "";
-    if (offer) {
-        offerPrompt = `
-        **CONTRACT OFFER DETAILS**
-        Offered Wage: £${offer.wage.toLocaleString()}/week
-        Offered Length: ${offer.length} years
-        
-        **PLAYER VALUATION**
-        Current/Expected Wage: £${p.wage.toLocaleString()}/week
-        Player Age: ${p.age}
-        Player Rating: ${p.rating}
-        Personality: ${p.personality}
-        
-        **RULES**
-        1. "Mercenary" players demand 20%+ wage increase.
-        2. "Loyal" players accept matching wages or slight cuts if term is long (4+ yrs).
-        3. If Offered Wage is < 80% of Current Wage, reject immediately unless "Loyal".
-        4. If Player is old (>32), they prioritize length (2+ years) over high wage.
-        `;
-    }
-
-    const prompt = `
-    You are ${p.name}'s agent.
-    Context: ${context}. Club: ${t.name}.
-    Previous Negotiation Chat Answers: ${ans.join(" | ")}
-    
-    ${offerPrompt}
-
-    Evaluate the deal based on the RULES above.
-    Return JSON: { "convinced": boolean, "reasoning": "string (speak as the agent)" }
-    `;
-    
-    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = parseJsonSafely<{ convinced: boolean; reasoning: string }>(response.text);
-    return parsed ?? { convinced: false, reasoning: "We are too far apart on the numbers." };
+export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer?: any) => {
+    const prompt = `Evaluate negotiation. JSON: { "convinced": boolean, "reasoning": "string" }`;
+    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+    return JSON.parse(cleanJson(response.text));
 };
 
 export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: string): Promise<string> => {
     const prompt = `Tactical advice for ${u}. Score ${s.homeScore}-${s.awayScore}.`;
-    const response = await ai.models.generateContent({ model, contents: prompt });
+    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
     return response.text || "No advice.";
 };
 
 export const getInternationalBreakSummary = async (week: number) => {
-    const prompt = `
-    Simulate an international break for Week ${week} of the 2026/27 season.
-    1. Invent a major upset in the Qualifiers/Nations League.
-    2. Identify a "Player of the Week".
-    3. Create a short news headline about a player returning with high morale.
-    
-    Return JSON: { "newsTitle": "string", "newsBody": "string", "riftPlayer1": "string (Generic Name)", "riftPlayer2": "string (Generic Name)" }
-    `;
-    const response = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = parseJsonSafely<{ newsTitle: string; newsBody: string; riftPlayer1: string; riftPlayer2: string }>(response.text);
-    return parsed ?? { newsTitle: "International Break Concludes", newsBody: "Players return to their clubs.", riftPlayer1: "", riftPlayer2: "" };
-};
-
-// *** CRITICAL ERROR DETECTION - "Salah at GK" Protocol ***
-export interface CriticalError {
-    type: 'position_mismatch' | 'injured_starter' | 'fatigued_player' | 'chemistry_clash';
-    severity: 'warning' | 'critical';
-    player: string;
-    message: string;
-}
-
-export const detectCriticalErrors = (team: Team, formation: string): CriticalError[] => {
-    const errors: CriticalError[] = [];
-    const starters = team.players.filter(p => p.isStarter);
-
-    // SIMPLE CHECK: Is a Goalkeeper actually in the GK slot?
-    // (Assuming first player in list is GK for simplicity, or checking position logic)
-    const gk = starters.find(p => p.position === 'GK');
-    if (!gk) {
-         errors.push({
-            type: 'position_mismatch',
-            severity: 'critical',
-            player: "SYSTEM",
-            message: "🚨 NO GOALKEEPER! You are playing with an empty net! The board will sack you immediately!"
-        });
-    }
-
-    starters.forEach(p => {
-        // CRITICAL: Outfield player in GK position
-        // This relies on your UI passing the "Formation Slot" index, 
-        // but for now, let's just check if a non-GK is the only one with GK gloves.
-        
-        // CRITICAL: Injured player starting
-        if (p.status.type === 'Injured') {
-            errors.push({
-                type: 'injured_starter',
-                severity: 'critical',
-                player: p.name,
-                message: `🏥 ${p.name} is INJURED! One sprint and his career is over. Get him off!`
-            });
-        }
-    });
-
-    return errors;
+    const prompt = `Simulate an international break for Week ${week}. Return JSON: { "newsTitle": "string", "newsBody": "string" }`;
+    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+    const parsed = JSON.parse(cleanJson(response.text));
+    return parsed ?? { newsTitle: "International Break", newsBody: "Matches played." };
 };
 
 // *** CONTEXT-AWARE SHOUTS ***
@@ -330,7 +275,6 @@ export interface TacticalShout {
 }
 
 export const getContextAwareShouts = async (userTeam: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
-    // Return standard shouts for now to save API calls, or implement the AI call here
     return [
         { id: 'encourage', label: 'Encourage', description: "Heads up! Keep going!", effect: 'Morale Boost' },
         { id: 'demand_more', label: 'Demand More', description: "Not good enough! Work harder!", effect: 'Intensity Boost' },

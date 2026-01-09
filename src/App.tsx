@@ -422,27 +422,6 @@ export default function App() {
 
         setMatchState(newState);
 
-        // --- CHANT LOGIC ADDED HERE ---
-        const goals = result.events.filter((e: any) => e.type === 'goal');
-        if (goals.length > 0 && userTeamName) {
-            const lastGoal = goals[goals.length - 1];
-            const isUserGoal = lastGoal.teamName === userTeamName;
-
-            generatePunkChant(
-                userTeamName,
-                isUserGoal ? 'goal' : 'losing',
-                lastGoal.player
-            ).then(chant => setCurrentChant(chant));
-
-            // Clear chant after 8 seconds
-            setTimeout(() => setCurrentChant(null), 8000);
-        } else if (newState.momentum < -4 && userTeamName) {
-            // Generate hostile chant when momentum is VERY BAD
-            generatePunkChant(userTeamName, 'bad_call').then(chant => setCurrentChant(chant));
-            setTimeout(() => setCurrentChant(null), 6000);
-        }
-        // ------------------------------
-
         if (targetMinute >= 90) {
             setGameState(GameState.POST_MATCH);
             const isHome = currentFixture.homeTeam === userTeamName;
@@ -625,7 +604,7 @@ export default function App() {
                         </main>
                     </div>
                 );
-            case AppScreen.SCOUTING: return <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async r=>{ setIsLoading(true); const res=await scoutPlayers(r); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
+            case AppScreen.SCOUTING: return <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async (r, useReal) => { setIsLoading(true); const res = await scoutPlayers(r, useReal); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} />;
             default: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
         }
