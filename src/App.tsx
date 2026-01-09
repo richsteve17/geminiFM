@@ -8,7 +8,9 @@ import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
+import AtmosphereWidget from './components/AtmosphereWidget';
 import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary, detectCriticalErrors, type CriticalError } from './services/geminiService';
+import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
@@ -76,6 +78,9 @@ export default function App() {
     
     // Persistent Manager Reputation
     const [managerReputation, setManagerReputation] = useState<number>(0);
+
+    // Terrace Chant System
+    const [currentChant, setCurrentChant] = useState<Chant | null>(null);
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
 
@@ -513,7 +518,28 @@ export default function App() {
         };
 
         setMatchState(newState);
-        
+
+        // *** TERRACE CHANT TRIGGER ***
+        const goals = result.events.filter((e: any) => e.type === 'goal');
+        if (goals.length > 0 && userTeamName) {
+            const lastGoal = goals[goals.length - 1];
+            const isUserGoal = lastGoal.teamName === userTeamName;
+
+            // Generate the Chant
+            generatePunkChant(
+                userTeamName,
+                isUserGoal ? 'goal' : 'losing',
+                lastGoal.player
+            ).then(chant => setCurrentChant(chant));
+
+            // Clear chant after 8 seconds
+            setTimeout(() => setCurrentChant(null), 8000);
+        } else if (newState.momentum < -3 && userTeamName) {
+            // Generate hostile chant when momentum is against us
+            generatePunkChant(userTeamName, 'bad_call').then(chant => setCurrentChant(chant));
+            setTimeout(() => setCurrentChant(null), 6000);
+        }
+
         if (targetMinute >= 90) {
             setGameState(GameState.POST_MATCH);
             
@@ -670,7 +696,16 @@ export default function App() {
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;
                 return (
-                    <main className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+                    <div>
+                        {/* ATMOSPHERE WIDGET - Shows during matches */}
+                        {gameState !== GameState.PRE_MATCH && matchState && userTeamName && (
+                            <AtmosphereWidget
+                                chant={currentChant}
+                                momentum={matchState.momentum || 0}
+                                teamName={userTeamName}
+                            />
+                        )}
+                        <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
                         {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
                         
@@ -690,7 +725,8 @@ export default function App() {
                         </div>
                         <div className="lg:col-span-6"><MatchView fixture={currentFixture} weeklyResults={weeklyResults} matchState={matchState} gameState={gameState} onPlayFirstHalf={handlePlayFirstHalf} onPlaySecondHalf={handlePlaySecondHalf} onSimulateSegment={handleSimulateSegment} onNextMatch={handleAdvanceWeek} error={null} isSeasonOver={false} userTeamName={userTeamName} leagueTable={leagueTable} isLoading={isLoading} currentWeek={currentWeek} teams={teams} /></div>
                         <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} /></div>
-                    </main>
+                        </main>
+                    </div>
                 );
             case AppScreen.SCOUTING: return <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async r=>{ setIsLoading(true); const res=await scoutPlayers(r); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} />;
