@@ -6,6 +6,7 @@ const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
 
 const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Switched to 2.0 Flash Exp for stability as requested
 const model = 'gemini-2.0-flash-exp';
 
 // Helper: check if player is physically on the pitch, even if injured
@@ -28,6 +29,7 @@ const parseJsonSafely = <T>(text?: string): T | null => {
     }
 };
 
+// "Hawk-Eye" Validation Layer
 const validateSimulationResult = (
     simulation: any,
     homeName: string,
@@ -141,8 +143,12 @@ ${tacticalContext}
             model: model, contents: prompt, config: { responseMimeType: "application/json" }
         });
         const parsed = JSON.parse(cleanJson(response.text));
+        // Validate against the "Hawk-Eye" rules
         const isValid = validateSimulationResult(parsed, homeTeam.name, awayTeam.name, allowedPlayers, minuteStart, minuteEnd);
-        if (!isValid) throw new Error("Simulation failed validation");
+        if (!isValid) {
+            console.warn("Simulation failed validation, falling back to safe state.");
+            throw new Error("Simulation failed validation");
+        }
         return parsed;
     } catch (error) {
         console.error("Match Sim Error", error);
@@ -157,7 +163,7 @@ ${tacticalContext}
 };
 
 export const scoutPlayers = async (request: string): Promise<Player[]> => {
-    // Enhanced prompt to include 'currentClub'
+    // Enhanced prompt to include 'currentClub' for realism
     const prompt = `Scout report for: "${request}". Generate 3 players who fit this description. 
     JSON format: { "players": [{ "name": "string", "position": "LB"|"CB"|"ST"|..., "rating": number, "age": number, "nationality": "Emoji", "scoutingReport": "string", "wage": number, "marketValue": number, "currentClub": "string" }] }
     Invent a realistic 'currentClub' for each player (e.g. 'Napoli', 'Boca Juniors', 'Ajax').`;

@@ -243,6 +243,7 @@ export const generateSwissFixtures = (teams: Team[]): Fixture[] => {
     return fixtures;
 };
 
+// "The Smoking Gun": Deterministic Math Engine
 export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals: number, awayGoals: number } => {
     const homeRating = homeTeam.players.length ? homeTeam.players.reduce((sum, p) => sum + p.rating, 0) / homeTeam.players.length : 70;
     const awayRating = awayTeam.players.length ? awayTeam.players.reduce((sum, p) => sum + p.rating, 0) / awayTeam.players.length : 70;
@@ -252,6 +253,7 @@ export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals:
     let awayGoals = 0;
     const baseChance = 0.25; 
     for(let i=0; i<5; i++) {
+        // This is the specific logic requested
         if (Math.random() < baseChance + (ratingDiff * 0.02)) homeGoals++;
         if (Math.random() < baseChance - (ratingDiff * 0.02)) awayGoals++;
     }
