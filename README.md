@@ -2,27 +2,33 @@
 # ⚽ Gemini Football Manager '27
 **The World's First LLM-Driven Sports Simulation**
 
-> **Built with:** React 19 · TypeScript · Google Gemini API · Tailwind CSS
+> **Current Build:** v2.1 (Atmosphere & Roster Update)
+> **Engine:** React 19 · TypeScript · Google Gemini 2.0 Flash · Tailwind CSS
 
-Gemini Football Manager '27 (GFM '27) is a paradigm shift in sports strategy games. Unlike traditional simulators that rely on static database lookups and rigid decision trees, GFM '27 uses a **Hybrid AI Architecture** to generate a living, breathing football world. Every match report, press conference, transfer negotiation, and tactical analysis is generated in real-time by Google's Gemini models, ensuring no two careers are ever the same.
+**Gemini Football Manager '27 (GFM '27)** is a paradigm shift in sports strategy games. Unlike traditional simulators (like Football Manager) that rely on static database lookups and rigid decision trees, GFM '27 uses a **Hybrid AI Architecture** to generate a living, breathing football world.
+
+Every match report, press conference, transfer negotiation, and tactical analysis is generated in real-time by **Google's Gemini 2.0 Flash**, ensuring no two careers are ever the same.
 
 ---
 
 ## 🧠 The Architecture: "Hawk-Eye" Hybrid Engine
 
-GFM '27 solves the "hallucination" problem common in AI games by separating **State** from **Narrative**.
+The core technical challenge of LLM gaming is "Hallucination" (e.g., the AI saying a player scored when they are on the bench). GFM '27 solves this with a strict separation of **Deterministic State** and **Generative Narrative**.
 
 ### 1. The Deterministic Layer (The Referee)
 Behind the scenes, a hard-coded TypeScript engine manages the laws of physics and the rules of the game.
-*   **Validation:** It is impossible for the AI to hallucinate a goal by a player who is on the bench.
-*   **State Management:** Tracks Condition (0-100%), Contract Lengths, Yellow Cards, and League Tables with mathematical precision.
-*   **Swiss Model Logic:** The Champions League fixtures are generated using a mathematically accurate Swiss-system pairing algorithm.
+*   **Validation:** It is impossible for the AI to hallucinate a goal by a player who is on the bench. The code pre-calculates valid scorers.
+*   **State Management:** Tracks `Condition` (0-100%), `Contract Lengths`, `Yellow Cards`, and `League Tables` with mathematical precision.
+*   **Swiss Model Logic:** The Champions League fixtures are generated using a mathematically accurate Swiss-system pairing algorithm (36 teams, 8 rounds).
 
 ### 2. The Generative Layer (The Color Commentator)
-We feed the deterministic state into Google Gemini 3.5/Flash via strict JSON schemas.
+We feed the deterministic state into Google Gemini via strict JSON schemas.
 *   **Context Injection:** The AI is told: *"Liverpool is losing 0-1 at home. It is the 88th minute. Trent Alexander-Arnold has the 'Leader' trait."*
 *   **Narrative Output:** The AI generates the specific event description: *"Trent screams at his teammates to push forward, whipping a desperate cross into the box..."*
 *   **Logic Influencer:** The AI *decides* the probability of events based on semantic understanding of traits (e.g., a "Volatile" player is more likely to get sent off in a derby).
+
+### 3. The Atmosphere Layer (New in v2.0)
+*   **Punk Chant Generator:** An experimental module that generates rhyming, rhythmic terrace chants based on the match state (Winning/Losing/Bad Call) using the style of Ska-Punk bands (Rancid/Specials).
 
 ---
 
@@ -32,8 +38,8 @@ We feed the deterministic state into Google Gemini 3.5/Flash via strict JSON sch
 *   **Language:** TypeScript (Strict Mode).
 *   **Build Tool:** Vite.
 *   **Styling:** Tailwind CSS (Utility-first for rapid UI iteration).
-*   **AI Integration:** `@google/genai` SDK (v1.34+).
-*   **State Persistence:** LocalStorage API (Serialized JSON state for Save/Load functionality).
+*   **AI Integration:** `@google/genai` SDK (Gemini 2.0 Flash Exp).
+*   **Compression:** `lz-string` (Compresses 50kb JSON save states into ~4kb UTF-16 strings for LocalStorage).
 *   **Visuals:** Custom CSS-based 2D Pitch Physics engine.
 
 ---
@@ -43,7 +49,7 @@ We feed the deterministic state into Google Gemini 3.5/Flash via strict JSON sch
 ### Prerequisites
 *   Node.js (v18+)
 *   npm or yarn
-*   A Google AI Studio API Key
+*   A Google AI Studio API Key (Free tier works perfectly)
 
 ### Steps
 
