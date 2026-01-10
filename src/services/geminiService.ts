@@ -51,20 +51,38 @@ async function decodeAudioData(
 
 // --- CORE SIMULATION ---
 
-export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, currentMatchState: MatchState, targetMinute: number, context: any) => {
+export const simulateMatchSegment = async (
+    homeTeam: Team, 
+    awayTeam: Team, 
+    currentMatchState: MatchState, 
+    targetMinute: number, 
+    context: { 
+        shout?: string, 
+        userTeamName: string | null,
+        tacticalContext?: string 
+    }
+) => {
     // Determine context for short bursts
     const userInstruction = context.shout ? `User Shout: "${context.shout}" (Factor this into momentum).` : "";
+    const tacticalInfo = context.tacticalContext ? `TACTICAL REALITY CHECK:\n${context.tacticalContext}` : "";
     
     const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
     Current State: Minute ${currentMatchState.currentMinute}, Score ${currentMatchState.homeScore}-${currentMatchState.awayScore}, Momentum ${currentMatchState.momentum}.
-    Task: Simulate ONLY from minute ${currentMatchState.currentMinute} to ${targetMinute}.
+    Task: Simulate ONLY from minute ${currentMatchState.currentMinute + 1} to ${targetMinute}.
+    
     ${userInstruction}
+    ${tacticalInfo}
+    
+    CRITICAL INSTRUCTIONS:
+    1. If a team has low Tactical Efficiency (<50%), they MUST make mistakes.
+    2. If a player is Out of Position (e.g. ST in Goal), specific events MUST mention them failing at their role (e.g. "Salah drops a simple catch").
+    3. Events must be realistic to the clock. Don't score 5 goals in 10 minutes unless efficiency is 0%.
     
     Respond ONLY in JSON format: { 
         "homeScoreAdded": number, 
         "awayScoreAdded": number, 
         "momentum": number (new value -10 to 10), 
-        "tacticalAnalysis": "string (one short sentence)", 
+        "tacticalAnalysis": "string (one short sentence about the flow)", 
         "events": [{ "minute": number, "type": "goal"|"commentary"|"card"|"injury"|"whistle", "teamName": "string", "description": "string", "player": "string" }] 
     }`;
 
@@ -74,6 +92,7 @@ export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, curre
         });
         return JSON.parse(cleanJson(response.text));
     } catch (error) {
+        console.error("Sim Error", error);
         return { homeScoreAdded: 0, awayScoreAdded: 0, momentum: 0, tacticalAnalysis: "Steady game.", events: [] };
     }
 };

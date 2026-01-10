@@ -34,7 +34,7 @@ const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamN
     }, [lastEvent, homeTeamName]);
 
     return (
-        <div className="relative w-full aspect-[16/9] bg-green-700 rounded-lg overflow-hidden shadow-inner border-2 border-green-800 mb-4 select-none">
+        <div className="relative w-full aspect-[16/9] max-h-[300px] bg-green-700 rounded-lg overflow-hidden shadow-inner border-2 border-green-800 mb-0 select-none mx-auto">
             <div className="absolute inset-0 opacity-20 pointer-events-none">
                  <div className="w-full h-full bg-[linear-gradient(90deg,transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:10%_100%]"></div>
                  <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-white"></div>

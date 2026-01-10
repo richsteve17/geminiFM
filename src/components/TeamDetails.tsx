@@ -9,7 +9,7 @@ import { FORMATIONS, MENTALITIES, CHAIRMAN_PERSONALITIES, PLAYER_PERSONALITIES }
 import { BrokenLinkIcon } from './icons/BrokenLinkIcon';
 import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
 import { UserGroupIcon } from './icons/UserGroupIcon';
-import { BriefcaseIcon } from './icons/BriefcaseIcon'; // Reusing for finance
+import { BriefcaseIcon } from './icons/BriefcaseIcon'; 
 import TacticsBoard from './TacticsBoard';
 import { analyzeTactics, TacticalAssignment, FORMATION_SLOTS } from '../utils';
 
@@ -20,6 +20,7 @@ interface TeamDetailsProps {
     onNavigateToNews: () => void;
     onStartContractTalk: (player: Player) => void;
     onToggleStarter: (playerName: string) => void;
+    onSwapPlayers?: (p1: Player, p2: Player) => void;
     gameState: GameState;
     subsUsed: number;
     onSubstitute: (playerIn: Player, playerOut: Player) => void;
@@ -48,19 +49,22 @@ const getPersonalityBadgeColor = (p: PlayerPersonality) => {
     }
 }
 
-const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onStartContractTalk, onToggleStarter, gameState, subsUsed, onSubstitute, onReorderPlayers }) => {
+const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onStartContractTalk, onToggleStarter, onSwapPlayers, gameState, subsUsed, onSubstitute, onReorderPlayers }) => {
     const [view, setView] = useState<'squad' | 'tactics' | 'finance'>('tactics'); 
     const [showContracts, setShowContracts] = useState(false);
     
-    // Board Selection State (for click-to-swap)
+    // Board Selection State (for click-to-swap in Tactics View)
     const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+
+    // List Selection State (for click-to-swap in List View)
+    const [selectedListPlayer, setSelectedListPlayer] = useState<string | null>(null);
 
     const isNationalTeam = team.league === 'International';
     const isMatchLive = gameState === 'PAUSED'; 
 
     // Financial Calcs
     const totalWageBill = team.players.reduce((sum, p) => sum + p.wage, 0);
-    const wageBudget = Math.floor(team.balance * 0.005) + totalWageBill; // Simple heuristic: Budget is current bill + small % of balance
+    const wageBudget = Math.floor(team.balance * 0.005) + totalWageBill;
     const highestEarner = [...team.players].sort((a,b) => b.wage - a.wage)[0];
     const averageWage = Math.floor(totalWageBill / team.players.length);
 
@@ -74,29 +78,20 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     // Run Tactical Analysis
     const tacticalAnalysis = useMemo(() => analyzeTactics(starters, team.tactic.formation), [starters, team.tactic.formation]);
 
-    // Handle "Swap" on the board
+    // Handle "Swap" on the board (Tactics View)
     const handleSlotClick = (clickedSlotIndex: number) => {
         if (selectedSlot === null) {
-            // Select first player
             setSelectedSlot(clickedSlotIndex);
         } else {
-            // Swap logic
             if (selectedSlot === clickedSlotIndex) {
-                setSelectedSlot(null); // Deselect
+                setSelectedSlot(null);
                 return;
             }
-
-            // We need to reorder the team.players array to reflect this swap in the 'starters' subset.
-            // 1. Get current starters list
             const currentStarters = [...starters];
-            
-            // 2. Perform swap in the local starters copy
             if (currentStarters[selectedSlot] && currentStarters[clickedSlotIndex]) {
                 const temp = currentStarters[selectedSlot];
                 currentStarters[selectedSlot] = currentStarters[clickedSlotIndex];
                 currentStarters[clickedSlotIndex] = temp;
-                
-                // 3. Reconstruct full player list: New Starters + Existing Bench
                 if (onReorderPlayers) {
                      onReorderPlayers([...currentStarters, ...bench]);
                 }
@@ -105,13 +100,31 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
         }
     };
 
-    // Helper for the list view interaction
-    const handleListClick = (player: Player) => {
-        onToggleStarter(player.name);
+    // Handle List View Interaction (Swap Mode)
+    const handleListClick = (clickedPlayer: Player) => {
+        if (selectedListPlayer === null) {
+            // Select first player
+            setSelectedListPlayer(clickedPlayer.name);
+        } else {
+            if (selectedListPlayer === clickedPlayer.name) {
+                // Deselect
+                setSelectedListPlayer(null);
+            } else {
+                // Swap Action
+                const p1 = team.players.find(p => p.name === selectedListPlayer);
+                const p2 = clickedPlayer;
+                
+                if (p1 && p2 && onSwapPlayers) {
+                    onSwapPlayers(p1, p2);
+                }
+                setSelectedListPlayer(null);
+            }
+        }
     }
 
     const renderPlayerItem = (player: Player, isBench: boolean) => {
         const personalityColor = getPersonalityBadgeColor(player.personality);
+        const isSelected = selectedListPlayer === player.name;
         
         // Effects & Status
         const effects = [];
@@ -135,6 +148,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
 
         return (
             <li key={player.name} onClick={() => handleListClick(player)} className={`p-2 rounded border cursor-pointer flex items-center gap-2 transition-all group ${
+                isSelected ? 'bg-yellow-900/40 border-yellow-500 ring-1 ring-yellow-500' :
                 player.status.type === 'Injured' ? 'bg-red-900/30 border-red-500' :
                 isBench ? 'bg-gray-900/50 border-gray-700 hover:bg-gray-700 opacity-80 hover:opacity-100' :
                 'bg-gray-800 border-gray-700 hover:bg-gray-700'
@@ -143,7 +157,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 
                 <div className="flex-grow min-w-0">
                     <div className="flex items-center gap-2">
-                        <p className="text-xs font-bold truncate text-gray-200">{player.name}</p>
+                        <p className={`text-xs font-bold truncate ${isSelected ? 'text-yellow-200' : 'text-gray-200'}`}>{player.name}</p>
                         <div className="flex gap-1">{effects}</div>
                         {outOfPosition && <span className="text-[10px] text-orange-400" title={`Playing as ${assignment?.formationRole}`}>⚠️</span>}
                     </div>
@@ -159,7 +173,11 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                     </div>
                 </div>
                 
-                <span className={`text-sm font-black ${player.rating >= 85 ? 'text-yellow-400' : 'text-green-400'}`}>{player.rating}</span>
+                {isSelected ? (
+                    <ArrowsRightLeftIcon className="w-4 h-4 text-yellow-400 animate-pulse" />
+                ) : (
+                    <span className={`text-sm font-black ${player.rating >= 85 ? 'text-yellow-400' : 'text-green-400'}`}>{player.rating}</span>
+                )}
             </li>
         );
     };
@@ -246,6 +264,14 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 
                 {view === 'squad' && (
                     <div className="space-y-4">
+                        {/* Swap Mode Indicator */}
+                        {selectedListPlayer && (
+                            <div className="bg-blue-900/50 border border-blue-500 p-2 rounded text-center animate-pulse mb-2">
+                                <p className="text-xs font-bold text-blue-200 uppercase tracking-widest">Select target to swap</p>
+                                <button onClick={() => setSelectedListPlayer(null)} className="text-[10px] text-blue-400 underline mt-1">Cancel</button>
+                            </div>
+                        )}
+
                         <div>
                             <div className="flex justify-between items-center mb-1 pl-1">
                                 <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Starting XI ({starters.length}/11)</p>

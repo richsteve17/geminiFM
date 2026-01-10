@@ -64,10 +64,13 @@ export default function MatchView({
     const [isShouting, setIsShouting] = useState(false);
     const [shoutFeedback, setShoutFeedback] = useState<{msg: string, effect: string} | null>(null);
 
-    // Auto-scroll feed - only scroll if near bottom to allow reading history
+    // Smooth Auto-scroll
     useEffect(() => {
         if (feedRef.current) {
-            feedRef.current.scrollTop = feedRef.current.scrollHeight;
+            feedRef.current.scrollTo({
+                top: feedRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
         }
     }, [matchState?.events.length]);
 
@@ -244,7 +247,7 @@ export default function MatchView({
     const score = matchState ? `${matchState.homeScore}-${matchState.awayScore}` : 'v';
 
     return (
-        <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden min-h-[600px] flex flex-col relative">
+        <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden flex flex-col relative h-[600px] lg:h-auto lg:min-h-[600px]">
             {/* ... Video Modal Code Omitted for Brevity (Same as before) ... */}
             {videoUrl && (
                 <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-4 animate-in fade-in backdrop-blur-md">
@@ -274,28 +277,30 @@ export default function MatchView({
             )}
 
             {/* SCOREBOARD */}
-            <div className="bg-black p-4 rounded-t-lg border-b border-gray-700">
+            <div className="bg-black p-4 rounded-t-lg border-b border-gray-700 flex-shrink-0">
                  <div className="flex justify-between items-center text-xs uppercase text-gray-500 mb-1">
                     <span>{fixture?.league}</span>
-                    <span>{isLoading ? 'Processing...' : (matchState?.isFinished ? 'Full Time' : `${currentMinute}' (LIVE)`)}</span>
+                    <span>{isLoading ? 'Thinking...' : (matchState?.isFinished ? 'Full Time' : `${currentMinute}' (LIVE)`)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                     <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-right text-white">{fixture?.homeTeam}</h3>
-                     <div className="px-4 py-1 bg-gray-800 rounded text-3xl font-mono font-bold text-yellow-500 mx-2">
+                     <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-right text-white truncate px-2">{fixture?.homeTeam}</h3>
+                     <div className="px-4 py-1 bg-gray-800 rounded text-3xl font-mono font-bold text-yellow-500 mx-2 flex-shrink-0">
                         {score}
                      </div>
-                     <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-left text-white">{fixture?.awayTeam}</h3>
+                     <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-left text-white truncate px-2">{fixture?.awayTeam}</h3>
                 </div>
                 {mediaError && <div className="text-center text-red-400 text-xs mt-2 animate-pulse font-bold">{mediaError}</div>}
             </div>
 
             {/* LIVE FEED */}
-            <div className="flex-grow bg-gray-900/50 p-4 flex flex-col min-h-[300px] max-h-[400px]">
+            <div className="flex-1 bg-gray-900/50 p-4 flex flex-col overflow-hidden">
                 {gameState !== GameState.PRE_MATCH && (
-                    <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events[matchState.events.length-1] || null} />
+                    <div className="flex-shrink-0 mb-4">
+                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events[matchState.events.length-1] || null} />
+                    </div>
                 )}
                 
-                <div ref={feedRef} className="overflow-y-auto space-y-1 scroll-smooth flex-1 pr-2">
+                <div ref={feedRef} className="overflow-y-auto space-y-1 scroll-smooth flex-1 pr-2 min-h-0">
                     {matchState?.events.length === 0 && <div className="text-center text-gray-500 italic mt-10">Match is about to start...</div>}
                     {matchState?.events.map(renderEvent)}
                     {isLoading && <div className="flex justify-center py-4"><FootballIcon className="w-6 h-6 text-green-500 animate-spin" /></div>}
@@ -303,7 +308,7 @@ export default function MatchView({
             </div>
 
             {/* CONTROLS */}
-            <div className="bg-gray-800 p-4 border-t border-gray-700">
+            <div className="bg-gray-800 p-4 border-t border-gray-700 flex-shrink-0">
                 {gameState === GameState.PLAYING ? (
                     <div className="space-y-3">
                         <div className="flex items-center justify-between bg-gray-900/50 p-2 rounded">
@@ -352,7 +357,7 @@ export default function MatchView({
                                     <p className="text-xs text-gray-400 font-bold">MATCH PAUSED</p>
                                 </div>
 
-                                {currentMinute === 45 && (
+                                {matchState?.currentMinute === 45 && (
                                     <div className="flex flex-col items-center space-y-2 mt-2 pt-2 border-t border-gray-700">
                                         <h4 className="text-gray-400 text-xs uppercase font-bold">Half Time Talk</h4>
                                         <div className="flex gap-2 w-full overflow-x-auto pb-2">
@@ -364,7 +369,7 @@ export default function MatchView({
                                     </div>
                                 )}
                                 
-                                {currentMinute !== 45 && currentMinute < 90 && (
+                                {matchState?.currentMinute !== 45 && (matchState?.currentMinute || 0) < 90 && (
                                     <div className="grid grid-cols-2 gap-2 mt-2">
                                         <button onClick={() => onPlaySecondHalf('resume')} className="py-3 bg-green-600 text-white rounded font-bold col-span-2">RESUME MATCH</button>
                                         <button onClick={() => onSimulateSegment(90)} className="py-2 bg-gray-600 text-white rounded font-bold text-xs">Sim to End</button>
