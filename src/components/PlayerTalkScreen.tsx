@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import type { PlayerTalk } from '../types';
+import type { PlayerTalk, NegotiationResult } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
 import { UserIcon } from './icons/UserIcon';
 import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
@@ -9,7 +9,7 @@ interface PlayerTalkScreenProps {
     talk: PlayerTalk | null;
     isLoading: boolean;
     error: string | null;
-    talkResult: { convinced: boolean; reasoning: string } | null;
+    talkResult: NegotiationResult | null;
     onAnswerSubmit: (answer: string, offer?: { wage: number, length: number }) => void;
     onFinish: () => void;
 }
@@ -30,6 +30,14 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
         }
     }, [talk]);
 
+    // Update state if AI counters
+    useMemo(() => {
+        if (talkResult?.decision === 'counter' && talkResult.counterOffer) {
+            setWageOffer(talkResult.counterOffer.wage);
+            setContractLength(talkResult.counterOffer.length);
+        }
+    }, [talkResult]);
+
     const formatMoney = (amount: number) => `£${amount.toLocaleString()}`;
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -46,6 +54,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
             // Final Step: Submit the Offer
             onAnswerSubmit(currentAnswer || "I believe this offer reflects your value.", { wage: wageOffer, length: contractLength });
             setHasNegotiated(true);
+            setCurrentAnswer('');
         }
     };
 
@@ -63,20 +72,25 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
              <div className="mt-20 max-w-2xl mx-auto text-center p-8 bg-red-900/50 border border-red-700 rounded-lg">
                 <h2 className="text-2xl font-bold text-red-400 mb-4">Negotiations Collapsed</h2>
                 <p className="text-white">{error}</p>
+                <button onClick={onFinish} className="mt-6 py-2 px-6 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">
+                    Leave Room
+                </button>
             </div>
          );
     }
 
-    if (talkResult && talk) {
+    if (talkResult && talkResult.decision !== 'counter' && talk) {
+        // Final Result (Accepted/Rejected)
         const isRenewal = talk.context === 'renewal';
+        const accepted = talkResult.decision === 'accepted';
         return (
              <div className="mt-20 max-w-2xl mx-auto text-center p-8 bg-gray-800/50 border border-gray-700 rounded-lg">
-                <h2 className={`text-3xl font-bold mb-4 ${talkResult.convinced ? 'text-green-400' : 'text-red-400'}`}>
-                    {talkResult.convinced ? "Deal Agreed!" : "Offer Rejected"}
+                <h2 className={`text-3xl font-bold mb-4 ${accepted ? 'text-green-400' : 'text-red-400'}`}>
+                    {accepted ? "Deal Agreed!" : "Offer Rejected"}
                 </h2>
                 <div className="text-left bg-gray-900/50 p-6 rounded-md my-6 border border-gray-600">
                     <p className="italic text-gray-300 text-lg">" {talkResult.reasoning} "</p>
-                    {talkResult.convinced && (
+                    {accepted && (
                         <div className="mt-4 pt-4 border-t border-gray-700 flex justify-center gap-8">
                             <div className="text-center">
                                 <p className="text-xs text-gray-500 uppercase">Weekly Wage</p>
@@ -89,7 +103,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                         </div>
                     )}
                 </div>
-                {talkResult.convinced ? (
+                {accepted ? (
                     <button onClick={onFinish} className="py-3 px-8 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors shadow-lg shadow-green-900/50">
                         {isRenewal ? "Sign Contract" : "Confirm Transfer"}
                     </button>
@@ -106,7 +120,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
     
     const isRenewal = talk.context === 'renewal';
     const isFinalStage = talk.currentQuestionIndex === talk.questions.length - 1;
-    const currentQuestion = talk.questions[talk.currentQuestionIndex];
+    const currentQuestion = talkResult?.decision === 'counter' ? talkResult.reasoning : talk.questions[talk.currentQuestionIndex];
 
     return (
         <div className="mt-8 max-w-3xl mx-auto px-4">
@@ -152,7 +166,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
 
                 {/* Right Panel: Negotiation Interface */}
                 <div className="md:col-span-2 bg-gray-800/80 border border-gray-700 rounded-xl p-6 shadow-xl">
-                    {!isFinalStage ? (
+                    {!isFinalStage && !talkResult ? (
                         // Phase 1: Chatting
                         <div className="h-full flex flex-col justify-between">
                             <div className="mb-4">
@@ -173,8 +187,14 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                             </form>
                         </div>
                     ) : (
-                        // Phase 2: The Contract Table
+                        // Phase 2: The Contract Table (Includes Counter Offers)
                         <div className="space-y-6">
+                            {talkResult?.decision === 'counter' && (
+                                <div className="bg-orange-900/30 border border-orange-500 p-3 rounded-lg mb-4 text-sm text-orange-200 animate-pulse">
+                                    <strong>Counter Offer:</strong> The agent has proposed new terms. Adjust your offer or argue your case.
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-between border-b border-gray-700 pb-4">
                                 <h3 className="text-lg font-bold text-white">Contract Offer</h3>
                                 <div className="text-right">
@@ -232,16 +252,17 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
 
                             {/* Final Comment & Submit */}
                             <form onSubmit={handleSubmit} className="pt-4 border-t border-gray-700">
+                                <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Negotiation Argument</label>
                                 <input
                                     type="text"
                                     value={currentAnswer}
                                     onChange={(e) => setCurrentAnswer(e.target.value)}
-                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white mb-4 text-sm"
-                                    placeholder="Add a final comment (optional)..."
+                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white mb-4 text-sm focus:ring-green-500 focus:border-green-500"
+                                    placeholder="E.g. 'This is fair because you will be our star player'..."
                                 />
                                 <button type="submit" className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg text-lg flex items-center justify-center gap-2">
                                     <DocumentCheckIcon className="w-5 h-5" />
-                                    Submit Final Offer
+                                    Submit Offer
                                 </button>
                             </form>
                         </div>

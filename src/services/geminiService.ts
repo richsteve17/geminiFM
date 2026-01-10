@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
-import type { Team, MatchState, Player, MatchEvent, TournamentStage } from '../types';
+import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult } from '../types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
@@ -14,14 +13,12 @@ const MODEL_TTS = 'gemini-2.5-flash-preview-tts';
 const MODEL_VIDEO = 'veo-3.1-fast-generate-preview'; 
 
 // --- CACHE LAYER ---
-// Stores audio buffers for TTS and signed URLs for Video based on Event ID
 const mediaCache = new Map<string, string | AudioBuffer>();
 
 // --- MEDIA HELPERS ---
 
 const cleanJson = (text?: string) => (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
 
-// Decodes base64 string to Uint8Array
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -32,7 +29,6 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
-// Decodes audio data for playback
 async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -70,9 +66,8 @@ export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, curre
     }
 };
 
-// --- MEDIA FEATURES (NEW IN v2.4) ---
+// --- MEDIA FEATURES ---
 
-// 1. SCOUTING (With Optional Search Grounding)
 export const scoutPlayers = async (request: string, useRealWorld: boolean = false): Promise<Player[]> => {
     let prompt = "";
     let config: any = { responseMimeType: "application/json" };
@@ -90,7 +85,6 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
         Return valid JSON in this exact format (do not wrap in markdown):
         { "players": [{ "name": "string", "position": "LB"|"CB"|"ST" etc, "rating": number (estimate 60-95 based on real ability), "age": number, "nationality": "Emoji", "scoutingReport": "string (mention real stats/facts)", "wage": number, "marketValue": number, "currentClub": "string" }] }
         `;
-        // Search tool enabled
         config.tools = [{googleSearch: {}}];
     } else {
         prompt = `Scout report for: "${request}". Generate 3 fictional players who fit this description. 
@@ -106,7 +100,6 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
         const jsonStr = cleanJson(response.text);
         const res = JSON.parse(jsonStr);
         
-        // Ensure valid defaults
         return res.players.map((p: any) => ({ 
             ...p, 
             status: { type: 'Available' }, 
@@ -122,12 +115,10 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
     }
 };
 
-// 2. TEXT TO SPEECH (Commentary) with Caching
 export const playMatchCommentary = async (text: string, eventId: number) => {
     const cacheKey = `tts-${eventId}`;
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
 
-    // Check Cache
     if (mediaCache.has(cacheKey)) {
         console.log("Playing from cache");
         const cachedBuffer = mediaCache.get(cacheKey) as AudioBuffer;
@@ -160,10 +151,7 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
                 24000,
                 1
             );
-            
-            // Store in Cache
             mediaCache.set(cacheKey, audioBuffer);
-
             const source = audioContext.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(audioContext.destination);
@@ -171,17 +159,13 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
         }
     } catch (error) {
         console.error("TTS Error", error);
-        throw error; // Re-throw to handle in UI
+        throw error;
     }
 };
 
-// 3. VIDEO GENERATION (Goal Replay) with Caching
 export const generateReplayVideo = async (description: string, eventId: number): Promise<string | null> => {
     const cacheKey = `video-${eventId}`;
-    
-    // Check Cache
     if (mediaCache.has(cacheKey)) {
-        console.log("Returning cached video URL");
         return mediaCache.get(cacheKey) as string;
     }
 
@@ -198,16 +182,15 @@ export const generateReplayVideo = async (description: string, eventId: number):
             }
         });
 
-        // Poll for completion
         while (!operation.done) {
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5s
+            await new Promise(resolve => setTimeout(resolve, 5000));
             operation = await ai.operations.getVideosOperation({operation: operation});
         }
 
         const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
         if (videoUri) {
             const fullUrl = `${videoUri}&key=${API_KEY}`;
-            mediaCache.set(cacheKey, fullUrl); // Store in cache
+            mediaCache.set(cacheKey, fullUrl); 
             return fullUrl;
         }
         return null;
@@ -217,7 +200,7 @@ export const generateReplayVideo = async (description: string, eventId: number):
     }
 };
 
-// --- EXISTING HELPERS ---
+// --- INTERACTIVE FEATURES ---
 
 export const generatePressConference = async (context: string): Promise<string[]> => {
     const prompt = `Press conference. Context: ${context}. Ask 3 questions. JSON: { "questions": [] }`;
@@ -229,32 +212,83 @@ export const generatePressConference = async (context: string): Promise<string[]
     } catch (e) { return ["How do you feel?", "What's next?"]; }
 };
 
-export const getInterviewQuestions = async (teamName: string, personality: string) => {
-    const prompt = `Interview for ${teamName}. JSON: { "questions": [] }`;
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text)).questions;
+export const getInterviewQuestions = async (teamName: string, personality: string, league: string) => {
+    const prompt = `
+    You are the ${personality} Chairman of ${teamName} (${league}). 
+    You are interviewing a new manager.
+    Generate 3 tough, specific questions based on the club's status and your personality.
+    Return JSON: { "questions": ["string", "string", "string"] }
+    `;
+    
+    try {
+        const response = await ai.models.generateContent({ 
+            model: MODEL_TEXT, 
+            contents: prompt, 
+            config: { responseMimeType: "application/json" } 
+        });
+        return JSON.parse(cleanJson(response.text)).questions;
+    } catch (e) {
+        return ["What is your philosophy?", "How will you handle the pressure?", "What are your wage demands?"];
+    }
 };
 
 export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], p: string) => {
-    const prompt = `Evaluate interview for ${teamName}. JSON: { "offer": boolean, "reasoning": "string" }`;
+    const prompt = `Evaluate job interview for ${teamName} manager role. 
+    Questions: ${JSON.stringify(qs)}. 
+    Answers: ${JSON.stringify(ans)}. 
+    Chairman Persona: ${p}.
+    Did they get the job? Be strict.
+    JSON: { "offer": boolean, "reasoning": "string (short comment from chairman)" }`;
+    
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(cleanJson(response.text));
 };
 
 export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
-    const prompt = `Negotiation with ${p.name}. JSON: { "questions": [] }`;
+    const prompt = `Negotiation with ${p.name} (${p.rating} rated, ${p.personality}). 
+    Context: ${c} to ${t.name}.
+    Generate 3 distinct questions/concerns the player/agent has.
+    JSON: { "questions": [] }`;
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(cleanJson(response.text)).questions;
 };
 
-export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer?: any) => {
-    const prompt = `Evaluate negotiation. JSON: { "convinced": boolean, "reasoning": "string" }`;
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text));
+// UPDATED NEGOTIATION ENGINE
+export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any): Promise<NegotiationResult> => {
+    const prompt = `
+    Roleplay as the Agent for ${p.name} (${p.age}yo, Rating: ${p.rating}, Personality: ${p.personality}).
+    User (Manager) has offered: Wage £${offer.wage}, Length ${offer.length} years.
+    User Argument: "${ans[ans.length - 1]}".
+    
+    Context: 
+    - Negotiation with ${t.name} (Prestige: ${t.prestige}).
+    - Previous Wage: £${p.wage}.
+    
+    LOGIC:
+    1. If the user argument is persuasive and specific (mentions playing time, role, legacy), be willing to accept a wage slightly lower than demand.
+    2. If the wage is < 80% of current wage, REJECT unless the user argument is amazing.
+    3. If the wage is close but not enough, COUNTER offer.
+    4. If offer is good, ACCEPT.
+
+    Return JSON: 
+    { 
+        "decision": "accepted" | "rejected" | "counter", 
+        "reasoning": "string (Agent's reply in character)", 
+        "counterOffer": { "wage": number, "length": number } (Optional, only if counter)
+    }
+    `;
+    
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        // Fallback safety
+        return { decision: "accepted", reasoning: "Okay, we have a deal." };
+    }
 };
 
 export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: string): Promise<string> => {
-    const prompt = `Tactical advice for ${u}. Score ${s.homeScore}-${s.awayScore}.`;
+    const prompt = `Tactical advice for ${u} vs ${h.name===u?a.name:h.name}. Score ${s.homeScore}-${s.awayScore}. Minute ${s.currentMinute}. Momentum ${s.momentum}. Concise advice.`;
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
     return response.text || "No advice.";
 };
@@ -266,7 +300,8 @@ export const getInternationalBreakSummary = async (week: number) => {
     return parsed ?? { newsTitle: "International Break", newsBody: "Matches played." };
 };
 
-// *** CONTEXT-AWARE SHOUTS ***
+// --- NEW SHOUTS FEATURE ---
+
 export interface TacticalShout {
     id: string;
     label: string;
@@ -274,11 +309,43 @@ export interface TacticalShout {
     effect: string;
 }
 
-export const getContextAwareShouts = async (userTeam: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
-    return [
-        { id: 'encourage', label: 'Encourage', description: "Heads up! Keep going!", effect: 'Morale Boost' },
-        { id: 'demand_more', label: 'Demand More', description: "Not good enough! Work harder!", effect: 'Intensity Boost' },
-        { id: 'calm_down', label: 'Calm Down', description: "Relax! Play our game.", effect: 'Composure Boost' },
-        { id: 'get_creative', label: 'Get Creative', description: "Express yourselves!", effect: 'Flair Boost' }
-    ];
+export const getContextAwareShouts = async (team: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
+    const prompt = `
+    You are the Assistant Manager of ${team.name}.
+    Halftime Situation:
+    - Score: ${isHome ? matchState.homeScore : matchState.awayScore} - ${isHome ? matchState.awayScore : matchState.homeScore} (We are ${isHome ? 'Home' : 'Away'})
+    - Momentum: ${matchState.momentum} (Positive = We are dominating, Negative = Under pressure)
+    - Team Personality: ${team.chairmanPersonality} (affects expected style)
+    
+    Generate 4 distinct halftime team talks (shouts) I can use.
+    1. One aggressive/demanding.
+    2. One encouraging/calm.
+    3. One tactical instruction based on score.
+    4. One risky/inspiring.
+
+    Return JSON:
+    {
+        "shouts": [
+            { "id": "string", "label": "string (max 15 chars)", "description": "string (what I say)", "effect": "string (expected outcome)" }
+        ]
+    }
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        const parsed = JSON.parse(cleanJson(response.text));
+        return parsed.shouts || [];
+    } catch (e) {
+        console.error("Shout Gen Error", e);
+        return [
+            { id: 'demand', label: 'Demand More', description: 'Show me some passion!', effect: 'Increases work rate.' },
+            { id: 'calm', label: 'Calm Down', description: 'Relax and play our game.', effect: 'Improves passing accuracy.' },
+            { id: 'push', label: 'Push Forward', description: 'Get the ball into the box!', effect: 'Higher goal chance.' },
+            { id: 'tighten', label: 'Tighten Up', description: 'Focus on defense.', effect: 'Reduces goals conceded.' }
+        ];
+    }
 };

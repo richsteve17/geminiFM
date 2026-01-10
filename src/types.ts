@@ -173,7 +173,14 @@ export interface PlayerTalk {
     answers: string[];
     currentQuestionIndex: number;
     context: 'transfer' | 'renewal';
-    teammates?: string[]; // Context for "Who else are you signing?"
+    teammates?: string[];
+    negotiationHistory: { offer: { wage: number, length: number }, response: string }[];
+}
+
+export interface NegotiationResult {
+    decision: 'accepted' | 'rejected' | 'counter';
+    reasoning: string;
+    counterOffer?: { wage: number, length: number };
 }
 
 export interface NewsItem {
