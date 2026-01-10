@@ -52,10 +52,21 @@ async function decodeAudioData(
 // --- CORE SIMULATION ---
 
 export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, currentMatchState: MatchState, targetMinute: number, context: any) => {
+    // Determine context for short bursts
+    const userInstruction = context.shout ? `User Shout: "${context.shout}" (Factor this into momentum).` : "";
+    
     const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
-    Current Minute: ${currentMatchState.currentMinute} to ${targetMinute}. 
-    Score: ${currentMatchState.homeScore}-${currentMatchState.awayScore}.
-    Respond ONLY in JSON format: { "homeScoreAdded": number, "awayScoreAdded": number, "momentum": number, "tacticalAnalysis": "string", "events": [{ "minute": number, "type": "goal"|"commentary"|"card"|"injury"|"whistle", "teamName": "string", "description": "string", "player": "string" }] }`;
+    Current State: Minute ${currentMatchState.currentMinute}, Score ${currentMatchState.homeScore}-${currentMatchState.awayScore}, Momentum ${currentMatchState.momentum}.
+    Task: Simulate ONLY from minute ${currentMatchState.currentMinute} to ${targetMinute}.
+    ${userInstruction}
+    
+    Respond ONLY in JSON format: { 
+        "homeScoreAdded": number, 
+        "awayScoreAdded": number, 
+        "momentum": number (new value -10 to 10), 
+        "tacticalAnalysis": "string (one short sentence)", 
+        "events": [{ "minute": number, "type": "goal"|"commentary"|"card"|"injury"|"whistle", "teamName": "string", "description": "string", "player": "string" }] 
+    }`;
 
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({

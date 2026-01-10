@@ -2,7 +2,7 @@
 # ⚽ Gemini Football Manager '27
 **The World's First Multimedia AI Sports Simulation**
 
-> **Current Build:** v2.5 (Audio-Visual Update)
+> **Current Build:** v2.6 (Stability & Live Engine Update)
 > **Engine:** React 19 · TypeScript · Google GenAI SDK · Tailwind CSS
 
 **Gemini Football Manager '27 (GFM '27)** is a hybrid simulation engine. It combines a rigid, deterministic mathematical core with a creative, generative AI layer to produce a football world that feels alive, visually distinct, and narratively deep.
@@ -21,13 +21,13 @@ To build a simulation that is both **fair** and **immersive**, we separate the "
 
 ### 🟣 The Vibes (Generative Layer)
 *The presentation layer that creates the illusion of a broadcast.*
-1.  **Match Narrative:** `gemini-2.0-flash-exp` receives the math (e.g., *Momentum: +8*) and converts it into a story (*"The home fans are deafening as the team presses high!"*).
+1.  **Live Match Narrative:** `gemini-2.0-flash-exp` receives the math (e.g., *Momentum: +8*) and converts it into a story (*"The home fans are deafening as the team presses high!"*).
 2.  **The Pitch:** The moving dots are **not** physics simulations. They are CSS animations driven by the "Momentum" variable to visualize the flow of the game.
 3.  **Atmosphere:** The decibel meter is a reactive visualizer based on the scoreline, not real audio analysis.
 
 ---
 
-## 📡 The Media Layer (v2.5)
+## 📡 The Media Layer (v2.5+)
 
 GFM '27 generates multimedia assets on-the-fly using Google models.
 

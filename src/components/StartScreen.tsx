@@ -48,9 +48,9 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 </h1>
                 
                 <div className="flex items-center justify-center gap-4 text-xs font-mono tracking-widest text-green-400/80 mb-8">
-                    <span>BUILD v2.5</span>
+                    <span>BUILD v2.6</span>
                     <span>•</span>
-                    <span>GEN AI ENGINE ONLINE</span>
+                    <span>LIVE ENGINE UPDATE</span>
                     <span>•</span>
                     <span>AUDIO-VISUAL</span>
                 </div>
@@ -116,11 +116,12 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         <p className="text-gray-400 mb-1">> LOADING MODULE: GEMINI-2.0-FLASH-EXP... OK</p>
                         <p className="text-gray-400 mb-1">> LOADING MODULE: VEO-3.1... OK</p>
                         <p className="text-gray-400 mb-1">> LOADING MODULE: GEMINI-TTS... OK</p>
-                        <p className="text-blue-400 mt-2">> PATCH NOTES v2.5:</p>
+                        <p className="text-blue-400 mt-2">> PATCH NOTES v2.6:</p>
                         <ul className="list-disc list-inside text-gray-500 pl-2">
-                            <li>Added <strong>Viral Audio Synthesis</strong>: Social clips now have auto-generated voiceovers.</li>
-                            <li>Integrated TTS directly into Streamer Studio.</li>
-                            <li>Added visual indicators for audio playback.</li>
+                            <li>Implemented <strong>Live Simulation Loop</strong>: Matches now play in 10-minute ticks.</li>
+                            <li>Fixed UI Pacing: Added read-time delays between simulation updates.</li>
+                            <li>Stabilized Shout System: Shouts now queue correctly for next phase.</li>
+                            <li>Fixed CSS wrapping issues in match feed.</li>
                         </ul>
                     </div>
                 )}

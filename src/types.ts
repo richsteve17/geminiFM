@@ -157,6 +157,7 @@ export interface MatchState {
 export enum GameState {
     PRE_MATCH = 'PRE_MATCH',
     SIMULATING = 'SIMULATING',
+    PLAYING = 'PLAYING',
     PAUSED = 'PAUSED',
     POST_MATCH = 'POST_MATCH'
 }

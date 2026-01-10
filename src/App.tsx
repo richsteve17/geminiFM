@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
 import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult } from './types';
 import { AppScreen, GameState } from './types';
@@ -27,6 +27,8 @@ import { generateWorldCupStructure, NATIONAL_TEAMS } from './international';
 import { getChampionsLeagueParticipants } from './europe';
 
 const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
+const SIMULATION_CHUNK_MINUTES = 10; // How many minutes to simulate per tick
+const TICK_DELAY_MS = 2500; // Delay between chunks for "Live" feel
 
 const convertNationalTeam = (nt: NationalTeam): Team => ({
     name: nt.name,
@@ -55,8 +57,11 @@ export default function App() {
     const [leagueTable, setLeagueTable] = useState<LeagueTableEntry[]>([]);
     const [fixtures, setFixtures] = useState<Fixture[]>([]);
     const [currentFixture, setCurrentFixture] = useState<Fixture | undefined>(undefined);
+    
+    // Game State Management
     const [gameState, setGameState] = useState<GameState>(GameState.PRE_MATCH);
     const [matchState, setMatchState] = useState<MatchState | null>(null);
+    
     const [error, setError] = useState<string | null>(null);
     const [news, setNews] = useState<NewsItem[]>([]);
     const [weeklyResults, setWeeklyResults] = useState<Fixture[]>([]);
@@ -82,6 +87,41 @@ export default function App() {
     const [currentChant, setCurrentChant] = useState<Chant | null>(null);
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
+    
+    // --- LIVE SIMULATION LOOP ---
+    // This effect drives the match forward when in PLAYING state
+    useEffect(() => {
+        let timeoutId: ReturnType<typeof setTimeout>;
+
+        const runSimulationTick = async () => {
+            if (gameState === GameState.PLAYING && currentFixture && userTeam && matchState && !isLoading) {
+                // If we reached Halftime or Fulltime, pause
+                if (matchState.currentMinute >= 90) {
+                    finishMatch();
+                    return;
+                }
+                if (matchState.currentMinute === 45) {
+                    setGameState(GameState.PAUSED); // Halftime pause
+                    return;
+                }
+
+                setIsLoading(true);
+                const targetMinute = Math.min(matchState.currentMinute + SIMULATION_CHUNK_MINUTES, matchState.currentMinute < 45 ? 45 : 90);
+                
+                await handleSimulateSegment(targetMinute);
+                
+                // After sim, if still playing (and not HT/FT), schedule next tick
+                // This delay creates the "Live" pacing where chants can load and shouts can be made
+                timeoutId = setTimeout(() => {
+                    setIsLoading(false); // Enable controls briefly?
+                }, TICK_DELAY_MS);
+            }
+        };
+
+        runSimulationTick();
+
+        return () => clearTimeout(timeoutId);
+    }, [gameState, matchState?.currentMinute]); // Re-run when minute updates
 
     // --- SAVE / LOAD SYSTEM ---
     const saveGame = () => {
@@ -155,8 +195,6 @@ export default function App() {
 
     const startTutorial = () => { setTutorialStep(0); setShowTutorial(true); };
 
-    // ... (World Cup and Club Initialization code omitted for brevity, essentially same as before but ensure clean state) ...
-    // Re-pasting Initialization for safety
     const initializeWorldCup = (selectedNationalTeamName: string) => {
         setGameMode('WorldCup');
         setIsPrologue(true);
@@ -292,7 +330,7 @@ export default function App() {
         setTeams(prev => ({ ...prev, [userTeamName]: { ...prev[userTeamName], players: newPlayerOrder } }));
     };
 
-    // ... Match Handling Logic (same as before) ...
+    // ... Match Handling Logic ...
     const handleAdvanceWeek = async () => {
         setIsLoading(true);
         if (gameState === GameState.POST_MATCH && matchState && userTeamName) {
@@ -317,28 +355,38 @@ export default function App() {
         setMatchState(null); setGameState(GameState.PRE_MATCH); setIsLoading(false);
     };
 
-    const handlePlayFirstHalf = async () => {
+    const handleStartMatch = () => {
         if (!currentFixture || !userTeam) return;
-        setGameState(GameState.SIMULATING); setIsLoading(true); setActiveShout(undefined); 
-        const home = teams[currentFixture.homeTeam]; const away = teams[currentFixture.awayTeam];
-        const startState = matchState || { currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off." };
-        const result = await simulateMatchSegment(home, away, startState, 45, { userTeamName });
-        setMatchState(prev => ({ ...startState, currentMinute: 45, homeScore: (prev?.homeScore || 0) + result.homeScoreAdded, awayScore: (prev?.awayScore || 0) + result.awayScoreAdded, events: [...(prev?.events || []), ...result.events], momentum: result.momentum, tacticalAnalysis: result.tacticalAnalysis }));
-        setGameState(GameState.PAUSED); setIsLoading(false);
+        // Initial state
+        setMatchState({ currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off." });
+        setGameState(GameState.PLAYING); 
     };
 
-    const handlePlaySecondHalf = async (shout: TouchlineShout) => { setActiveShout(shout); handleSimulateSegment(60); };
+    const handleResumeMatch = (shout?: TouchlineShout) => {
+        if (shout) setActiveShout(shout);
+        setGameState(GameState.PLAYING);
+    }
 
-    // MODIFIED: Support manual momentum shift from shouts
+    const handlePauseMatch = () => {
+        setGameState(GameState.PAUSED);
+    }
+
+    // This function is now mostly an internal helper called by the effect loop
     const handleSimulateSegment = async (targetMinute: number, momentumShift: number = 0) => {
         if (!currentFixture || !matchState || !userTeam) return;
-        setGameState(GameState.SIMULATING); setIsLoading(true);
-        const home = teams[currentFixture.homeTeam]; const away = teams[currentFixture.awayTeam];
+        
+        const home = teams[currentFixture.homeTeam]; 
+        const away = teams[currentFixture.awayTeam];
         
         // Apply momentum shift from shout
         const currentStateWithShift = { ...matchState, momentum: Math.max(-10, Math.min(10, matchState.momentum + momentumShift)) };
 
+        // We use the active Shout here, which might have been set by the UI
         const result = await simulateMatchSegment(home, away, currentStateWithShift, targetMinute, { shout: activeShout, userTeamName });
+        
+        // Reset active shout after it's been used in a sim tick
+        if (activeShout) setActiveShout(undefined);
+
         const newState = { 
             ...currentStateWithShift, 
             currentMinute: targetMinute, 
@@ -351,26 +399,29 @@ export default function App() {
         };
         
         setMatchState(newState);
-        if (targetMinute >= 90) {
-            setGameState(GameState.POST_MATCH);
-            const isHome = currentFixture.homeTeam === userTeamName;
-            const userGoals = isHome ? newState.homeScore : newState.awayScore;
-            const oppGoals = isHome ? newState.awayScore : newState.homeScore;
-            if (userGoals > oppGoals) setManagerReputation(r => Math.min(100, r + 2));
-            else if (userGoals === oppGoals) setManagerReputation(r => Math.min(100, r + 1));
-            else setManagerReputation(r => Math.max(0, r - 1));
-            setLeagueTable(prev => {
-                const newTable = [...prev];
-                const updateTeam = (name: string, goalsFor: number, goalsAgainst: number) => {
-                    const idx = newTable.findIndex(t => t.teamName === name);
-                    if (idx !== -1) { const t = newTable[idx]; t.played++; t.goalsFor += goalsFor; t.goalsAgainst += goalsAgainst; t.goalDifference = t.goalsFor - t.goalsAgainst; if (goalsFor > goalsAgainst) { t.won++; t.points += 3; } else if (goalsFor === goalsAgainst) { t.drawn++; t.points += 1; } else { t.lost++; } }
-                };
-                updateTeam(currentFixture.homeTeam, newState.homeScore, newState.awayScore);
-                updateTeam(currentFixture.awayTeam, newState.awayScore, newState.homeScore);
-                return newTable;
-            });
-        } else { setGameState(GameState.PAUSED); }
-        setIsLoading(false);
+        setIsLoading(false); // Finished this chunk
+    };
+
+    const finishMatch = () => {
+        setGameState(GameState.POST_MATCH);
+        if (!matchState || !userTeamName || !currentFixture) return;
+
+        const isHome = currentFixture.homeTeam === userTeamName;
+        const userGoals = isHome ? matchState.homeScore : matchState.awayScore;
+        const oppGoals = isHome ? matchState.awayScore : matchState.homeScore;
+        if (userGoals > oppGoals) setManagerReputation(r => Math.min(100, r + 2));
+        else if (userGoals === oppGoals) setManagerReputation(r => Math.min(100, r + 1));
+        else setManagerReputation(r => Math.max(0, r - 1));
+        setLeagueTable(prev => {
+            const newTable = [...prev];
+            const updateTeam = (name: string, goalsFor: number, goalsAgainst: number) => {
+                const idx = newTable.findIndex(t => t.teamName === name);
+                if (idx !== -1) { const t = newTable[idx]; t.played++; t.goalsFor += goalsFor; t.goalsAgainst += goalsAgainst; t.goalDifference = t.goalsFor - t.goalsAgainst; if (goalsFor > goalsAgainst) { t.won++; t.points += 3; } else if (goalsFor === goalsAgainst) { t.drawn++; t.points += 1; } else { t.lost++; } }
+            };
+            updateTeam(currentFixture.homeTeam, matchState.homeScore, matchState.awayScore);
+            updateTeam(currentFixture.awayTeam, matchState.awayScore, matchState.homeScore);
+            return newTable;
+        });
     };
 
     const handleSubstitute = (playerIn: Player, playerOut: Player) => {
@@ -508,7 +559,28 @@ export default function App() {
                         <div className="lg:col-span-3">
                             <TeamDetails team={userTeam} onTacticChange={handleTacticChange} onNavigateToTransfers={() => setAppScreen(AppScreen.SCOUTING)} onNavigateToNews={()=>setAppScreen(AppScreen.NEWS_FEED)} onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')} onToggleStarter={handleToggleStarter} gameState={gameState} subsUsed={matchState?.subsUsed?.home || 0} onSubstitute={handleSubstitute} onReorderPlayers={handleReorderPlayers} />
                         </div>
-                        <div className="lg:col-span-6"><MatchView fixture={currentFixture} weeklyResults={weeklyResults} matchState={matchState} gameState={gameState} onPlayFirstHalf={handlePlayFirstHalf} onPlaySecondHalf={handlePlaySecondHalf} onSimulateSegment={handleSimulateSegment} onNextMatch={handleAdvanceWeek} error={null} isSeasonOver={false} userTeamName={userTeamName} leagueTable={leagueTable} isLoading={isLoading} currentWeek={currentWeek} teams={teams} /></div>
+                        <div className="lg:col-span-6">
+                            <MatchView 
+                                fixture={currentFixture} 
+                                weeklyResults={weeklyResults} 
+                                matchState={matchState} 
+                                gameState={gameState} 
+                                onPlayFirstHalf={handleStartMatch} 
+                                onPlaySecondHalf={handleResumeMatch} 
+                                onSimulateSegment={(target) => { 
+                                    // Manual override button click
+                                    if(gameState === GameState.PAUSED) handleResumeMatch();
+                                }} 
+                                onNextMatch={handleAdvanceWeek} 
+                                error={null} 
+                                isSeasonOver={false} 
+                                userTeamName={userTeamName} 
+                                leagueTable={leagueTable} 
+                                isLoading={isLoading} 
+                                currentWeek={currentWeek} 
+                                teams={teams} 
+                            />
+                        </div>
                         <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} /></div>
                         </main>
                     </div>
