@@ -207,7 +207,8 @@ export const generateWorldCupStructure = (): Record<string, Team> => {
                 // Only top 6 teams get their Real Roster. Clones/Minor nations get generic.
                 players: (i === 0 && teamCounter < 6) ? template.players : generateGenericSquad(template.players[0].nationality, template.prestige - 5 - prestigeAdjustment, template.countryCode),
                 tactic: { ...template.tactic },
-                objectives: []
+                objectives: [],
+                activePromises: []
             };
             teamCounter++;
         }

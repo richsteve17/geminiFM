@@ -37,7 +37,8 @@ const convertNationalTeam = (nt: NationalTeam): Team => ({
     chairmanPersonality: 'Traditionalist',
     group: nt.group,
     balance: 0,
-    objectives: nt.objectives || []
+    objectives: nt.objectives || [],
+    activePromises: []
 });
 
 export default function App() {
@@ -328,12 +329,27 @@ export default function App() {
 
     const handlePlaySecondHalf = async (shout: TouchlineShout) => { setActiveShout(shout); handleSimulateSegment(60); };
 
-    const handleSimulateSegment = async (targetMinute: number) => {
+    // MODIFIED: Support manual momentum shift from shouts
+    const handleSimulateSegment = async (targetMinute: number, momentumShift: number = 0) => {
         if (!currentFixture || !matchState || !userTeam) return;
         setGameState(GameState.SIMULATING); setIsLoading(true);
         const home = teams[currentFixture.homeTeam]; const away = teams[currentFixture.awayTeam];
-        const result = await simulateMatchSegment(home, away, matchState, targetMinute, { shout: activeShout, userTeamName });
-        const newState = { ...matchState, currentMinute: targetMinute, homeScore: matchState.homeScore + result.homeScoreAdded, awayScore: matchState.awayScore + result.awayScoreAdded, events: [...matchState.events, ...result.events], momentum: result.momentum, tacticalAnalysis: result.tacticalAnalysis, isFinished: targetMinute >= 90 };
+        
+        // Apply momentum shift from shout
+        const currentStateWithShift = { ...matchState, momentum: Math.max(-10, Math.min(10, matchState.momentum + momentumShift)) };
+
+        const result = await simulateMatchSegment(home, away, currentStateWithShift, targetMinute, { shout: activeShout, userTeamName });
+        const newState = { 
+            ...currentStateWithShift, 
+            currentMinute: targetMinute, 
+            homeScore: matchState.homeScore + result.homeScoreAdded, 
+            awayScore: matchState.awayScore + result.awayScoreAdded, 
+            events: [...matchState.events, ...result.events], 
+            momentum: result.momentum, 
+            tacticalAnalysis: result.tacticalAnalysis, 
+            isFinished: targetMinute >= 90 
+        };
+        
         setMatchState(newState);
         if (targetMinute >= 90) {
             setGameState(GameState.POST_MATCH);
@@ -408,6 +424,17 @@ export default function App() {
                 const team = prev[userTeamName];
                 let updatedPlayers;
 
+                // Handle extracted promises
+                const newPromises = (talkResult.extractedPromises || []).map(desc => ({
+                    id: `${Date.now()}-${Math.random()}`,
+                    description: desc,
+                    deadlineWeek: currentWeek + 10, // Default 10 week deadline for promises
+                    status: 'pending' as const,
+                    playerInvolved: playerTalk.player.name
+                }));
+
+                const activePromises = [...(team.activePromises || []), ...newPromises];
+
                 if (playerTalk.context === 'renewal') {
                     updatedPlayers = team.players.map(p => 
                         p.name === playerTalk.player.name 
@@ -428,7 +455,7 @@ export default function App() {
                 
                 return { 
                     ...prev, 
-                    [userTeamName]: { ...team, players: updatedPlayers } 
+                    [userTeamName]: { ...team, players: updatedPlayers, activePromises } 
                 };
             });
 

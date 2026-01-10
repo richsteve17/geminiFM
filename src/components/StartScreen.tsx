@@ -48,11 +48,11 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 </h1>
                 
                 <div className="flex items-center justify-center gap-4 text-xs font-mono tracking-widest text-green-400/80 mb-8">
-                    <span>BUILD v2.4</span>
+                    <span>BUILD v2.5</span>
                     <span>•</span>
                     <span>GEN AI ENGINE ONLINE</span>
                     <span>•</span>
-                    <span>REAL-TIME SIMULATION</span>
+                    <span>AUDIO-VISUAL</span>
                 </div>
 
                 <p className="text-lg md:text-xl text-gray-300 font-light max-w-2xl mx-auto leading-relaxed border-t border-b border-gray-700/50 py-4 bg-black/20 backdrop-blur-sm rounded-lg">
@@ -115,13 +115,12 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         <p className="text-green-500 mb-2">> SYSTEM INITIALIZED</p>
                         <p className="text-gray-400 mb-1">> LOADING MODULE: GEMINI-2.0-FLASH-EXP... OK</p>
                         <p className="text-gray-400 mb-1">> LOADING MODULE: VEO-3.1... OK</p>
-                        <p className="text-gray-400 mb-1">> LOADING MODULE: SWISS-SYSTEM FIXTURE ENGINE... OK</p>
-                        <p className="text-gray-400 mb-1">> LOADING MODULE: REAL-WORLD SCOUTING (GROUNDING)... OK</p>
-                        <p className="text-blue-400 mt-2">> PATCH NOTES v2.4:</p>
+                        <p className="text-gray-400 mb-1">> LOADING MODULE: GEMINI-TTS... OK</p>
+                        <p className="text-blue-400 mt-2">> PATCH NOTES v2.5:</p>
                         <ul className="list-disc list-inside text-gray-500 pl-2">
-                            <li>Added generative TTS commentary for goals.</li>
-                            <li>Implemented visual replay generation via Veo.</li>
-                            <li>Upgraded 'Job Interview' logic to use live LLM generation instead of static arrays.</li>
+                            <li>Added <strong>Viral Audio Synthesis</strong>: Social clips now have auto-generated voiceovers.</li>
+                            <li>Integrated TTS directly into Streamer Studio.</li>
+                            <li>Added visual indicators for audio playback.</li>
                         </ul>
                     </div>
                 )}

@@ -1,10 +1,15 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team, MatchEvent } from '../types';
+import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team, MatchEvent, TacticalShout } from '../types';
 import { GameState } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
+import { DevicePhoneMobileIcon } from './icons/DevicePhoneMobileIcon';
+import { HeartIcon } from './icons/HeartIcon';
+import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
+import { ShareIcon } from './icons/ShareIcon';
+import { MusicalNoteIcon } from './icons/MusicalNoteIcon';
 import { TOUCHLINE_SHOUTS } from '../constants';
-import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getContextAwareShouts, TacticalShout } from '../services/geminiService';
+import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getContextAwareShouts, processTouchlineInteraction, generateSocialPost, type SocialPostData } from '../services/geminiService';
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 import AtmosphereWidget from './AtmosphereWidget';
@@ -17,7 +22,7 @@ interface MatchViewProps {
     gameState: GameState;
     onPlayFirstHalf: () => void;
     onPlaySecondHalf: (shout: TouchlineShout) => void;
-    onSimulateSegment: (targetMinute: number) => void;
+    onSimulateSegment: (targetMinute: number, momentumShift?: number) => void;
     onNextMatch: () => void;
     error: string | null;
     isSeasonOver: boolean;
@@ -42,12 +47,22 @@ export default function MatchView({
     const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
     const [generatingVideoId, setGeneratingVideoId] = useState<number | null>(null);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
+    const [videoFormat, setVideoFormat] = useState<'landscape' | 'portrait'>('landscape');
+    const [currentClipEventId, setCurrentClipEventId] = useState<number | null>(null);
     const [mediaError, setMediaError] = useState<string | null>(null);
+    
+    // Social Studio State
+    const [socialPost, setSocialPost] = useState<SocialPostData | null>(null);
 
-    // Atmosphere
+    // Atmosphere & Interaction
     const [availableShouts, setAvailableShouts] = useState<TacticalShout[]>([]);
     const [selectedShout, setSelectedShout] = useState<TacticalShout | null>(null);
     const [currentChant, setCurrentChant] = useState<Chant | null>(null);
+    
+    // THE SICK FEATURE: Touchline Scream
+    const [customShout, setCustomShout] = useState('');
+    const [isShouting, setIsShouting] = useState(false);
+    const [shoutFeedback, setShoutFeedback] = useState<{msg: string, effect: string} | null>(null);
 
     // Auto-scroll feed
     useEffect(() => {
@@ -64,6 +79,14 @@ export default function MatchView({
             getContextAwareShouts(userTeam, isHome, matchState).then(setAvailableShouts);
         }
     }, [gameState, matchState, userTeamName, fixture, teams]);
+
+    // Viral Clip Audio Auto-Play
+    useEffect(() => {
+        if (videoUrl && videoFormat === 'portrait' && socialPost && currentClipEventId) {
+            // Trigger TTS for the caption as a "Voiceover"
+            playMatchCommentary(socialPost.caption, currentClipEventId * 999); // Use unique ID for viral clip audio
+        }
+    }, [videoUrl, videoFormat, socialPost, currentClipEventId]);
 
     // Chant Trigger Logic
     useEffect(() => {
@@ -93,14 +116,36 @@ export default function MatchView({
         setIsAskingAssistant(false);
     }
 
+    const handleCustomShout = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!customShout.trim() || !userTeamName || !matchState) return;
+        
+        setIsShouting(true);
+        const userTeam = teams[userTeamName];
+        const isHome = fixture?.homeTeam === userTeamName;
+        
+        const result = await processTouchlineInteraction(customShout, userTeam, matchState, isHome);
+        
+        setShoutFeedback({ msg: result.commentary, effect: result.effectDescription });
+        setCustomShout('');
+        setIsShouting(false);
+
+        // Apply effect immediately by triggering a small simulation segment with momentum bias
+        if (matchState.currentMinute < 90) {
+             const nextMinute = Math.min(90, matchState.currentMinute + 5);
+             onSimulateSegment(nextMinute, result.momentumChange);
+        }
+        
+        setTimeout(() => setShoutFeedback(null), 5000);
+    };
+
     // --- MEDIA HANDLERS ---
     const handlePlayAudio = async (event: MatchEvent) => {
         setPlayingAudioId(event.id);
         setMediaError(null);
         const commentary = `${event.minute}th minute. ${event.description}`;
         try {
-            await playMatchCommentary(commentary, event.id); // Pass ID for caching
-            // Reset icon after a reasonable duration if audio plays fire-and-forget
+            await playMatchCommentary(commentary, event.id);
             setTimeout(() => setPlayingAudioId(null), 5000); 
         } catch (e) {
             setMediaError("Audio unavailable.");
@@ -108,12 +153,22 @@ export default function MatchView({
         }
     };
 
-    const handleGenerateVideo = async (event: MatchEvent) => {
+    const handleGenerateVideo = async (event: MatchEvent, format: 'landscape' | 'portrait') => {
         setGeneratingVideoId(event.id);
+        setVideoFormat(format);
+        setCurrentClipEventId(event.id);
         setMediaError(null);
+        setSocialPost(null); // Reset previous social data
+
         const description = `${event.teamName} scores a goal. ${event.description}`;
+        
+        // Parallel execution: Start generating social data immediately if portrait
+        if (format === 'portrait' && userTeamName) {
+            generateSocialPost(description, userTeamName, 'goal').then(setSocialPost);
+        }
+
         try {
-            const url = await generateReplayVideo(description, event.id); // Pass ID for caching
+            const url = await generateReplayVideo(description, event.id, format); 
             if (url) {
                 setVideoUrl(url);
             } else {
@@ -159,25 +214,23 @@ export default function MatchView({
                             className={`p-1 rounded hover:bg-gray-700 transition-colors ${playingAudioId === event.id ? 'text-green-400 animate-pulse' : 'text-gray-500'}`}
                             title="Listen to Radio Commentary (TTS)"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 1 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z" />
-                                <path d="M15.932 7.757a.75.75 0 0 1 1.061 0 6 6 0 0 1 0 8.486.75.75 0 0 1-1.06-1.061 4.5 4.5 0 0 0 0-6.364.75.75 0 0 1 0-1.06Z" />
-                            </svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 1 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z" /></svg>
                         </button>
-                        
                         <button 
-                            onClick={() => handleGenerateVideo(event)}
+                            onClick={() => handleGenerateVideo(event, 'landscape')}
                             disabled={generatingVideoId === event.id}
                             className={`p-1 rounded hover:bg-gray-700 transition-colors ${generatingVideoId === event.id ? 'text-yellow-400 animate-spin' : 'text-gray-500'}`}
-                            title="Generate Replay (Video)"
+                            title="Generate Broadcast Replay"
                         >
-                            {generatingVideoId === event.id ? (
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                                    <path d="M4.5 4.5a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h8.25a3 3 0 0 0 3-3v-9a3 3 0 0 0-3-3H4.5ZM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06Z" />
-                                </svg>
-                            )}
+                            {generatingVideoId === event.id ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M4.5 4.5a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h8.25a3 3 0 0 0 3-3v-9a3 3 0 0 0-3-3H4.5ZM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06Z" /></svg>}
+                        </button>
+                        <button 
+                            onClick={() => handleGenerateVideo(event, 'portrait')}
+                            disabled={generatingVideoId === event.id}
+                            className={`p-1 rounded hover:bg-purple-900/50 transition-colors ${generatingVideoId === event.id ? 'text-purple-400 animate-spin' : 'text-purple-400 hover:text-purple-300'}`}
+                            title="Clip It! (9:16 Social Video)"
+                        >
+                            <DevicePhoneMobileIcon className="w-4 h-4" />
                         </button>
                     </div>
                 )}
@@ -185,7 +238,6 @@ export default function MatchView({
         );
     }
 
-    // Render Logic...
     if (isSeasonOver) return <div className="text-center p-8"><h2 className="text-3xl font-bold text-green-400 mb-4">Season Over!</h2></div>;
     
     if (gameState === GameState.PRE_MATCH && !fixture) {
@@ -200,12 +252,81 @@ export default function MatchView({
             
             {/* VIDEO MODAL */}
             {videoUrl && (
-                <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in">
-                    <button onClick={() => setVideoUrl(null)} className="absolute top-4 right-4 text-white hover:text-gray-300">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-4 animate-in fade-in backdrop-blur-md">
+                    <button onClick={() => setVideoUrl(null)} className="absolute top-4 right-4 text-white hover:text-gray-300 z-50 bg-gray-800/50 rounded-full p-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                     </button>
-                    <h3 className="text-green-400 font-bold mb-4 text-xl tracking-widest uppercase">Instant Replay (AI Generated)</h3>
-                    <video src={videoUrl} controls autoPlay className="max-w-full max-h-[80vh] rounded border-2 border-green-600 shadow-2xl" />
+                    
+                    <div className={`relative ${videoFormat === 'portrait' ? 'max-w-[320px] aspect-[9/16] rounded-3xl border-0 ring-4 ring-gray-800' : 'w-full max-w-4xl aspect-[16/9] rounded-lg border-2 border-green-600'} shadow-2xl bg-black overflow-hidden`}>
+                        <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />
+                        
+                        {/* STREAMER STUDIO OVERLAY */}
+                        {videoFormat === 'portrait' && (
+                            <>
+                                {/* Right Sidebar Actions */}
+                                <div className="absolute bottom-4 right-2 flex flex-col gap-4 items-center z-20">
+                                    <div className="group flex flex-col items-center gap-1 cursor-pointer">
+                                        <div className="w-10 h-10 bg-gray-800/60 rounded-full flex items-center justify-center backdrop-blur-md group-hover:bg-gray-700 transition">
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-green-400 to-blue-500 p-0.5">
+                                                <div className="w-full h-full rounded-full bg-black flex items-center justify-center font-black text-xs text-white">
+                                                    {userTeamName?.substring(0, 1)}
+                                                </div>
+                                            </div>
+                                            <div className="absolute -bottom-1 bg-red-500 rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold text-white border border-black">+</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="group flex flex-col items-center gap-1 cursor-pointer">
+                                        <HeartIcon className="w-8 h-8 text-white drop-shadow-md group-hover:text-red-500 transition-colors" />
+                                        <span className="text-[10px] font-bold text-white drop-shadow">{socialPost?.likes || '...'}</span>
+                                    </div>
+
+                                    <div className="group flex flex-col items-center gap-1 cursor-pointer">
+                                        <ChatBubbleIcon className="w-8 h-8 text-white drop-shadow-md group-hover:text-blue-400 transition-colors" />
+                                        <span className="text-[10px] font-bold text-white drop-shadow">{socialPost?.comments.length || 0}</span>
+                                    </div>
+
+                                    <div className="group flex flex-col items-center gap-1 cursor-pointer">
+                                        <ShareIcon className="w-8 h-8 text-white drop-shadow-md group-hover:text-green-400 transition-colors" />
+                                        <span className="text-[10px] font-bold text-white drop-shadow">{socialPost?.shareCount || '...'}</span>
+                                    </div>
+                                    
+                                    <div className="w-8 h-8 bg-gray-800/80 rounded-full flex items-center justify-center animate-spin-slow border-2 border-gray-600 mt-2">
+                                        <div className="w-4 h-4 bg-gradient-to-tr from-purple-500 to-pink-500 rounded-full"></div>
+                                    </div>
+                                </div>
+
+                                {/* Bottom Info Overlay */}
+                                <div className="absolute bottom-0 left-0 right-12 p-3 bg-gradient-to-t from-black/80 to-transparent pt-12 z-10">
+                                    <div className="text-white">
+                                        <h4 className="font-bold text-sm shadow-black drop-shadow-md">@{userTeamName?.replace(/\s/g, '').toLowerCase()}_official <span className="text-blue-400 text-[10px]">✓</span></h4>
+                                        <p className="text-xs mt-1 leading-snug drop-shadow-md">
+                                            {socialPost?.caption || "Generating caption..."} {socialPost?.hashtags.map(t => <span key={t} className="font-bold text-white">{t} </span>)}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-2 text-[10px] opacity-90">
+                                            <MusicalNoteIcon className="w-3 h-3 animate-bounce" />
+                                            {/* Sound Indicator */}
+                                            <div className="flex items-center gap-1">
+                                                <span className="animate-pulse font-bold text-green-400">♫ Playing:</span>
+                                                <span className="truncate max-w-[120px]">{socialPost?.sound || "Original Sound"}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Floating Comments (Mock) */}
+                                {socialPost && (
+                                    <div className="absolute bottom-24 left-3 w-48 space-y-2 pointer-events-none">
+                                        {socialPost.comments.map((comment, i) => (
+                                            <div key={i} className="bg-black/40 backdrop-blur-md rounded-lg p-2 text-white text-xs animate-in slide-in-from-bottom-2 fade-in" style={{ animationDelay: `${i * 1.5}s`, opacity: 0, animationFillMode: 'forwards' }}>
+                                                <span className="font-bold text-gray-300">{comment.username}</span>: {comment.text}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -227,7 +348,6 @@ export default function MatchView({
                      </div>
                      <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-left text-white">{fixture?.awayTeam}</h3>
                 </div>
-                {/* Media Error Toast */}
                 {mediaError && <div className="text-center text-red-400 text-xs mt-2 animate-pulse font-bold">{mediaError}</div>}
             </div>
 
@@ -258,19 +378,48 @@ export default function MatchView({
 
                         {gameState === GameState.PAUSED && (
                             <div className="space-y-3">
+                                {/* OPEN ENDED SHOUT BOX */}
+                                <form onSubmit={handleCustomShout} className="relative">
+                                    <input 
+                                        type="text" 
+                                        value={customShout}
+                                        onChange={(e) => setCustomShout(e.target.value)}
+                                        placeholder="SCREAM FROM TOUCHLINE (e.g. 'Press them harder!')"
+                                        className="w-full bg-gray-700 border-2 border-gray-600 rounded p-3 pl-10 text-white text-sm focus:border-green-500 outline-none"
+                                        disabled={isShouting}
+                                    />
+                                    <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                                        <UserIcon className="w-4 h-4 text-gray-400" />
+                                    </div>
+                                    <button 
+                                        type="submit" 
+                                        disabled={!customShout.trim() || isShouting}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded uppercase"
+                                    >
+                                        {isShouting ? '...' : 'Shout'}
+                                    </button>
+                                </form>
+                                {shoutFeedback && (
+                                    <div className="text-center animate-in fade-in slide-in-from-bottom-2">
+                                        <span className="text-xs font-bold bg-blue-900 text-blue-200 px-2 py-1 rounded border border-blue-500">{shoutFeedback.effect}</span>
+                                        <p className="text-xs text-gray-300 mt-1 italic">"{shoutFeedback.msg}"</p>
+                                    </div>
+                                )}
+
                                 {currentMinute === 45 && (
-                                    <div className="flex flex-col items-center space-y-2">
-                                        <h4 className="text-gray-400 text-xs uppercase font-bold">Team Talk</h4>
+                                    <div className="flex flex-col items-center space-y-2 mt-4 pt-4 border-t border-gray-700">
+                                        <h4 className="text-gray-400 text-xs uppercase font-bold">Team Talk Options</h4>
                                         <div className="flex gap-2">
                                             {availableShouts.map(shout => (
                                                 <button key={shout.id} onClick={() => setSelectedShout(shout)} className={`px-3 py-1 text-xs rounded border ${selectedShout?.id === shout.id ? 'bg-blue-600 border-blue-400' : 'bg-gray-700 border-gray-600'}`}>{shout.label}</button>
                                             ))}
                                         </div>
-                                        <button onClick={() => onPlaySecondHalf(selectedShout || { id: 'none', label: 'None', description: '', effect: '' })} className="w-full py-2 bg-green-600 text-white font-bold rounded">Start 2nd Half</button>
+                                        <button onClick={() => onPlaySecondHalf((selectedShout as any) || { id: 'none', label: 'None', description: '', effect: '' })} className="w-full py-2 bg-green-600 text-white font-bold rounded">Start 2nd Half</button>
                                     </div>
                                 )}
+                                
                                 {currentMinute > 45 && currentMinute < 90 && (
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
                                         {currentMinute < 75 && <button onClick={() => onSimulateSegment(currentMinute + 15)} className="py-2 bg-gray-600 text-white rounded font-bold">Sim 15m</button>}
                                         <button onClick={() => onSimulateSegment(90)} className="py-2 bg-green-600 text-white rounded font-bold col-span-2">To Full Time</button>
                                     </div>

@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
-import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult } from '../types';
+import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData } from '../types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
@@ -163,14 +164,19 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
     }
 };
 
-export const generateReplayVideo = async (description: string, eventId: number): Promise<string | null> => {
-    const cacheKey = `video-${eventId}`;
+export const generateReplayVideo = async (description: string, eventId: number, format: 'landscape' | 'portrait' = 'landscape'): Promise<string | null> => {
+    const cacheKey = `video-${eventId}-${format}`;
     if (mediaCache.has(cacheKey)) {
         return mediaCache.get(cacheKey) as string;
     }
 
     try {
-        const prompt = `A cinematic 4k football match replay. TV Broadcast style. ${description}. Realistic lighting, green grass, stadium crowd in background.`;
+        const aspectRatio = format === 'portrait' ? '9:16' : '16:9';
+        const stylePrompt = format === 'portrait' 
+            ? "Vertical viral social media video, TikTok style, fan phone camera angle from the stands" 
+            : "Cinematic 4k broadcast TV camera angle";
+
+        const prompt = `${stylePrompt}. Football match goal. ${description}. Realistic lighting, green grass, stadium crowd.`;
         
         let operation = await ai.models.generateVideos({
             model: MODEL_VIDEO,
@@ -178,7 +184,7 @@ export const generateReplayVideo = async (description: string, eventId: number):
             config: {
                 numberOfVideos: 1,
                 resolution: '720p',
-                aspectRatio: '16:9'
+                aspectRatio: aspectRatio
             }
         });
 
@@ -253,12 +259,13 @@ export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
     return JSON.parse(cleanJson(response.text)).questions;
 };
 
-// UPDATED NEGOTIATION ENGINE
+// UPDATED NEGOTIATION ENGINE: Extract Promises
 export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any): Promise<NegotiationResult> => {
     const prompt = `
     Roleplay as the Agent for ${p.name} (${p.age}yo, Rating: ${p.rating}, Personality: ${p.personality}).
     User (Manager) has offered: Wage £${offer.wage}, Length ${offer.length} years.
     User Argument: "${ans[ans.length - 1]}".
+    Full Conversation History: ${JSON.stringify(ans)}.
     
     Context: 
     - Negotiation with ${t.name} (Prestige: ${t.prestige}).
@@ -266,15 +273,15 @@ export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[],
     
     LOGIC:
     1. If the user argument is persuasive and specific (mentions playing time, role, legacy), be willing to accept a wage slightly lower than demand.
-    2. If the wage is < 80% of current wage, REJECT unless the user argument is amazing.
-    3. If the wage is close but not enough, COUNTER offer.
-    4. If offer is good, ACCEPT.
-
+    2. Analyze the User's text for PROMISES (e.g., "I promise to sign Salah", "You will be captain", "We will win the league").
+    3. Extract these promises into a list.
+    
     Return JSON: 
     { 
         "decision": "accepted" | "rejected" | "counter", 
         "reasoning": "string (Agent's reply in character)", 
-        "counterOffer": { "wage": number, "length": number } (Optional, only if counter)
+        "counterOffer": { "wage": number, "length": number } (Optional, only if counter),
+        "extractedPromises": ["string", "string"] (List of promises found in user text, empty if none)
     }
     `;
     
@@ -282,8 +289,45 @@ export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[],
         const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
-        // Fallback safety
-        return { decision: "accepted", reasoning: "Okay, we have a deal." };
+        return { decision: "accepted", reasoning: "Okay, we have a deal.", extractedPromises: [] };
+    }
+};
+
+// --- PROMISE CHECKING ---
+export const checkPromises = async (promises: PromiseData[], currentWeek: number, teamState: any): Promise<PromiseData[]> => {
+    // Only check active promises that are near deadline or can be fulfilled
+    const relevantPromises = promises.filter(p => p.status === 'pending');
+    if (relevantPromises.length === 0) return promises;
+
+    const prompt = `
+    Analyze these football manager promises.
+    Current Week: ${currentWeek}.
+    Team Context: ${JSON.stringify(teamState)}.
+    Promises: ${JSON.stringify(relevantPromises)}.
+    
+    For each promise, determine if it is KEPT, BROKEN, or still PENDING.
+    If broken or kept, provide a short status update message.
+    
+    Return JSON: 
+    { 
+        "updates": [
+            { "id": "string", "newStatus": "kept" | "broken" | "pending", "message": "string" }
+        ] 
+    }
+    `;
+
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const result = JSON.parse(cleanJson(response.text));
+        
+        // Merge updates
+        return promises.map(p => {
+            const update = result.updates.find((u: any) => u.id === p.id);
+            if (update) return { ...p, status: update.newStatus };
+            return p;
+        });
+    } catch (e) {
+        return promises;
     }
 };
 
@@ -300,14 +344,49 @@ export const getInternationalBreakSummary = async (week: number) => {
     return parsed ?? { newsTitle: "International Break", newsBody: "Matches played." };
 };
 
-// --- NEW SHOUTS FEATURE ---
+export const processTouchlineInteraction = async (
+    userShout: string, 
+    team: Team, 
+    matchState: MatchState,
+    isHome: boolean
+): Promise<{ 
+    momentumChange: number, 
+    commentary: string,
+    effectDescription: string 
+}> => {
+    const prompt = `
+    Football Manager Match Engine.
+    User (Manager of ${team.name}) screams from the touchline: "${userShout}".
+    
+    Context:
+    - Score: ${matchState.homeScore}-${matchState.awayScore}
+    - Minute: ${matchState.currentMinute}
+    - Momentum: ${matchState.momentum} (-10 to 10)
+    
+    Determine the effect of this shout.
+    - If it's smart/motivational, give positive momentum (+1 to +5).
+    - If it's toxic/stupid, give negative momentum (-1 to -5).
+    - If it's tactical (e.g., "Overload the left"), assume it works slightly.
+    
+    Return JSON:
+    {
+        "momentumChange": number,
+        "commentary": "string (How the players/crowd react, e.g. 'The players look fired up!')",
+        "effectDescription": "string (Short UI label, e.g. 'Tactical Adjustment', 'Confusion', 'Inspiration')"
+    }
+    `;
 
-export interface TacticalShout {
-    id: string;
-    label: string;
-    description: string;
-    effect: string;
-}
+    try {
+        const response = await ai.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { momentumChange: 0, commentary: "The players couldn't hear you.", effectDescription: "Ignored" };
+    }
+};
 
 export const getContextAwareShouts = async (team: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
     const prompt = `
@@ -318,17 +397,7 @@ export const getContextAwareShouts = async (team: Team, isHome: boolean, matchSt
     - Team Personality: ${team.chairmanPersonality} (affects expected style)
     
     Generate 4 distinct halftime team talks (shouts) I can use.
-    1. One aggressive/demanding.
-    2. One encouraging/calm.
-    3. One tactical instruction based on score.
-    4. One risky/inspiring.
-
-    Return JSON:
-    {
-        "shouts": [
-            { "id": "string", "label": "string (max 15 chars)", "description": "string (what I say)", "effect": "string (expected outcome)" }
-        ]
-    }
+    Return JSON: { "shouts": [{ "id": "string", "label": "string", "description": "string", "effect": "string" }] }
     `;
 
     try {
@@ -340,12 +409,76 @@ export const getContextAwareShouts = async (team: Team, isHome: boolean, matchSt
         const parsed = JSON.parse(cleanJson(response.text));
         return parsed.shouts || [];
     } catch (e) {
-        console.error("Shout Gen Error", e);
         return [
             { id: 'demand', label: 'Demand More', description: 'Show me some passion!', effect: 'Increases work rate.' },
             { id: 'calm', label: 'Calm Down', description: 'Relax and play our game.', effect: 'Improves passing accuracy.' },
             { id: 'push', label: 'Push Forward', description: 'Get the ball into the box!', effect: 'Higher goal chance.' },
             { id: 'tighten', label: 'Tighten Up', description: 'Focus on defense.', effect: 'Reduces goals conceded.' }
         ];
+    }
+};
+
+// --- NEW STREAMER STUDIO FEATURE ---
+export interface SocialComment {
+    username: string;
+    text: string;
+    likes: number;
+}
+
+export interface SocialPostData {
+    caption: string;
+    hashtags: string[];
+    likes: string;
+    comments: SocialComment[];
+    sound: string;
+    shareCount: string;
+}
+
+export const generateSocialPost = async (description: string, teamName: string, eventType: string): Promise<SocialPostData> => {
+    const prompt = `
+    Generate viral social media content (TikTok/Shorts style) for a football clip.
+    Event: ${description}.
+    Team: ${teamName}.
+    
+    Generate:
+    1. A hype caption.
+    2. Trending hashtags.
+    3. Realistic view/like counts (e.g. "2.4M").
+    4. 4 fake comments from fans (some using emojis, slang).
+    5. A trending audio/sound name.
+
+    Return JSON:
+    {
+        "caption": "string",
+        "hashtags": ["#tag1", "#tag2"],
+        "likes": "string",
+        "shareCount": "string",
+        "sound": "string",
+        "comments": [
+            { "username": "string", "text": "string", "likes": number }
+        ]
+    }
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return {
+            caption: `Unbelievable scenes! ${teamName} scoring!`,
+            hashtags: ["#football", "#goal", `#${teamName.replace(/\s/g,'')}`],
+            likes: "1.2M",
+            shareCount: "45K",
+            sound: "Trending Audio - Viral",
+            comments: [
+                { username: "footyfan123", text: "WHAT A GOAL 🔥", likes: 2400 },
+                { username: "manager_pro", text: "Tactical genius!", likes: 1500 },
+                { username: "away_fan", text: "Lucky...", likes: 200 }
+            ]
+        };
     }
 };

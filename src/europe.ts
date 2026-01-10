@@ -51,7 +51,8 @@ const createEuroTeam = (name: string, flag: string, prestige: number): Team => {
         prestige,
         chairmanPersonality: 'Traditionalist',
         balance: 0,
-        objectives: []
+        objectives: [],
+        activePromises: []
     };
 };
 

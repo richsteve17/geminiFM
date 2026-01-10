@@ -28,7 +28,8 @@ export type PlayerStatus =
 
 export type PlayerEffect = 
     | { type: 'PostTournamentMorale'; morale: 'Winner' | 'FiredUp' | 'Disappointed'; message: string; until: number }
-    | { type: 'BadChemistry'; with: string; message: string; until: number };
+    | { type: 'BadChemistry'; with: string; message: string; until: number }
+    | { type: 'PromiseBroken'; message: string; until: number };
 
 export type PlayerPosition = 
     | 'GK' 
@@ -66,6 +67,14 @@ export interface Tactic {
 
 export type LeagueTier = 'Premier League' | 'Championship' | 'La Liga' | 'Serie A' | 'Bundesliga' | 'Ligue 1' | 'MLS' | 'International' | 'Champions League';
 
+export interface PromiseData {
+    id: string;
+    description: string; // "Sign Mo Salah"
+    deadlineWeek: number;
+    status: 'pending' | 'kept' | 'broken';
+    playerInvolved?: string; // "V. van Dijk"
+}
+
 export interface Team {
   name: string;
   league: LeagueTier;
@@ -76,9 +85,10 @@ export interface Team {
   group?: string;
   balance: number; 
   objectives: string[];
+  activePromises: PromiseData[]; // MEMORY SYSTEM
 }
 
-export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance' | 'objectives'> {
+export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance' | 'objectives' | 'activePromises'> {
     countryCode: string;
     players: Player[];
     objectives?: string[];
@@ -151,7 +161,14 @@ export enum GameState {
     POST_MATCH = 'POST_MATCH'
 }
 
-export type TouchlineShout = 'Encourage' | 'Demand More' | 'Tighten Up' | 'Push Forward';
+export type TouchlineShout = string;
+
+export interface TacticalShout {
+    id: string;
+    label: string;
+    description: string;
+    effect: string;
+}
 
 export interface Job {
     teamName: string;
@@ -181,6 +198,7 @@ export interface NegotiationResult {
     decision: 'accepted' | 'rejected' | 'counter';
     reasoning: string;
     counterOffer?: { wage: number, length: number };
+    extractedPromises?: string[]; // New field for extracted text promises
 }
 
 export interface NewsItem {
@@ -188,7 +206,7 @@ export interface NewsItem {
     week: number;
     title: string;
     body: string;
-    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance';
+    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance' | 'promise-broken';
 }
 
 export interface ExperienceLevel {

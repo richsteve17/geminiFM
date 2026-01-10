@@ -1,7 +1,8 @@
+
 # ⚽ Gemini Football Manager '27
 **The World's First Multimedia AI Sports Simulation**
 
-> **Current Build:** v2.4 (Galácticos Media Update)
+> **Current Build:** v2.5 (Audio-Visual Update)
 > **Engine:** React 19 · TypeScript · Google GenAI SDK · Tailwind CSS
 
 **Gemini Football Manager '27 (GFM '27)** is a hybrid simulation engine. It combines a rigid, deterministic mathematical core with a creative, generative AI layer to produce a football world that feels alive, visually distinct, and narratively deep.
@@ -26,15 +27,15 @@ To build a simulation that is both **fair** and **immersive**, we separate the "
 
 ---
 
-## 📡 The Media Layer (New in v2.4)
+## 📡 The Media Layer (v2.5)
 
-GFM '27 now generates multimedia assets on-the-fly using specific Google models.
+GFM '27 generates multimedia assets on-the-fly using Google models.
 
-### 1. 🎙️ AI Commentary (TTS)
+### 1. 🎙️ AI Commentary & Viral Voiceover
 *   **Model:** `gemini-2.5-flash-preview-tts`
-*   **Trigger:** Click the 🎧 icon on a Goal event.
-*   **Behavior:** The text description is sent to the model with an "Excited Commentator" system instruction. The resulting raw PCM audio is decoded and played in the browser.
-*   **Caching:** Audio clips are cached in memory. Clicking the button twice does **not** cost extra tokens.
+*   **Trigger:** Click the 🎧 icon on a Goal event OR open a Viral Clip.
+*   **Behavior:** The app synthesizes "Excited Commentator" audio for standard replays, and "Viral Hype" voiceovers for vertical social clips.
+*   **Caching:** Audio clips are cached in memory to save quota.
 
 ### 2. 📺 Instant Replay (Veo)
 *   **Model:** `veo-3.1-fast-generate-preview`
@@ -45,7 +46,7 @@ GFM '27 now generates multimedia assets on-the-fly using specific Google models.
 ### 3. 🌍 Real-World Scouting (Grounding)
 *   **Model:** `gemini-3-flash-preview` + Google Search Tool
 *   **Trigger:** Toggle "Use Real World Network" in Scouting.
-*   **Behavior:** Instead of inventing players, the AI queries Google Search (*"Current top scorer Eredivisie under 21"*) and maps the real-world data into game-compatible stats.
+*   **Behavior:** The AI searches the live internet (*"Fastest winger in the Premier League under 23"*) and maps real-world data into game-compatible stats.
 
 ---
 

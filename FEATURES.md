@@ -1,14 +1,18 @@
 
-# 📘 Feature Guide: Galácticos Media Update (v2.4)
+# 📘 Feature Guide: Galácticos Media Update (v2.5)
 
 ## 📡 Generative Media Suite
 
-The v2.4 update introduces the "Media Layer," allowing the game to generate assets on the fly.
+The v2.5 update introduces the "Media Layer," allowing the game to generate assets on the fly.
 
 ### 🎙️ AI Commentary (TTS)
 *   **Model:** `gemini-2.5-flash-preview-tts`
 *   **How it works:** When a goal is scored, the text description (e.g., "Haaland smashes it top bin") is sent to the TTS model with a specific "Excited Commentator" system instruction.
 *   **Playback:** The app decodes the raw PCM audio stream directly in the browser using the Web Audio API.
+
+### 🎥 Streamer Studio Audio (New in v2.5)
+*   **Feature:** TikTok-style viral clips now include auto-generated voiceovers.
+*   **Logic:** When you click the purple "Clip It" button, the AI generates a hype caption ("SCENES!"). This caption is immediately sent to the TTS engine to create a voiceover that plays automatically when the vertical video loads.
 
 ### 📺 Instant Replay (Veo)
 *   **Model:** `veo-3.1-fast-generate-preview`
