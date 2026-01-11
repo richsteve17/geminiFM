@@ -65,6 +65,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     // Financial Calcs
     const totalWageBill = team.players.reduce((sum, p) => sum + p.wage, 0);
     const wageBudget = Math.floor(team.balance * 0.005) + totalWageBill;
+    // CRITICAL FIX: Use slice() to copy array before sort to prevent mutating state
     const highestEarner = [...team.players].sort((a,b) => b.wage - a.wage)[0];
     const averageWage = Math.floor(totalWageBill / team.players.length);
 
@@ -351,7 +352,8 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Payroll Distribution</h4>
                             <div className="space-y-1">
-                                {team.players.sort((a,b) => b.wage - a.wage).slice(0, 5).map(p => (
+                                { /* CRITICAL FIX: Use .slice() to copy array before sorting to avoid mutating state */ }
+                                {team.players.slice().sort((a,b) => b.wage - a.wage).slice(0, 5).map(p => (
                                     <div key={p.name} className="flex justify-between items-center text-xs border-b border-gray-800 pb-1 last:border-0">
                                         <span className="text-gray-300">{p.name}</span>
                                         <span className="font-mono text-gray-400">£{p.wage.toLocaleString()}</span>
