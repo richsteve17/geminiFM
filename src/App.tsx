@@ -28,7 +28,7 @@ import { getChampionsLeagueParticipants } from './europe';
 
 const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
 const SIMULATION_CHUNK_MINUTES = 10; 
-const TICK_DELAY_MS = 1500; // 1.5s per minute for readability
+const TICK_DELAY_MS = 1500; 
 
 const convertNationalTeam = (nt: NationalTeam): Team => ({
     name: nt.name,
@@ -93,16 +93,14 @@ export default function App() {
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
     
-    // --- LIVE SIMULATION LOOP (Minute-by-Minute Playback) ---
+    // --- LIVE SIMULATION LOOP ---
     useEffect(() => {
         let timeoutId: ReturnType<typeof setTimeout>;
 
         const runPlaybackTick = async () => {
             if (gameState === GameState.PLAYING && currentFixture && userTeam && matchState && !isLoading) {
                 
-                // If we need to fetch more data (caught up to target)
                 if (currentPlaybackMinute >= simulationTargetMinute) {
-                    // Check for Half Time or Full Time stops
                     if (currentPlaybackMinute >= 90) {
                         finishMatch();
                         return;
@@ -112,7 +110,6 @@ export default function App() {
                         return;
                     }
 
-                    // Otherwise, simulate next chunk
                     setIsLoading(true);
                     const nextTarget = Math.min(simulationTargetMinute + SIMULATION_CHUNK_MINUTES, simulationTargetMinute < 45 ? 45 : 90);
                     
@@ -141,13 +138,11 @@ export default function App() {
                         { shout: activeShout, userTeamName, tacticalContext }
                     );
 
-                    // Append new events to pending queue
                     setPendingEvents(prev => [...prev, ...result.events]);
                     
-                    // Update meta-state (score, momentum) in background, but don't show yet
                     setMatchState(prev => prev ? ({
                         ...prev,
-                        homeScore: prev.homeScore + result.homeScoreAdded, // Note: This updates score immediately in state, but UI can use derived score from events if needed. For now, simple score update is fine as events trickle in.
+                        homeScore: prev.homeScore + result.homeScoreAdded,
                         awayScore: prev.awayScore + result.awayScoreAdded,
                         momentum: result.momentum,
                         tacticalAnalysis: result.tacticalAnalysis
@@ -157,33 +152,25 @@ export default function App() {
                     
                     if (activeShout) setActiveShout(undefined);
                     setIsLoading(false);
-                    return; // Wait for next tick to start playback
+                    return; 
                 }
 
-                // --- PLAYBACK LOGIC ---
-                // Advance one minute
+                // --- PLAYBACK ---
                 const nextMinute = currentPlaybackMinute + 1;
                 setCurrentPlaybackMinute(nextMinute);
 
-                // Check if any events happen at this minute
                 const eventsNow = pendingEvents.filter(e => e.minute === nextMinute);
                 
-                // If event exists, add to visible history
                 if (eventsNow.length > 0) {
                     setMatchState(prev => prev ? ({
                         ...prev,
                         events: [...prev.events, ...eventsNow],
-                        // Update visual current minute to match playback
                         currentMinute: nextMinute 
                     }) : null);
                     
-                    // If goal, longer delay
                     const hasGoal = eventsNow.some(e => e.type === 'goal');
-                    timeoutId = setTimeout(() => {
-                        // Loop continues via dependency change
-                    }, hasGoal ? 4000 : TICK_DELAY_MS);
+                    timeoutId = setTimeout(() => {}, hasGoal ? 4000 : TICK_DELAY_MS);
                 } else {
-                    // No event, just tick clock
                     setMatchState(prev => prev ? ({ ...prev, currentMinute: nextMinute }) : null);
                     timeoutId = setTimeout(() => {}, TICK_DELAY_MS);
                 }
@@ -225,7 +212,7 @@ export default function App() {
         setMatchState(null);
         setUserTeamName(null);
         setTeams(allTeams); 
-        setTransferMarket(TRANSFER_TARGETS); // Reset transfers
+        setTransferMarket(TRANSFER_TARGETS); 
     };
 
     const handleContinue = () => {
@@ -407,10 +394,8 @@ export default function App() {
             
             if (idx1 === -1 || idx2 === -1) return prev;
 
-            // Swap objects in array (to maintain array-based slot mapping for starters)
             [players[idx1], players[idx2]] = [players[idx2], players[idx1]];
 
-            // CRITICAL: Swap isStarter status relative to the INDEX position.
             const tempStarter = players[idx1].isStarter;
             players[idx1].isStarter = players[idx2].isStarter;
             players[idx2].isStarter = tempStarter;
@@ -424,7 +409,6 @@ export default function App() {
         setTeams(prev => ({ ...prev, [userTeamName]: { ...prev[userTeamName], players: newPlayerOrder } }));
     };
 
-    // ... Match Handling Logic ...
     const handleAdvanceWeek = async () => {
         setIsLoading(true);
         if (gameState === GameState.POST_MATCH && matchState && userTeamName) {
@@ -451,7 +435,6 @@ export default function App() {
 
     const handleStartMatch = () => {
         if (!currentFixture || !userTeam) return;
-        // Initial state
         setMatchState({ currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off." });
         setGameState(GameState.PLAYING); 
         setCurrentPlaybackMinute(0);
@@ -462,14 +445,12 @@ export default function App() {
     const handleResumeMatch = (shout?: TouchlineShout) => {
         if (shout) setActiveShout(shout);
         setGameState(GameState.PLAYING);
-        // Playback logic will naturally pick up where currentPlaybackMinute left off
     }
 
     const handlePauseMatch = () => {
         setGameState(GameState.PAUSED);
     }
 
-    // Used for "Sim to End" manual override
     const handleSimulateSegment = async (targetMinute: number, momentumShift: number = 0) => {
         if (!currentFixture || !matchState || !userTeam) return;
         setSimulationTargetMinute(targetMinute);
@@ -508,8 +489,6 @@ export default function App() {
         });
         setMatchState(prev => prev ? ({ ...prev, subsUsed: { home: isHome ? prev.subsUsed.home + 1 : prev.subsUsed.home, away: !isHome ? prev.subsUsed.away + 1 : prev.subsUsed.away }, events: [...prev.events, { id: Date.now(), minute: prev.currentMinute, type: 'sub', description: `SUB: ${playerIn.name} ON, ${playerOut.name} OFF`, teamName: userTeamName }] }) : null);
     };
-
-    // --- PLAYER NEGOTIATION HANDLERS ---
 
     const handleStartPlayerTalk = async (player: Player, context: 'transfer' | 'renewal') => {
         if (!userTeamName) return;
@@ -634,7 +613,6 @@ export default function App() {
                                 onPlayFirstHalf={handleStartMatch} 
                                 onPlaySecondHalf={handleResumeMatch} 
                                 onSimulateSegment={(target) => { 
-                                    // Manual override button click
                                     if(gameState === GameState.PAUSED) handleResumeMatch();
                                 }} 
                                 onNextMatch={handleAdvanceWeek} 

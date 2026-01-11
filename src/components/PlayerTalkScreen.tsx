@@ -40,6 +40,12 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
 
     const formatMoney = (amount: number) => `£${amount.toLocaleString()}`;
 
+    // Estimate market value if not present (approx 250x weekly wage for display)
+    const getMarketValue = () => {
+        if (!talk) return 0;
+        return talk.player.marketValue || talk.player.wage * 250;
+    }
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -120,7 +126,15 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
     
     const isRenewal = talk.context === 'renewal';
     const isFinalStage = talk.currentQuestionIndex === talk.questions.length - 1;
-    const currentQuestion = talkResult?.decision === 'counter' ? talkResult.reasoning : talk.questions[talk.currentQuestionIndex];
+    
+    // Determine displayed question
+    let currentQuestion = talk.questions[talk.currentQuestionIndex];
+    if (talkResult?.decision === 'counter') {
+        currentQuestion = talkResult.reasoning; // Show the agent's counter argument
+    } else if (isFinalStage) {
+        // OVERRIDE: Ensure the final question matches the UI context (Money)
+        currentQuestion = "We are ready to discuss financial terms. What is your offer?";
+    }
 
     return (
         <div className="mt-8 max-w-3xl mx-auto px-4">
@@ -157,9 +171,13 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                             <span className="text-gray-400">Age</span>
                             <span className="font-bold text-gray-200">{talk.player.age}</span>
                         </div>
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-xs mb-1">
                             <span className="text-gray-400">Current Wage</span>
                             <span className="font-bold text-gray-200">{formatMoney(talk.player.wage)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs border-t border-gray-700 pt-1 mt-1">
+                            <span className="text-gray-400">Est. Value</span>
+                            <span className="font-bold text-blue-300">{formatMoney(getMarketValue())}</span>
                         </div>
                     </div>
                 </div>

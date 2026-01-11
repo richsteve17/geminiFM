@@ -252,7 +252,12 @@ export const getInterviewQuestions = async (teamName: string, personality: strin
     const prompt = `
     You are the ${personality} Chairman of ${teamName} (${league}). 
     You are interviewing a new manager.
-    Generate 3 tough, specific questions based on the club's status and your personality.
+    Generate 3 TOUGH, SPECIFIC questions based on the club's status and your personality.
+    RULES:
+    1. Do NOT ask generic "What are your tactics?" questions.
+    2. If personality is 'Moneyball', ask about youth stats or resale value.
+    3. If 'Ambitious', ask about big signings.
+    
     Return JSON: { "questions": ["string", "string", "string"] }
     `;
     
@@ -281,10 +286,27 @@ export const evaluateInterview = async (teamName: string, qs: string[], ans: str
 };
 
 export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
-    const prompt = `Negotiation with ${p.name} (${p.rating} rated, ${p.personality}). 
-    Context: ${c} to ${t.name}.
-    Generate 3 distinct questions/concerns the player/agent has.
-    JSON: { "questions": [] }`;
+    const contextType = c === 'renewal' ? 'Contract Renewal' : 'Transfer Negotiation';
+    const prompt = `
+    You are the Agent representing ${p.name}.
+    Player Profile:
+    - Age: ${p.age}
+    - Rating: ${p.rating}/100
+    - Personality: ${p.personality}
+    - Current/Target Club: ${t.name} (Prestige: ${t.prestige})
+    - Context: ${contextType}
+    
+    Generate 3 distinct questions/concerns for the manager.
+    RULES:
+    1. Be hyper-specific to the player's career stage.
+       - If Age > 30: Ask about contract length security, coaching roles, or legacy.
+       - If Age < 21: Ask about guaranteed minutes, loan pathways, or development.
+       - If Rating > 85: Ask about ambition, signings, and Champions League.
+    2. Reflect the '${p.personality}' trait (e.g. 'Mercenary' asks about bonuses, 'Loyal' asks about club vision).
+    3. Do NOT ask generic "What is your philosophy?" questions.
+    
+    JSON Format: { "questions": ["string", "string", "string"] }`;
+
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(cleanJson(response.text)).questions;
 };
