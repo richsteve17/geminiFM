@@ -168,7 +168,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         </span>
                         {!isNationalTeam && (
                             <span className="text-[9px] text-gray-500">
-                                {player.contractExpires === 0 ? <span className="text-red-400 font-bold">Expiring!</span> : `${player.contractExpires}y`} · £{player.wage.toLocaleString()}/wk
+                                {player.contractExpires === 0 ? <span className="text-red-400 font-bold">Expiring!</span> : `${player.contractExpires}y`} · ${player.wage.toLocaleString()}/wk
                             </span>
                         )}
                     </div>
@@ -189,7 +189,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 <div>
                     <h2 className="text-xl font-bold text-green-400">{team.name}</h2>
                     {!isNationalTeam && (
-                        <p className="text-xs text-blue-400 font-mono font-bold uppercase">Balance: £{team.balance.toLocaleString()}</p>
+                        <p className="text-xs text-blue-400 font-mono font-bold uppercase">Balance: ${team.balance.toLocaleString()}</p>
                     )}
                 </div>
                 <div className="flex bg-gray-900 rounded p-1 border border-gray-700 shadow-inner">
@@ -320,9 +320,9 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Weekly Wage Budget</h4>
                             <div className="flex justify-between items-end mb-1">
                                 <span className={`text-2xl font-mono font-bold ${totalWageBill > wageBudget ? 'text-red-400' : 'text-green-400'}`}>
-                                    £{totalWageBill.toLocaleString()}
+                                    ${totalWageBill.toLocaleString()}
                                 </span>
-                                <span className="text-sm text-gray-500 font-mono mb-1"> / £{wageBudget.toLocaleString()}</span>
+                                <span className="text-sm text-gray-500 font-mono mb-1"> / ${wageBudget.toLocaleString()}</span>
                             </div>
                             <div className="w-full h-2 bg-gray-900 rounded-full overflow-hidden">
                                 <div 
@@ -339,11 +339,11 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         <div className="grid grid-cols-2 gap-3">
                             <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
                                 <p className="text-[10px] text-gray-500 uppercase">Squad Average</p>
-                                <p className="text-lg font-bold text-white">£{averageWage.toLocaleString()}</p>
+                                <p className="text-lg font-bold text-white">${averageWage.toLocaleString()}</p>
                             </div>
                             <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
                                 <p className="text-[10px] text-gray-500 uppercase">Highest Earner</p>
-                                <p className="text-lg font-bold text-yellow-400">£{highestEarner?.wage.toLocaleString()}</p>
+                                <p className="text-lg font-bold text-yellow-400">${highestEarner?.wage.toLocaleString()}</p>
                                 <p className="text-[10px] text-gray-400 truncate">{highestEarner?.name}</p>
                             </div>
                         </div>
@@ -356,7 +356,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                                 {team.players.slice().sort((a,b) => b.wage - a.wage).slice(0, 5).map(p => (
                                     <div key={p.name} className="flex justify-between items-center text-xs border-b border-gray-800 pb-1 last:border-0">
                                         <span className="text-gray-300">{p.name}</span>
-                                        <span className="font-mono text-gray-400">£{p.wage.toLocaleString()}</span>
+                                        <span className="font-mono text-gray-400">${p.wage.toLocaleString()}</span>
                                     </div>
                                 ))}
                                 <p className="text-[10px] text-center text-gray-500 pt-1 italic">...and {team.players.length - 5} others</p>

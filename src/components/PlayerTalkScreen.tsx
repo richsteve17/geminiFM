@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { PlayerTalk, NegotiationResult } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
@@ -37,7 +38,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
         }
     }, [talkResult]);
 
-    const formatMoney = (amount: number) => `£${amount.toLocaleString()}`;
+    const formatMoney = (amount: number) => `$${amount.toLocaleString()}`;
 
     // Estimate market value if not present (approx 250x weekly wage for display)
     const getMarketValue = () => {

@@ -294,10 +294,10 @@ export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
 export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any): Promise<NegotiationResult> => {
     const prompt = `
     Roleplay as the Agent for ${p.name}.
-    User offer: £${offer.wage}, ${offer.length} years.
+    User offer: $${offer.wage}, ${offer.length} years.
     History: ${JSON.stringify(ans)}.
     Context: Negotiation with ${t.name}.
-    Previous Wage: £${p.wage}.
+    Previous Wage: $${p.wage}.
     
     Return JSON: 
     { 
@@ -435,7 +435,7 @@ export const generateSocialPost = async (description: string, teamName: string, 
         const netProfit = revenue - TOTAL_GEN_COST;
         
         // Formatted String: "$3.00 (+$2.91 Net)"
-        parsed.estimatedEarnings = `£${revenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${netProfit > 0 ? '+' : ''}£${netProfit.toFixed(2)} Net)`;
+        parsed.estimatedEarnings = `$${revenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${netProfit > 0 ? '+' : ''}$${netProfit.toFixed(2)} Net)`;
         
         return parsed;
     } catch (e) {
@@ -445,7 +445,7 @@ export const generateSocialPost = async (description: string, teamName: string, 
             likes: "10K",
             shareCount: "500",
             sound: "Viral Sound",
-            estimatedEarnings: "£3.00 (+£2.91 Net)",
+            estimatedEarnings: "$3.00 (+$2.91 Net)",
             comments: []
         };
     }
