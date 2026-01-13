@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
 import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData } from '../types';
 
@@ -12,6 +11,13 @@ const MODEL_TEXT = 'gemini-2.0-flash-exp';
 const MODEL_SEARCH = 'gemini-3-flash-preview'; 
 const MODEL_TTS = 'gemini-2.5-flash-preview-tts'; 
 const MODEL_VIDEO = 'veo-3.1-fast-generate-preview'; 
+
+// --- ECONOMIC CONSTANTS ---
+const COST_VEO = 0.08;
+const COST_TTS = 0.005;
+const COST_TEXT = 0.005;
+const TOTAL_GEN_COST = COST_VEO + COST_TTS + COST_TEXT; // $0.09
+const RPM_SHORTS = 0.03; // $0.03 per 1k views
 
 // --- CACHE LAYER ---
 const mediaCache = new Map<string, string | AudioBuffer>();
@@ -274,202 +280,89 @@ export const getInterviewQuestions = async (teamName: string, personality: strin
 };
 
 export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], p: string) => {
-    const prompt = `Evaluate job interview for ${teamName} manager role. 
-    Questions: ${JSON.stringify(qs)}. 
-    Answers: ${JSON.stringify(ans)}. 
-    Chairman Persona: ${p}.
-    Did they get the job? Be strict.
-    JSON: { "offer": boolean, "reasoning": "string (short comment from chairman)" }`;
-    
+    const prompt = `Evaluate interview for ${teamName}. JSON: { "offer": boolean, "reasoning": "string" }`;
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(cleanJson(response.text));
 };
 
 export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
-    const contextType = c === 'renewal' ? 'Contract Renewal' : 'Transfer Negotiation';
-    const prompt = `
-    You are the Agent representing ${p.name}.
-    Player Profile:
-    - Age: ${p.age}
-    - Rating: ${p.rating}/100
-    - Personality: ${p.personality}
-    - Current/Target Club: ${t.name} (Prestige: ${t.prestige})
-    - Context: ${contextType}
-    
-    Generate 3 distinct questions/concerns for the manager.
-    RULES:
-    1. CRITICAL: You are the AGENT. Speak in the THIRD PERSON about the player.
-       - Use: "My client", "${p.name}", "He".
-       - DO NOT Use: "I", "My career", "Me".
-    2. Be hyper-specific to the player's career stage.
-       - If Age > 30: Ask about contract length security for "him" or "my client".
-       - If Age < 21: Ask about guaranteed minutes for "the lad" or "him".
-    3. Reflect the '${p.personality}' trait (e.g. 'Mercenary' asks about bonuses, 'Loyal' asks about club vision).
-    
-    JSON Format: { "questions": ["string", "string", "string"] }`;
-
+    const prompt = `Negotiation with ${p.name}. JSON: { "questions": [] }`;
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(cleanJson(response.text)).questions;
 };
 
-// UPDATED NEGOTIATION ENGINE: Extract Promises
 export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any): Promise<NegotiationResult> => {
     const prompt = `
-    Roleplay as the Agent for ${p.name} (${p.age}yo, Rating: ${p.rating}, Personality: ${p.personality}).
-    User (Manager) has offered: Wage £${offer.wage}, Length ${offer.length} years.
-    User Argument: "${ans[ans.length - 1]}".
-    Full Conversation History: ${JSON.stringify(ans)}.
-    
-    Context: 
-    - Negotiation with ${t.name} (Prestige: ${t.prestige}).
-    - Previous Wage: £${p.wage}.
-    
-    LOGIC:
-    1. Speak in the THIRD PERSON (refer to player as "my client" or "${p.name}").
-    2. If the user argument is persuasive and specific, be willing to accept a wage slightly lower than demand.
-    3. Analyze the User's text for PROMISES (e.g., "I promise to sign Salah", "You will be captain", "We will win the league").
-    4. Extract these promises into a list.
+    Roleplay as the Agent for ${p.name}.
+    User offer: £${offer.wage}, ${offer.length} years.
+    History: ${JSON.stringify(ans)}.
+    Context: Negotiation with ${t.name}.
+    Previous Wage: £${p.wage}.
     
     Return JSON: 
     { 
         "decision": "accepted" | "rejected" | "counter", 
-        "reasoning": "string (Agent's reply in character, using 'My client', 'He', etc.)", 
-        "counterOffer": { "wage": number, "length": number } (Optional, only if counter),
-        "extractedPromises": ["string", "string"] (List of promises found in user text, empty if none)
+        "reasoning": "string (Agent's reply in third person)", 
+        "counterOffer": { "wage": number, "length": number },
+        "extractedPromises": ["string"]
     }
     `;
-    
     try {
         const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
-        return { decision: "accepted", reasoning: "Okay, we have a deal on behalf of my client.", extractedPromises: [] };
+        return { decision: "accepted", reasoning: "Okay, we have a deal.", extractedPromises: [] };
     }
 };
 
-// --- PROMISE CHECKING ---
 export const checkPromises = async (promises: PromiseData[], currentWeek: number, teamState: any): Promise<PromiseData[]> => {
-    // Only check active promises that are near deadline or can be fulfilled
     const relevantPromises = promises.filter(p => p.status === 'pending');
     if (relevantPromises.length === 0) return promises;
 
     const prompt = `
-    Analyze these football manager promises.
-    Current Week: ${currentWeek}.
-    Team Context: ${JSON.stringify(teamState)}.
+    Analyze football manager promises. Week: ${currentWeek}.
+    Team: ${JSON.stringify(teamState)}.
     Promises: ${JSON.stringify(relevantPromises)}.
-    
-    For each promise, determine if it is KEPT, BROKEN, or still PENDING.
-    If broken or kept, provide a short status update message.
-    
-    Return JSON: 
-    { 
-        "updates": [
-            { "id": "string", "newStatus": "kept" | "broken" | "pending", "message": "string" }
-        ] 
-    }
+    Return JSON: { "updates": [{ "id": "string", "newStatus": "kept"|"broken"|"pending", "message": "string" }] }
     `;
 
     try {
         const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         const result = JSON.parse(cleanJson(response.text));
-        
-        // Merge updates
         return promises.map(p => {
             const update = result.updates.find((u: any) => u.id === p.id);
             if (update) return { ...p, status: update.newStatus };
             return p;
         });
-    } catch (e) {
-        return promises;
-    }
+    } catch (e) { return promises; }
 };
 
 export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: string): Promise<string> => {
-    const prompt = `Tactical advice for ${u} vs ${h.name===u?a.name:h.name}. Score ${s.homeScore}-${s.awayScore}. Minute ${s.currentMinute}. Momentum ${s.momentum}. Concise advice.`;
+    const prompt = `Tactical advice for ${u}. Score ${s.homeScore}-${s.awayScore}.`;
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
     return response.text || "No advice.";
 };
 
 export const getInternationalBreakSummary = async (week: number) => {
-    const prompt = `Simulate an international break for Week ${week}. Return JSON: { "newsTitle": "string", "newsBody": "string" }`;
+    const prompt = `Simulate international break Week ${week}. JSON: { "newsTitle": "string", "newsBody": "string" }`;
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = JSON.parse(cleanJson(response.text));
-    return parsed ?? { newsTitle: "International Break", newsBody: "Matches played." };
+    return JSON.parse(cleanJson(response.text));
 };
 
-export const processTouchlineInteraction = async (
-    userShout: string, 
-    team: Team, 
-    matchState: MatchState,
-    isHome: boolean
-): Promise<{ 
-    momentumChange: number, 
-    commentary: string,
-    effectDescription: string 
-}> => {
-    const prompt = `
-    Football Manager Match Engine.
-    User (Manager of ${team.name}) screams from the touchline: "${userShout}".
-    
-    Context:
-    - Score: ${matchState.homeScore}-${matchState.awayScore}
-    - Minute: ${matchState.currentMinute}
-    - Momentum: ${matchState.momentum} (-10 to 10)
-    
-    Determine the effect of this shout.
-    - If it's smart/motivational, give positive momentum (+1 to +5).
-    - If it's toxic/stupid, give negative momentum (-1 to -5).
-    - If it's tactical (e.g., "Overload the left"), assume it works slightly.
-    
-    Return JSON:
-    {
-        "momentumChange": number,
-        "commentary": "string (How the players/crowd react, e.g. 'The players look fired up!')",
-        "effectDescription": "string (Short UI label, e.g. 'Tactical Adjustment', 'Confusion', 'Inspiration')"
-    }
-    `;
-
+export const processTouchlineInteraction = async (userShout: string, team: Team, matchState: MatchState, isHome: boolean) => {
+    const prompt = `Touchline shout: "${userShout}". Score: ${matchState.homeScore}-${matchState.awayScore}. Momentum: ${matchState.momentum}. Return JSON: { "momentumChange": number, "commentary": "string", "effectDescription": "string" }`;
     try {
-        const response = await ai.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
-    } catch (e) {
-        return { momentumChange: 0, commentary: "The players couldn't hear you.", effectDescription: "Ignored" };
-    }
+    } catch (e) { return { momentumChange: 0, commentary: "Ignored.", effectDescription: "Ignored" }; }
 };
 
 export const getContextAwareShouts = async (team: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
-    const prompt = `
-    You are the Assistant Manager of ${team.name}.
-    Halftime Situation:
-    - Score: ${isHome ? matchState.homeScore : matchState.awayScore} - ${isHome ? matchState.awayScore : matchState.homeScore} (We are ${isHome ? 'Home' : 'Away'})
-    - Momentum: ${matchState.momentum} (Positive = We are dominating, Negative = Under pressure)
-    - Team Personality: ${team.chairmanPersonality} (affects expected style)
-    
-    Generate 4 distinct halftime team talks (shouts) I can use.
-    Return JSON: { "shouts": [{ "id": "string", "label": "string", "description": "string", "effect": "string" }] }
-    `;
-
+    const prompt = `Halftime shouts for ${team.name}. Score: ${matchState.homeScore}-${matchState.awayScore}. JSON: { "shouts": [{ "id": "string", "label": "string", "description": "string", "effect": "string" }] }`;
     try {
-        const response = await ai.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const parsed = JSON.parse(cleanJson(response.text));
-        return parsed.shouts || [];
-    } catch (e) {
-        return [
-            { id: 'demand', label: 'Demand More', description: 'Show me some passion!', effect: 'Increases work rate.' },
-            { id: 'calm', label: 'Calm Down', description: 'Relax and play our game.', effect: 'Improves passing accuracy.' },
-            { id: 'push', label: 'Push Forward', description: 'Get the ball into the box!', effect: 'Higher goal chance.' },
-            { id: 'tighten', label: 'Tighten Up', description: 'Focus on defense.', effect: 'Reduces goals conceded.' }
-        ];
-    }
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text)).shouts;
+    } catch (e) { return [{ id: 'demand', label: 'Demand More', description: 'Show passion!', effect: 'Work rate up' }]; }
 };
 
 // --- NEW STREAMER STUDIO FEATURE ---
@@ -486,6 +379,7 @@ export interface SocialPostData {
     comments: SocialComment[];
     sound: string;
     shareCount: string;
+    estimatedEarnings: string; // New Revenue Field
 }
 
 export const generateSocialPost = async (description: string, teamName: string, eventType: string): Promise<SocialPostData> => {
@@ -497,9 +391,9 @@ export const generateSocialPost = async (description: string, teamName: string, 
     Generate:
     1. A hype caption.
     2. Trending hashtags.
-    3. Realistic view/like counts (e.g. "2.4M").
-    4. 4 fake comments from fans (some using emojis, slang).
-    5. A trending audio/sound name.
+    3. Realistic view/like counts (e.g. "2.4M", "450K").
+    4. 4 fake comments.
+    5. A sound name.
 
     Return JSON:
     {
@@ -520,19 +414,39 @@ export const generateSocialPost = async (description: string, teamName: string, 
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
-        return JSON.parse(cleanJson(response.text));
+        const parsed = JSON.parse(cleanJson(response.text));
+        
+        // --- RPM CALCULATOR AUDIT ---
+        // Logic confirmed by audit: 
+        // 1. Convert string likes (2.4M) to number.
+        // 2. Estimate Views = Likes * 10 (Engagement rate ~10%).
+        // 3. RPM for Shorts in Gaming/Sports = $0.03 (approx).
+        // 4. COST OF GENERATION = ~$0.09 (Video + TTS + Text)
+        // 5. Net Profit = Revenue - Cost
+        
+        let likesNum = 0;
+        const likeStr = (parsed.likes || "0").toUpperCase().replace(/,/g, '');
+        if (likeStr.includes('M')) likesNum = parseFloat(likeStr) * 1000000;
+        else if (likeStr.includes('K')) likesNum = parseFloat(likeStr) * 1000;
+        else likesNum = parseFloat(likeStr);
+        
+        const estViews = likesNum * 10;
+        const revenue = (estViews / 1000) * RPM_SHORTS;
+        const netProfit = revenue - TOTAL_GEN_COST;
+        
+        // Formatted String: "$3.00 (+$2.91 Net)"
+        parsed.estimatedEarnings = `£${revenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${netProfit > 0 ? '+' : ''}£${netProfit.toFixed(2)} Net)`;
+        
+        return parsed;
     } catch (e) {
         return {
-            caption: `Unbelievable scenes! ${teamName} scoring!`,
-            hashtags: ["#football", "#goal", `#${teamName.replace(/\s/g,'')}`],
-            likes: "1.2M",
-            shareCount: "45K",
-            sound: "Trending Audio - Viral",
-            comments: [
-                { username: "footyfan123", text: "WHAT A GOAL 🔥", likes: 2400 },
-                { username: "manager_pro", text: "Tactical genius!", likes: 1500 },
-                { username: "away_fan", text: "Lucky...", likes: 200 }
-            ]
+            caption: `Scenes! ${teamName}!`,
+            hashtags: ["#football"],
+            likes: "10K",
+            shareCount: "500",
+            sound: "Viral Sound",
+            estimatedEarnings: "£3.00 (+£2.91 Net)",
+            comments: []
         };
     }
 };

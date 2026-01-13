@@ -9,6 +9,40 @@
 
 ---
 
+## 📊 The FIFA vs. GFM Audit (10-Month Cycle)
+
+*An economic analysis of the Sep-July football season lifecycle.*
+
+### 1. The Cost of Access
+Comparing a standard AAA title ($70 flat) vs. the GFM AI Subscription Model ($19.99/mo).
+
+| Timeline | FIFA / FC 25 | GFM '27 (Gemini Adv.) | Status |
+| :--- | :--- | :--- | :--- |
+| **Month 1 (Sep)** | $70.00 | $19.99 | ✅ GFM Cheaper |
+| **Month 3 (Nov)** | $70.00 | $59.97 | ✅ GFM Cheaper |
+| **Month 4 (Dec)** | $70.00 | $79.96 | 🚨 **Crossover Point** |
+| **Month 10 (July)** | **$70.00** | **$199.90** | ❌ GFM 2.8x Cost |
+
+**Insight:** For a pure consumer, GFM is significantly more expensive over a full season cycle.
+
+### 2. The Streamer Arbitrage (Profit Logic)
+Unlike FIFA, GFM provides **commercial rights** to generated assets. The math flips when the user becomes a creator.
+
+**Unit Economics of a Viral Clip:**
+*   **Cost to Generate (COGS):** ~$0.09 (Video $0.08 + Audio $0.005 + Text)
+*   **Revenue (RPM):** ~$0.03 per 1,000 Views (Gaming Shorts Average)
+
+| User Tier | Views/Clip | Monthly Clips | Est. Revenue | Sub Cost | **Net P/L** |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Casual** | 0 | 0 | $0.00 | -$19.99 | **-$19.99** |
+| **Aspiring** | 10,000 | 30 | $9.00 | -$19.99 | **-$10.99** |
+| **Partner** | 50,000 | 30 | $45.00 | -$19.99 | **+$25.01** |
+| **Pro** | 1,000,000 | 15 | $450.00 | -$19.99 | **+$430.01** |
+
+**Verdict:** The "Pro" user does not just play the game; they run a profitable content studio *using* the game. The break-even point is approximately **667,000 aggregated views per month**.
+
+---
+
 ## 🏗️ Architecture: Truth vs. Vibes
 
 To build a simulation that is both **fair** and **immersive**, we separate the "Truth" (State) from the "Vibes" (Presentation).
@@ -47,53 +81,6 @@ GFM '27 generates multimedia assets on-the-fly using Google models.
 *   **Model:** `gemini-3-flash-preview` + Google Search Tool
 *   **Trigger:** Toggle "Use Real World Network" in Scouting.
 *   **Behavior:** The AI searches the live internet (*"Fastest winger in the Premier League under 23"*) and maps real-world data into game-compatible stats.
-
----
-
-## 📊 Business & Unit Economics (Projected)
-
-*Analysis based on Google Cloud / Vertex AI public pricing models (Flash/Neural2/Video).*
-
-### 🏷️ Pricing Per Feature (Unit Cost)
-
-| Feature | Model | Est. Cost | Unit Definition |
-| :--- | :--- | :--- | :--- |
-| **Match Sim (Text)** | `gemini-2.0-flash` | **$0.0003** | Per 10-minute game chunk (2k tokens in, 500 out) |
-| **Scout Report** | `gemini-3-flash` (Grounding) | **$0.0350** | Per Google Search query execution |
-| **Commentary** | `gemini-2.5-flash-tts` | **$0.0050** | Per 15-second audio clip (Goal call) |
-| **Instant Replay** | `veo-3.1-preview` | **$0.0800** | Per 5-second video generation |
-
-### 📈 User Tiers & Margins
-
-Assumptions per User per Season (38 Matches):
-
-#### 1. Basic Scout (Free Tier)
-*   **Usage:** Text Sim Only. No Media. Fictional Scouting.
-*   **Cost/Season:** ~$0.25 (Text Tokens)
-*   **Revenue:** Ad-supported or Free to Play.
-
-#### 2. The Gaffer ($4.99/mo)
-*   **Usage:** Text Sim + 5 Real World Scouts/mo + Unlimited TTS Commentary.
-*   **Frequency:** 100 Goals/Season (TTS) + 20 Searches.
-*   **Cost/Season:**
-    *   Text: $0.25
-    *   TTS: $0.50 (100 clips * $0.005)
-    *   Search: $0.70 (20 searches * $0.035)
-    *   **Total:** ~$1.45
-*   **Margin:** ~70%
-
-#### 3. Galáctico Owner ($19.99/mo)
-*   **Usage:** Full Media Suite. Veo Replays enabled.
-*   **Frequency:** Generates 1 Video Replay per match (38/season).
-*   **Cost/Season:**
-    *   Base Costs: $1.45
-    *   Video: $3.04 (38 clips * $0.08)
-    *   **Total:** ~$4.49
-*   **Margin:** ~77% (High margin, but high compute risk)
-
-### 📉 Caching Assumptions
-*   **TTS Cache:** 15% Hit Rate. (Generic phrases like "What a goal!" are cached; specific names trigger generation).
-*   **Video Cache:** 100% Hit Rate for re-watches. Assets are generated once per event ID and stored in `mediaCache` (session) or S3 (production).
 
 ---
 
