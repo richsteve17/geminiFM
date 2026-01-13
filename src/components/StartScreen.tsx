@@ -14,14 +14,17 @@ interface StartScreenProps {
 
 const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect }) => {
     const [showDevlog, setShowDevlog] = useState(false);
+    const [selectedTeamPreview, setSelectedTeamPreview] = useState<string | null>(null);
 
-    const popularTeams = ['Chelsea', 'Philadelphia Union', 'Liverpool', 'Manchester City', 'Real Madrid', 'Arsenal', 'Inter Miami'];
+    const handleThemeSelect = (teamName: string) => {
+        setSelectedTeamPreview(teamName);
+        if (onThemeSelect) onThemeSelect(teamName);
+    };
 
     return (
         <div className="relative flex flex-col items-center justify-center min-h-[85vh] px-4 w-full max-w-7xl mx-auto overflow-hidden rounded-2xl bg-gray-900 border border-gray-800 shadow-2xl">
             
             {/* --- ATMOSPHERE LAYER --- */}
-            {/* Animated Grid Background */}
             <div className="absolute inset-0 pointer-events-none z-0 opacity-20" 
                  style={{ 
                      backgroundImage: 'linear-gradient(var(--team-secondary, rgba(0, 255, 127, 0.1)) 1px, transparent 1px), linear-gradient(90deg, var(--team-secondary, rgba(0, 255, 127, 0.1)) 1px, transparent 1px)', 
@@ -30,12 +33,10 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                  }}>
             </div>
             
-            {/* Scanline Overlay */}
             <div className="absolute inset-0 pointer-events-none z-0" 
                  style={{ background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 1px, transparent 1px, transparent 2px)' }}>
             </div>
 
-            {/* Radial Vignette */}
             <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(17,24,39,0.8)_80%)]"></div>
 
             {/* --- CONTENT LAYER --- */}
@@ -65,10 +66,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 </p>
             </div>
             
-            {/* Game Modes */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mb-12 z-10 px-4">
-                
-                {/* Mode 1 */}
                 <button onClick={onStartWorldCup} className="group relative overflow-hidden bg-gray-800/60 backdrop-blur-sm border border-gray-600 rounded-xl p-6 text-left transition-all hover:bg-gray-700/80 hover:border-yellow-500 hover:shadow-[0_0_20px_rgba(234,179,8,0.2)] hover:-translate-y-1">
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <GlobeAltIcon className="w-24 h-24 text-yellow-500" />
@@ -80,7 +78,6 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     </div>
                 </button>
 
-                {/* Mode 2 */}
                 <button onClick={onSelectTeam} className="group relative overflow-hidden bg-gray-800/60 backdrop-blur-sm border border-gray-600 rounded-xl p-6 text-left transition-all hover:bg-gray-700/80 hover:border-[var(--team-secondary,rgb(34,197,94))] hover:shadow-[0_0_20px_var(--team-secondary,rgba(34,197,94,0.2))] hover:-translate-y-1 ring-1 ring-white/10">
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <FootballIcon className="w-24 h-24 text-[var(--team-secondary,rgb(34,197,94))]" />
@@ -92,7 +89,6 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     </div>
                 </button>
 
-                {/* Mode 3 */}
                 <button onClick={onStartUnemployed} className="group relative overflow-hidden bg-gray-800/60 backdrop-blur-sm border border-gray-600 rounded-xl p-6 text-left transition-all hover:bg-gray-700/80 hover:border-purple-500 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)] hover:-translate-y-1">
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <BriefcaseIcon className="w-24 h-24 text-purple-500" />
@@ -108,20 +104,49 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
             {/* Footer */}
             <div className="z-10 w-full max-w-4xl text-center flex flex-col items-center">
                 
-                {/* Theme Selector */}
+                {/* Theme Selector - Full Team List */}
                 {onThemeSelect && (
-                    <div className="mb-6 flex flex-col items-center">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Select Favorite Club</label>
-                        <div className="flex flex-wrap justify-center gap-2">
-                            {popularTeams.map(t => (
-                                <button 
-                                    key={t}
-                                    onClick={() => onThemeSelect(t)}
-                                    className="px-3 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                    <div className="mb-6 flex flex-col items-center animate-in fade-in slide-in-from-bottom-4">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Select Favorite Club (Themes UI)</label>
+                        
+                        <div className="flex gap-4 items-center">
+                            <div className="relative inline-block w-64">
+                                <select 
+                                    onChange={(e) => handleThemeSelect(e.target.value)}
+                                    className="block appearance-none w-full bg-gray-800 border border-gray-600 hover:border-gray-500 px-4 py-2 pr-8 rounded shadow leading-tight focus:outline-none focus:shadow-outline text-gray-300 text-xs font-bold uppercase cursor-pointer"
+                                    value={selectedTeamPreview || ""}
                                 >
-                                    {t}
-                                </button>
-                            ))}
+                                    <option value="">Select a Club...</option>
+                                    {Object.keys(TEAMS).sort().map(name => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                </div>
+                            </div>
+
+                            {/* Theme Preview Badge */}
+                            {selectedTeamPreview && TEAMS[selectedTeamPreview]?.colors && (
+                                <div 
+                                    className="px-4 py-2 rounded shadow-lg border-l-4 flex items-center gap-2 animate-in zoom-in duration-300"
+                                    style={{
+                                        backgroundColor: TEAMS[selectedTeamPreview].colors?.primary,
+                                        borderColor: TEAMS[selectedTeamPreview].colors?.secondary,
+                                    }}
+                                >
+                                    <div 
+                                        className="text-xs font-black uppercase tracking-widest"
+                                        style={{ color: TEAMS[selectedTeamPreview].colors?.text }}
+                                    >
+                                        {selectedTeamPreview}
+                                    </div>
+                                    <div 
+                                        className="w-2 h-2 rounded-full animate-pulse"
+                                        style={{ backgroundColor: TEAMS[selectedTeamPreview].colors?.secondary }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

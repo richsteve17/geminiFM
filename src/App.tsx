@@ -585,11 +585,7 @@ export default function App() {
     };
 
     const worldCupTeams = NATIONAL_TEAMS.map(convertNationalTeam);
-    const clubTeams = Object.values(allTeams).filter(t => {
-        if (['Manchester City', 'Arsenal', 'Liverpool', 'Chelsea', 'Real Madrid', 'FC Barcelona', 'Bayern Munich', 'Juventus', 'AC Milan', 'Inter Milan', 'PSG', 'Inter Miami'].includes(t.name)) return true;
-        if (t.league === 'MLS' || t.league === 'Championship') return true;
-        return t.prestige >= 80; 
-    });
+    const clubTeams = Object.values(allTeams);
 
     const renderScreen = () => {
         switch (appScreen) {
