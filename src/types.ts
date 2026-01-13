@@ -86,9 +86,14 @@ export interface Team {
   balance: number; 
   objectives: string[];
   activePromises: PromiseData[]; // MEMORY SYSTEM
+  colors?: { // Dynamic Theming
+      primary: string;
+      secondary: string;
+      text: string;
+  };
 }
 
-export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance' | 'objectives' | 'activePromises'> {
+export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance' | 'objectives' | 'activePromises' | 'colors'> {
     countryCode: string;
     players: Player[];
     objectives?: string[];

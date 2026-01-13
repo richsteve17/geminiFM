@@ -91,7 +91,31 @@ export default function App() {
     // --- CHANT STATE ---
     const [currentChant, setCurrentChant] = useState<Chant | null>(null);
 
+    // --- THEMING STATE ---
+    const [activeTheme, setActiveTheme] = useState<{ primary: string, secondary: string, text: string } | null>(null);
+
     const userTeam = userTeamName ? teams[userTeamName] : null;
+
+    // Apply Theme Effects
+    useEffect(() => {
+        // If a user team is selected, use its colors.
+        // If not, allow manual override (via Start Screen) or default.
+        if (userTeam && userTeam.colors) {
+            setActiveTheme(userTeam.colors);
+        } else if (!userTeamName && !activeTheme) {
+            // Default Theme
+            setActiveTheme({ primary: '#1f2937', secondary: '#22c55e', text: '#FFFFFF' });
+        }
+    }, [userTeam, userTeamName]);
+
+    // Apply CSS Variables
+    useEffect(() => {
+        if (activeTheme) {
+            document.documentElement.style.setProperty('--team-primary', activeTheme.primary);
+            document.documentElement.style.setProperty('--team-secondary', activeTheme.secondary);
+            document.documentElement.style.setProperty('--team-text', activeTheme.text);
+        }
+    }, [activeTheme]);
     
     // --- LIVE SIMULATION LOOP ---
     useEffect(() => {
@@ -213,6 +237,7 @@ export default function App() {
         setUserTeamName(null);
         setTeams(allTeams); 
         setTransferMarket(TRANSFER_TARGETS); 
+        setActiveTheme({ primary: '#1f2937', secondary: '#22c55e', text: '#FFFFFF' }); // Reset theme
     };
 
     const handleContinue = () => {
@@ -447,10 +472,6 @@ export default function App() {
         setGameState(GameState.PLAYING);
     }
 
-    const handlePauseMatch = () => {
-        setGameState(GameState.PAUSED);
-    }
-
     const handleSimulateSegment = async (targetMinute: number, momentumShift: number = 0) => {
         if (!currentFixture || !matchState || !userTeam) return;
         setSimulationTargetMinute(targetMinute);
@@ -574,7 +595,15 @@ export default function App() {
         switch (appScreen) {
             case AppScreen.START_SCREEN: return (
                 <div>
-                    <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />
+                    <StartScreen 
+                        onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} 
+                        onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} 
+                        onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} 
+                        onThemeSelect={(teamName) => {
+                            const team = allTeams[teamName];
+                            if(team && team.colors) setActiveTheme(team.colors);
+                        }}
+                    />
                     {localStorage.getItem('gfm_save_v1') && (
                         <div className="text-center pb-8 -mt-8">
                             <button onClick={handleContinue} className="text-sm font-bold text-blue-400 hover:text-blue-300 underline">Continue Saved Career</button>
@@ -636,7 +665,9 @@ export default function App() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-900 text-gray-200 p-4">
+        <div className="min-h-screen bg-gray-900 text-gray-200 p-4" style={{ 
+            backgroundImage: activeTheme ? `radial-gradient(circle at 50% 0%, ${activeTheme.primary}40 0%, #111827 60%)` : undefined 
+        }}>
             <Header onQuit={appScreen !== AppScreen.START_SCREEN ? handleQuit : undefined} showQuit={appScreen !== AppScreen.START_SCREEN} onSave={saveGame} onToggleGuide={() => setShowMechanicsGuide(true)} managerReputation={userTeamName ? managerReputation : undefined} />
             {renderScreen()}
         </div>
