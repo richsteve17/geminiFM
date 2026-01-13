@@ -50,6 +50,53 @@ GFM '27 generates multimedia assets on-the-fly using Google models.
 
 ---
 
+## 📊 Business & Unit Economics (Projected)
+
+*Analysis based on Google Cloud / Vertex AI public pricing models (Flash/Neural2/Video).*
+
+### 🏷️ Pricing Per Feature (Unit Cost)
+
+| Feature | Model | Est. Cost | Unit Definition |
+| :--- | :--- | :--- | :--- |
+| **Match Sim (Text)** | `gemini-2.0-flash` | **$0.0003** | Per 10-minute game chunk (2k tokens in, 500 out) |
+| **Scout Report** | `gemini-3-flash` (Grounding) | **$0.0350** | Per Google Search query execution |
+| **Commentary** | `gemini-2.5-flash-tts` | **$0.0050** | Per 15-second audio clip (Goal call) |
+| **Instant Replay** | `veo-3.1-preview` | **$0.0800** | Per 5-second video generation |
+
+### 📈 User Tiers & Margins
+
+Assumptions per User per Season (38 Matches):
+
+#### 1. Basic Scout (Free Tier)
+*   **Usage:** Text Sim Only. No Media. Fictional Scouting.
+*   **Cost/Season:** ~$0.25 (Text Tokens)
+*   **Revenue:** Ad-supported or Free to Play.
+
+#### 2. The Gaffer ($4.99/mo)
+*   **Usage:** Text Sim + 5 Real World Scouts/mo + Unlimited TTS Commentary.
+*   **Frequency:** 100 Goals/Season (TTS) + 20 Searches.
+*   **Cost/Season:**
+    *   Text: $0.25
+    *   TTS: $0.50 (100 clips * $0.005)
+    *   Search: $0.70 (20 searches * $0.035)
+    *   **Total:** ~$1.45
+*   **Margin:** ~70%
+
+#### 3. Galáctico Owner ($19.99/mo)
+*   **Usage:** Full Media Suite. Veo Replays enabled.
+*   **Frequency:** Generates 1 Video Replay per match (38/season).
+*   **Cost/Season:**
+    *   Base Costs: $1.45
+    *   Video: $3.04 (38 clips * $0.08)
+    *   **Total:** ~$4.49
+*   **Margin:** ~77% (High margin, but high compute risk)
+
+### 📉 Caching Assumptions
+*   **TTS Cache:** 15% Hit Rate. (Generic phrases like "What a goal!" are cached; specific names trigger generation).
+*   **Video Cache:** 100% Hit Rate for re-watches. Assets are generated once per event ID and stored in `mediaCache` (session) or S3 (production).
+
+---
+
 ## 🛠️ Technical Implementation
 
 ### Prerequisites
@@ -68,14 +115,6 @@ VITE_GEMINI_API_KEY=your_api_key_here
 npm install
 npm run dev
 ```
-
----
-
-## ⚠️ Cost & Privacy Note
-
-*   **Token Usage:** The deterministic simulation is free (local CPU). Narrative generation uses text tokens.
-*   **Media Costs:** Generating Video (Veo) and Audio (TTS) consumes significantly more quota than text.
-*   **Safety:** The app includes a simple in-memory cache to prevent re-generating the same media asset twice, protecting your API quota.
 
 ---
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { PlayerTalk, NegotiationResult } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
@@ -139,153 +138,81 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
     return (
         <div className="mt-8 max-w-3xl mx-auto px-4">
             <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-white mb-2 flex items-center justify-center gap-2">
-                    <DocumentCheckIcon className="w-6 h-6 text-green-400" />
-                    {isRenewal ? `Contract Renewal: ${talk.player.name}` : `Negotiations: ${talk.player.name}`}
+                <h2 className="text-2xl font-bold text-white mb-2">
+                    {isRenewal ? `Contract Talks: ${talk.player.name}` : `Negotiations: ${talk.player.name}`}
                 </h2>
+                <p className="text-lg text-gray-400">
+                    Agent Status: <span className="text-blue-400 font-bold">{talk.player.personality}</span>
+                </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Left Panel: Agent Chat */}
-                <div className="md:col-span-1 space-y-4">
-                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 shadow-lg">
-                        <div className="flex items-center gap-3 mb-3 border-b border-gray-700 pb-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-900 flex items-center justify-center">
-                                <UserIcon className="w-6 h-6 text-blue-300" />
-                            </div>
-                            <div>
-                                <p className="font-bold text-blue-400 text-sm">The Agent</p>
-                                <p className="text-[10px] text-gray-400 uppercase tracking-wider">{talk.player.personality}</p>
-                            </div>
-                        </div>
-                        <p className="text-white text-sm italic">"{currentQuestion}"</p>
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 shadow-xl">
+                {/* Agent Message Bubble */}
+                <div className="flex items-start gap-4 mb-6">
+                    <div className="w-12 h-12 rounded-full bg-blue-900 flex items-center justify-center flex-shrink-0 border-2 border-blue-700">
+                         <UserIcon className="w-6 h-6 text-blue-300" />
                     </div>
-
-                    <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-800">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Player Stats</p>
-                        <div className="flex justify-between text-xs mb-1">
-                            <span className="text-gray-400">Rating</span>
-                            <span className="font-bold text-green-400">{talk.player.rating}</span>
-                        </div>
-                        <div className="flex justify-between text-xs mb-1">
-                            <span className="text-gray-400">Age</span>
-                            <span className="font-bold text-gray-200">{talk.player.age}</span>
-                        </div>
-                        <div className="flex justify-between text-xs mb-1">
-                            <span className="text-gray-400">Current Wage</span>
-                            <span className="font-bold text-gray-200">{formatMoney(talk.player.wage)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs border-t border-gray-700 pt-1 mt-1">
-                            <span className="text-gray-400">Est. Value</span>
-                            <span className="font-bold text-blue-300">{formatMoney(getMarketValue())}</span>
-                        </div>
+                    <div className="bg-gray-700/50 p-4 rounded-lg rounded-tl-none border border-gray-600 flex-grow">
+                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Agent</p>
+                        <p className="text-white text-lg leading-relaxed">"{currentQuestion}"</p>
                     </div>
                 </div>
-
-                {/* Right Panel: Negotiation Interface */}
-                <div className="md:col-span-2 bg-gray-800/80 border border-gray-700 rounded-xl p-6 shadow-xl">
-                    {!isFinalStage && !talkResult ? (
-                        // Phase 1: Chatting
-                        <div className="h-full flex flex-col justify-between">
-                            <div className="mb-4">
-                                <h3 className="text-lg font-bold text-white mb-2">Build a Relationship</h3>
-                                <p className="text-sm text-gray-400">Before discussing numbers, reassure the agent about your vision.</p>
-                            </div>
-                            <form onSubmit={handleSubmit}>
-                                <textarea
-                                    value={currentAnswer}
-                                    onChange={(e) => setCurrentAnswer(e.target.value)}
-                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-green-500 focus:border-green-500 h-32 resize-none"
-                                    placeholder="Type your response..."
-                                    required
-                                />
-                                <button type="submit" className="mt-4 w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors">
-                                    Send Response
-                                </button>
-                            </form>
+                
+                {/* User Response Area */}
+                <form onSubmit={handleSubmit} className="border-t border-gray-700/50 pt-6">
+                    <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-full bg-green-900 flex items-center justify-center flex-shrink-0 border-2 border-green-700">
+                             <UserIcon className="w-6 h-6 text-green-300" />
                         </div>
-                    ) : (
-                        // Phase 2: The Contract Table (Includes Counter Offers)
-                        <div className="space-y-6">
-                            {talkResult?.decision === 'counter' && (
-                                <div className="bg-orange-900/30 border border-orange-500 p-3 rounded-lg mb-4 text-sm text-orange-200 animate-pulse">
-                                    <strong>Counter Offer:</strong> The agent has proposed new terms. Adjust your offer or argue your case.
+                        <div className="flex-grow space-y-4">
+                            
+                            {/* IF FINAL STAGE: Show Money Controls */}
+                            {(isFinalStage || talkResult?.decision === 'counter') && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-900/50 p-4 rounded-lg border border-gray-600 mb-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Weekly Wage Offer</label>
+                                        <div className="flex items-center gap-2">
+                                            <button type="button" onClick={() => setWageOffer(w => Math.max(0, w - 5000))} className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">-</button>
+                                            <input 
+                                                type="number" 
+                                                value={wageOffer} 
+                                                onChange={(e) => setWageOffer(parseInt(e.target.value) || 0)}
+                                                className="w-full bg-gray-800 text-white font-mono text-center p-2 rounded border border-gray-600"
+                                            />
+                                            <button type="button" onClick={() => setWageOffer(w => w + 5000)} className="p-2 bg-green-900/30 text-green-400 rounded hover:bg-green-900/50">+</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Contract Length</label>
+                                        <div className="flex items-center gap-2">
+                                            <button type="button" onClick={() => setContractLength(l => Math.max(1, l - 1))} className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">-</button>
+                                            <span className="w-full text-center font-bold text-white bg-gray-800 p-2 rounded border border-gray-600">{contractLength} Years</span>
+                                            <button type="button" onClick={() => setContractLength(l => Math.min(7, l + 1))} className="p-2 bg-green-900/30 text-green-400 rounded hover:bg-green-900/50">+</button>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
-                            <div className="flex items-center justify-between border-b border-gray-700 pb-4">
-                                <h3 className="text-lg font-bold text-white">Contract Offer</h3>
-                                <div className="text-right">
-                                    <p className="text-[10px] text-gray-500 uppercase">Total Value</p>
-                                    <p className="text-sm font-mono text-gray-300">
-                                        £{((wageOffer * 52) * contractLength).toLocaleString()}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Wage Slider */}
                             <div>
-                                <div className="flex justify-between mb-2">
-                                    <label className="text-sm font-bold text-gray-300">Weekly Wage</label>
-                                    <span className={`text-xl font-mono font-bold ${wageOffer > talk.player.wage * 1.2 ? 'text-green-400' : wageOffer < talk.player.wage ? 'text-red-400' : 'text-white'}`}>
-                                        {formatMoney(wageOffer)}
-                                    </span>
-                                </div>
-                                <input 
-                                    type="range" 
-                                    min={Math.floor(talk.player.wage * 0.5)} 
-                                    max={Math.floor(talk.player.wage * 3)} 
-                                    step={1000}
-                                    value={wageOffer} 
-                                    onChange={(e) => setWageOffer(Number(e.target.value))}
-                                    className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-green-500"
-                                />
-                                <div className="flex justify-between text-[10px] text-gray-500 mt-1">
-                                    <span>{formatMoney(talk.player.wage * 0.5)}</span>
-                                    <span>Current: {formatMoney(talk.player.wage)}</span>
-                                    <span>{formatMoney(talk.player.wage * 3)}</span>
-                                </div>
-                            </div>
-
-                            {/* Contract Length */}
-                            <div>
-                                <label className="block text-sm font-bold text-gray-300 mb-2">Contract Length</label>
-                                <div className="flex gap-2">
-                                    {[1, 2, 3, 4, 5].map(year => (
-                                        <button
-                                            key={year}
-                                            type="button"
-                                            onClick={() => setContractLength(year)}
-                                            className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${
-                                                contractLength === year 
-                                                ? 'bg-blue-600 text-white shadow-inner ring-2 ring-blue-400' 
-                                                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                                            }`}
-                                        >
-                                            {year} Yr
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Final Comment & Submit */}
-                            <form onSubmit={handleSubmit} className="pt-4 border-t border-gray-700">
-                                <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Negotiation Argument</label>
-                                <input
-                                    type="text"
+                                <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Your Response {isFinalStage && "(Optional Reasoning)"}</label>
+                                <textarea
                                     value={currentAnswer}
                                     onChange={(e) => setCurrentAnswer(e.target.value)}
-                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white mb-4 text-sm focus:ring-green-500 focus:border-green-500"
-                                    placeholder="E.g. 'This is fair because you will be our star player'..."
+                                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-green-500 focus:border-green-500 transition-colors"
+                                    placeholder={isFinalStage ? "E.g. 'We are building the team around you.'" : "Type your answer..."}
+                                    rows={3}
+                                    required={!isFinalStage}
                                 />
-                                <button type="submit" className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors shadow-lg text-lg flex items-center justify-center gap-2">
-                                    <DocumentCheckIcon className="w-5 h-5" />
-                                    Submit Offer
+                            </div>
+                            
+                            <div className="flex justify-end">
+                                <button type="submit" className="py-3 px-8 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors shadow-lg shadow-green-900/20 flex items-center gap-2">
+                                    {(isFinalStage || talkResult?.decision === 'counter') ? <><DocumentCheckIcon className="w-5 h-5"/> Submit Offer</> : "Reply"}
                                 </button>
-                            </form>
+                            </div>
                         </div>
-                    )}
-                </div>
+                    </div>
+                </form>
             </div>
         </div>
     );
