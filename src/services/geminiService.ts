@@ -298,12 +298,13 @@ export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
     
     Generate 3 distinct questions/concerns for the manager.
     RULES:
-    1. Be hyper-specific to the player's career stage.
-       - If Age > 30: Ask about contract length security, coaching roles, or legacy.
-       - If Age < 21: Ask about guaranteed minutes, loan pathways, or development.
-       - If Rating > 85: Ask about ambition, signings, and Champions League.
-    2. Reflect the '${p.personality}' trait (e.g. 'Mercenary' asks about bonuses, 'Loyal' asks about club vision).
-    3. Do NOT ask generic "What is your philosophy?" questions.
+    1. CRITICAL: You are the AGENT. Speak in the THIRD PERSON about the player.
+       - Use: "My client", "${p.name}", "He".
+       - DO NOT Use: "I", "My career", "Me".
+    2. Be hyper-specific to the player's career stage.
+       - If Age > 30: Ask about contract length security for "him" or "my client".
+       - If Age < 21: Ask about guaranteed minutes for "the lad" or "him".
+    3. Reflect the '${p.personality}' trait (e.g. 'Mercenary' asks about bonuses, 'Loyal' asks about club vision).
     
     JSON Format: { "questions": ["string", "string", "string"] }`;
 
@@ -324,14 +325,15 @@ export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[],
     - Previous Wage: £${p.wage}.
     
     LOGIC:
-    1. If the user argument is persuasive and specific (mentions playing time, role, legacy), be willing to accept a wage slightly lower than demand.
-    2. Analyze the User's text for PROMISES (e.g., "I promise to sign Salah", "You will be captain", "We will win the league").
-    3. Extract these promises into a list.
+    1. Speak in the THIRD PERSON (refer to player as "my client" or "${p.name}").
+    2. If the user argument is persuasive and specific, be willing to accept a wage slightly lower than demand.
+    3. Analyze the User's text for PROMISES (e.g., "I promise to sign Salah", "You will be captain", "We will win the league").
+    4. Extract these promises into a list.
     
     Return JSON: 
     { 
         "decision": "accepted" | "rejected" | "counter", 
-        "reasoning": "string (Agent's reply in character)", 
+        "reasoning": "string (Agent's reply in character, using 'My client', 'He', etc.)", 
         "counterOffer": { "wage": number, "length": number } (Optional, only if counter),
         "extractedPromises": ["string", "string"] (List of promises found in user text, empty if none)
     }
@@ -341,7 +343,7 @@ export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[],
         const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
-        return { decision: "accepted", reasoning: "Okay, we have a deal.", extractedPromises: [] };
+        return { decision: "accepted", reasoning: "Okay, we have a deal on behalf of my client.", extractedPromises: [] };
     }
 };
 
