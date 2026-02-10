@@ -1,10 +1,45 @@
+
 # ⚽ Gemini Football Manager '27
 **The World's First Multimedia AI Sports Simulation**
 
-> **Current Build:** v2.4 (Galácticos Media Update)
+> **Current Build:** v2.6 (Stability & Live Engine Update)
 > **Engine:** React 19 · TypeScript · Google GenAI SDK · Tailwind CSS
 
 **Gemini Football Manager '27 (GFM '27)** is a hybrid simulation engine. It combines a rigid, deterministic mathematical core with a creative, generative AI layer to produce a football world that feels alive, visually distinct, and narratively deep.
+
+---
+
+## 📊 The FIFA vs. GFM Audit (10-Month Cycle)
+
+*An economic analysis of the Sep-July football season lifecycle.*
+
+### 1. The Cost of Access
+Comparing a standard AAA title ($70 flat) vs. the GFM AI Subscription Model ($19.99/mo).
+
+| Timeline | FIFA / FC 25 | GFM '27 (Gemini Adv.) | Status |
+| :--- | :--- | :--- | :--- |
+| **Month 1 (Sep)** | $70.00 | $19.99 | ✅ GFM Cheaper |
+| **Month 3 (Nov)** | $70.00 | $59.97 | ✅ GFM Cheaper |
+| **Month 4 (Dec)** | $70.00 | $79.96 | 🚨 **Crossover Point** |
+| **Month 10 (July)** | **$70.00** | **$199.90** | ❌ GFM 2.8x Cost |
+
+**Insight:** For a pure consumer, GFM is significantly more expensive over a full season cycle.
+
+### 2. The Streamer Arbitrage (Profit Logic)
+Unlike FIFA, GFM provides **commercial rights** to generated assets. The math flips when the user becomes a creator.
+
+**Unit Economics of a Viral Clip:**
+*   **Cost to Generate (COGS):** ~$0.09 (Video $0.08 + Audio $0.005 + Text)
+*   **Revenue (RPM):** ~$0.03 per 1,000 Views (Gaming Shorts Average)
+
+| User Tier | Views/Clip | Monthly Clips | Est. Revenue | Sub Cost | **Net P/L** |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Casual** | 0 | 0 | $0.00 | -$19.99 | **-$19.99** |
+| **Aspiring** | 10,000 | 30 | $9.00 | -$19.99 | **-$10.99** |
+| **Partner** | 50,000 | 30 | $45.00 | -$19.99 | **+$25.01** |
+| **Pro** | 1,000,000 | 15 | $450.00 | -$19.99 | **+$430.01** |
+
+**Verdict:** The "Pro" user does not just play the game; they run a profitable content studio *using* the game. The break-even point is approximately **667,000 aggregated views per month**.
 
 ---
 
@@ -20,21 +55,21 @@ To build a simulation that is both **fair** and **immersive**, we separate the "
 
 ### 🟣 The Vibes (Generative Layer)
 *The presentation layer that creates the illusion of a broadcast.*
-1.  **Match Narrative:** `gemini-2.0-flash-exp` receives the math (e.g., *Momentum: +8*) and converts it into a story (*"The home fans are deafening as the team presses high!"*).
+1.  **Live Match Narrative:** `gemini-2.0-flash-exp` receives the math (e.g., *Momentum: +8*) and converts it into a story (*"The home fans are deafening as the team presses high!"*).
 2.  **The Pitch:** The moving dots are **not** physics simulations. They are CSS animations driven by the "Momentum" variable to visualize the flow of the game.
 3.  **Atmosphere:** The decibel meter is a reactive visualizer based on the scoreline, not real audio analysis.
 
 ---
 
-## 📡 The Media Layer (New in v2.4)
+## 📡 The Media Layer (v2.5+)
 
-GFM '27 now generates multimedia assets on-the-fly using specific Google models.
+GFM '27 generates multimedia assets on-the-fly using Google models.
 
-### 1. 🎙️ AI Commentary (TTS)
+### 1. 🎙️ AI Commentary & Viral Voiceover
 *   **Model:** `gemini-2.5-flash-preview-tts`
-*   **Trigger:** Click the 🎧 icon on a Goal event.
-*   **Behavior:** The text description is sent to the model with an "Excited Commentator" system instruction. The resulting raw PCM audio is decoded and played in the browser.
-*   **Caching:** Audio clips are cached in memory. Clicking the button twice does **not** cost extra tokens.
+*   **Trigger:** Click the 🎧 icon on a Goal event OR open a Viral Clip.
+*   **Behavior:** The app synthesizes "Excited Commentator" audio for standard replays, and "Viral Hype" voiceovers for vertical social clips.
+*   **Caching:** Audio clips are cached in memory to save quota.
 
 ### 2. 📺 Instant Replay (Veo)
 *   **Model:** `veo-3.1-fast-generate-preview`
@@ -45,7 +80,7 @@ GFM '27 now generates multimedia assets on-the-fly using specific Google models.
 ### 3. 🌍 Real-World Scouting (Grounding)
 *   **Model:** `gemini-3-flash-preview` + Google Search Tool
 *   **Trigger:** Toggle "Use Real World Network" in Scouting.
-*   **Behavior:** Instead of inventing players, the AI queries Google Search (*"Current top scorer Eredivisie under 21"*) and maps the real-world data into game-compatible stats.
+*   **Behavior:** The AI searches the live internet (*"Fastest winger in the Premier League under 23"*) and maps real-world data into game-compatible stats.
 
 ---
 
@@ -67,14 +102,6 @@ VITE_GEMINI_API_KEY=your_api_key_here
 npm install
 npm run dev
 ```
-
----
-
-## ⚠️ Cost & Privacy Note
-
-*   **Token Usage:** The deterministic simulation is free (local CPU). Narrative generation uses text tokens.
-*   **Media Costs:** Generating Video (Veo) and Audio (TTS) consumes significantly more quota than text.
-*   **Safety:** The app includes a simple in-memory cache to prevent re-generating the same media asset twice, protecting your API quota.
 
 ---
 

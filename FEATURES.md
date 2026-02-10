@@ -1,14 +1,24 @@
 
-# 📘 Feature Guide: Galácticos Media Update (v2.4)
+# 📘 Feature Guide: Galácticos Media Update (v2.6)
 
-## 📡 Generative Media Suite
+## 📡 Generative Media Suite & Creator Economy
 
-The v2.4 update introduces the "Media Layer," allowing the game to generate assets on the fly.
+The v2.6 update fully integrates the "Streamer Mode" mechanics, allowing users to run a profitable content studio within the game.
+
+### 💰 The Streamer Arbitrage Engine (New in v2.6)
+*   **Net Profit Calculation:** The Viral Clip Studio now calculates the real-world profitability of your content.
+    *   **Revenue:** Uses an estimated RPM ($0.03 per 1k views) for Gaming Shorts.
+    *   **COGS (Cost of Goods Sold):** Subtracts the real API cost of generation ($0.08 Veo + $0.005 TTS + $0.005 Text).
+    *   **Result:** You see a live "Net Profit" metric (e.g., "+$2.91 Net") on every clip you generate.
 
 ### 🎙️ AI Commentary (TTS)
 *   **Model:** `gemini-2.5-flash-preview-tts`
 *   **How it works:** When a goal is scored, the text description (e.g., "Haaland smashes it top bin") is sent to the TTS model with a specific "Excited Commentator" system instruction.
 *   **Playback:** The app decodes the raw PCM audio stream directly in the browser using the Web Audio API.
+
+### 🎥 Streamer Studio Audio
+*   **Feature:** TikTok-style viral clips now include auto-generated voiceovers.
+*   **Logic:** When you click the purple "Clip It" button, the AI generates a hype caption ("SCENES!"). This caption is immediately sent to the TTS engine to create a voiceover that plays automatically when the vertical video loads.
 
 ### 📺 Instant Replay (Veo)
 *   **Model:** `veo-3.1-fast-generate-preview`
@@ -17,6 +27,18 @@ The v2.4 update introduces the "Media Layer," allowing the game to generate asse
     2.  This text is enhanced with visual prompts ("Cinematic angle, professional stadium lighting, 4k").
     3.  Veo generates a video URI.
     4.  The app polls for completion and overlays a video player.
+
+---
+
+## 🎨 Dynamic Club Theming (New in v2.6)
+
+The UI now adapts to your club's identity.
+
+*   **Logic:** Every club has a defined `primary`, `secondary`, and `text` color palette in the database.
+*   **Behavior:**
+    *   **Main Menu:** Selecting a "Favorite Club" instantly themes the Start Screen background and accents.
+    *   **Gameplay:** When managing a team (e.g., Chelsea), the header, buttons, and background gradients shift to Royal Blue and Gold.
+    *   **Fallback:** Defaults to the classic "Manager Green" if no team is selected.
 
 ---
 

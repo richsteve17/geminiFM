@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
-import type { Team, MatchState, Player, MatchEvent, TournamentStage } from '../types';
+import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData } from '../types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
@@ -13,15 +12,20 @@ const MODEL_SEARCH = 'gemini-3-flash-preview';
 const MODEL_TTS = 'gemini-2.5-flash-preview-tts'; 
 const MODEL_VIDEO = 'veo-3.1-fast-generate-preview'; 
 
+// --- ECONOMIC CONSTANTS ---
+const COST_VEO = 0.08;
+const COST_TTS = 0.005;
+const COST_TEXT = 0.005;
+const TOTAL_GEN_COST = COST_VEO + COST_TTS + COST_TEXT; // $0.09
+const RPM_SHORTS = 0.03; // $0.03 per 1k views
+
 // --- CACHE LAYER ---
-// Stores audio buffers for TTS and signed URLs for Video based on Event ID
 const mediaCache = new Map<string, string | AudioBuffer>();
 
 // --- MEDIA HELPERS ---
 
 const cleanJson = (text?: string) => (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
 
-// Decodes base64 string to Uint8Array
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -32,7 +36,6 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
-// Decodes audio data for playback
 async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -54,11 +57,40 @@ async function decodeAudioData(
 
 // --- CORE SIMULATION ---
 
-export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, currentMatchState: MatchState, targetMinute: number, context: any) => {
+export const simulateMatchSegment = async (
+    homeTeam: Team, 
+    awayTeam: Team, 
+    currentMatchState: MatchState, 
+    targetMinute: number, 
+    context: { 
+        shout?: string, 
+        userTeamName: string | null,
+        tacticalContext?: string 
+    }
+) => {
+    // Determine context for short bursts
+    const userInstruction = context.shout ? `User Shout: "${context.shout}" (Factor this into momentum).` : "";
+    const tacticalInfo = context.tacticalContext ? `TACTICAL REALITY CHECK:\n${context.tacticalContext}` : "";
+    
     const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
-    Current Minute: ${currentMatchState.currentMinute} to ${targetMinute}. 
-    Score: ${currentMatchState.homeScore}-${currentMatchState.awayScore}.
-    Respond ONLY in JSON format: { "homeScoreAdded": number, "awayScoreAdded": number, "momentum": number, "tacticalAnalysis": "string", "events": [{ "minute": number, "type": "goal"|"commentary"|"card"|"injury"|"whistle", "teamName": "string", "description": "string", "player": "string" }] }`;
+    Current State: Minute ${currentMatchState.currentMinute}, Score ${currentMatchState.homeScore}-${currentMatchState.awayScore}, Momentum ${currentMatchState.momentum}.
+    Task: Simulate ONLY from minute ${currentMatchState.currentMinute + 1} to ${targetMinute}.
+    
+    ${userInstruction}
+    ${tacticalInfo}
+    
+    CRITICAL INSTRUCTIONS:
+    1. If a team has low Tactical Efficiency (<50%), they MUST make mistakes.
+    2. If a player is Out of Position (e.g. ST in Goal), specific events MUST mention them failing at their role (e.g. "Salah drops a simple catch").
+    3. Events must be realistic to the clock. Don't score 5 goals in 10 minutes unless efficiency is 0%.
+    
+    Respond ONLY in JSON format: { 
+        "homeScoreAdded": number, 
+        "awayScoreAdded": number, 
+        "momentum": number (new value -10 to 10), 
+        "tacticalAnalysis": "string (one short sentence about the flow)", 
+        "events": [{ "minute": number, "type": "goal"|"commentary"|"card"|"injury"|"whistle", "teamName": "string", "description": "string", "player": "string" }] 
+    }`;
 
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
@@ -66,13 +98,13 @@ export const simulateMatchSegment = async (homeTeam: Team, awayTeam: Team, curre
         });
         return JSON.parse(cleanJson(response.text));
     } catch (error) {
+        console.error("Sim Error", error);
         return { homeScoreAdded: 0, awayScoreAdded: 0, momentum: 0, tacticalAnalysis: "Steady game.", events: [] };
     }
 };
 
-// --- MEDIA FEATURES (NEW IN v2.4) ---
+// --- MEDIA FEATURES ---
 
-// 1. SCOUTING (With Optional Search Grounding)
 export const scoutPlayers = async (request: string, useRealWorld: boolean = false): Promise<Player[]> => {
     let prompt = "";
     let config: any = { responseMimeType: "application/json" };
@@ -90,7 +122,6 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
         Return valid JSON in this exact format (do not wrap in markdown):
         { "players": [{ "name": "string", "position": "LB"|"CB"|"ST" etc, "rating": number (estimate 60-95 based on real ability), "age": number, "nationality": "Emoji", "scoutingReport": "string (mention real stats/facts)", "wage": number, "marketValue": number, "currentClub": "string" }] }
         `;
-        // Search tool enabled
         config.tools = [{googleSearch: {}}];
     } else {
         prompt = `Scout report for: "${request}". Generate 3 fictional players who fit this description. 
@@ -106,7 +137,6 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
         const jsonStr = cleanJson(response.text);
         const res = JSON.parse(jsonStr);
         
-        // Ensure valid defaults
         return res.players.map((p: any) => ({ 
             ...p, 
             status: { type: 'Available' }, 
@@ -122,12 +152,10 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
     }
 };
 
-// 2. TEXT TO SPEECH (Commentary) with Caching
 export const playMatchCommentary = async (text: string, eventId: number) => {
     const cacheKey = `tts-${eventId}`;
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
 
-    // Check Cache
     if (mediaCache.has(cacheKey)) {
         console.log("Playing from cache");
         const cachedBuffer = mediaCache.get(cacheKey) as AudioBuffer;
@@ -160,10 +188,7 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
                 24000,
                 1
             );
-            
-            // Store in Cache
             mediaCache.set(cacheKey, audioBuffer);
-
             const source = audioContext.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(audioContext.destination);
@@ -171,22 +196,23 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
         }
     } catch (error) {
         console.error("TTS Error", error);
-        throw error; // Re-throw to handle in UI
+        throw error;
     }
 };
 
-// 3. VIDEO GENERATION (Goal Replay) with Caching
-export const generateReplayVideo = async (description: string, eventId: number): Promise<string | null> => {
-    const cacheKey = `video-${eventId}`;
-    
-    // Check Cache
+export const generateReplayVideo = async (description: string, eventId: number, format: 'landscape' | 'portrait' = 'landscape'): Promise<string | null> => {
+    const cacheKey = `video-${eventId}-${format}`;
     if (mediaCache.has(cacheKey)) {
-        console.log("Returning cached video URL");
         return mediaCache.get(cacheKey) as string;
     }
 
     try {
-        const prompt = `A cinematic 4k football match replay. TV Broadcast style. ${description}. Realistic lighting, green grass, stadium crowd in background.`;
+        const aspectRatio = format === 'portrait' ? '9:16' : '16:9';
+        const stylePrompt = format === 'portrait' 
+            ? "Vertical viral social media video, TikTok style, fan phone camera angle from the stands" 
+            : "Cinematic 4k broadcast TV camera angle";
+
+        const prompt = `${stylePrompt}. Football match goal. ${description}. Realistic lighting, green grass, stadium crowd.`;
         
         let operation = await ai.models.generateVideos({
             model: MODEL_VIDEO,
@@ -194,20 +220,19 @@ export const generateReplayVideo = async (description: string, eventId: number):
             config: {
                 numberOfVideos: 1,
                 resolution: '720p',
-                aspectRatio: '16:9'
+                aspectRatio: aspectRatio
             }
         });
 
-        // Poll for completion
         while (!operation.done) {
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5s
+            await new Promise(resolve => setTimeout(resolve, 5000));
             operation = await ai.operations.getVideosOperation({operation: operation});
         }
 
         const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
         if (videoUri) {
             const fullUrl = `${videoUri}&key=${API_KEY}`;
-            mediaCache.set(cacheKey, fullUrl); // Store in cache
+            mediaCache.set(cacheKey, fullUrl); 
             return fullUrl;
         }
         return null;
@@ -217,7 +242,7 @@ export const generateReplayVideo = async (description: string, eventId: number):
     }
 };
 
-// --- EXISTING HELPERS ---
+// --- INTERACTIVE FEATURES ---
 
 export const generatePressConference = async (context: string): Promise<string[]> => {
     const prompt = `Press conference. Context: ${context}. Ask 3 questions. JSON: { "questions": [] }`;
@@ -229,10 +254,29 @@ export const generatePressConference = async (context: string): Promise<string[]
     } catch (e) { return ["How do you feel?", "What's next?"]; }
 };
 
-export const getInterviewQuestions = async (teamName: string, personality: string) => {
-    const prompt = `Interview for ${teamName}. JSON: { "questions": [] }`;
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text)).questions;
+export const getInterviewQuestions = async (teamName: string, personality: string, league: string) => {
+    const prompt = `
+    You are the ${personality} Chairman of ${teamName} (${league}). 
+    You are interviewing a new manager.
+    Generate 3 TOUGH, SPECIFIC questions based on the club's status and your personality.
+    RULES:
+    1. Do NOT ask generic "What are your tactics?" questions.
+    2. If personality is 'Moneyball', ask about youth stats or resale value.
+    3. If 'Ambitious', ask about big signings.
+    
+    Return JSON: { "questions": ["string", "string", "string"] }
+    `;
+    
+    try {
+        const response = await ai.models.generateContent({ 
+            model: MODEL_TEXT, 
+            contents: prompt, 
+            config: { responseMimeType: "application/json" } 
+        });
+        return JSON.parse(cleanJson(response.text)).questions;
+    } catch (e) {
+        return ["What is your philosophy?", "How will you handle the pressure?", "What are your wage demands?"];
+    }
 };
 
 export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], p: string) => {
@@ -247,10 +291,50 @@ export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
     return JSON.parse(cleanJson(response.text)).questions;
 };
 
-export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer?: any) => {
-    const prompt = `Evaluate negotiation. JSON: { "convinced": boolean, "reasoning": "string" }`;
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text));
+export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any): Promise<NegotiationResult> => {
+    const prompt = `
+    Roleplay as the Agent for ${p.name}.
+    User offer: $${offer.wage}, ${offer.length} years.
+    History: ${JSON.stringify(ans)}.
+    Context: Negotiation with ${t.name}.
+    Previous Wage: $${p.wage}.
+    
+    Return JSON: 
+    { 
+        "decision": "accepted" | "rejected" | "counter", 
+        "reasoning": "string (Agent's reply in third person)", 
+        "counterOffer": { "wage": number, "length": number },
+        "extractedPromises": ["string"]
+    }
+    `;
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { decision: "accepted", reasoning: "Okay, we have a deal.", extractedPromises: [] };
+    }
+};
+
+export const checkPromises = async (promises: PromiseData[], currentWeek: number, teamState: any): Promise<PromiseData[]> => {
+    const relevantPromises = promises.filter(p => p.status === 'pending');
+    if (relevantPromises.length === 0) return promises;
+
+    const prompt = `
+    Analyze football manager promises. Week: ${currentWeek}.
+    Team: ${JSON.stringify(teamState)}.
+    Promises: ${JSON.stringify(relevantPromises)}.
+    Return JSON: { "updates": [{ "id": "string", "newStatus": "kept"|"broken"|"pending", "message": "string" }] }
+    `;
+
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const result = JSON.parse(cleanJson(response.text));
+        return promises.map(p => {
+            const update = result.updates.find((u: any) => u.id === p.id);
+            if (update) return { ...p, status: update.newStatus };
+            return p;
+        });
+    } catch (e) { return promises; }
 };
 
 export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: string): Promise<string> => {
@@ -260,25 +344,109 @@ export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: s
 };
 
 export const getInternationalBreakSummary = async (week: number) => {
-    const prompt = `Simulate an international break for Week ${week}. Return JSON: { "newsTitle": "string", "newsBody": "string" }`;
+    const prompt = `Simulate international break Week ${week}. JSON: { "newsTitle": "string", "newsBody": "string" }`;
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    const parsed = JSON.parse(cleanJson(response.text));
-    return parsed ?? { newsTitle: "International Break", newsBody: "Matches played." };
+    return JSON.parse(cleanJson(response.text));
 };
 
-// *** CONTEXT-AWARE SHOUTS ***
-export interface TacticalShout {
-    id: string;
-    label: string;
-    description: string;
-    effect: string;
+export const processTouchlineInteraction = async (userShout: string, team: Team, matchState: MatchState, isHome: boolean) => {
+    const prompt = `Touchline shout: "${userShout}". Score: ${matchState.homeScore}-${matchState.awayScore}. Momentum: ${matchState.momentum}. Return JSON: { "momentumChange": number, "commentary": "string", "effectDescription": "string" }`;
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) { return { momentumChange: 0, commentary: "Ignored.", effectDescription: "Ignored" }; }
+};
+
+export const getContextAwareShouts = async (team: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
+    const prompt = `Halftime shouts for ${team.name}. Score: ${matchState.homeScore}-${matchState.awayScore}. JSON: { "shouts": [{ "id": "string", "label": "string", "description": "string", "effect": "string" }] }`;
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text)).shouts;
+    } catch (e) { return [{ id: 'demand', label: 'Demand More', description: 'Show passion!', effect: 'Work rate up' }]; }
+};
+
+// --- NEW STREAMER STUDIO FEATURE ---
+export interface SocialComment {
+    username: string;
+    text: string;
+    likes: number;
 }
 
-export const getContextAwareShouts = async (userTeam: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
-    return [
-        { id: 'encourage', label: 'Encourage', description: "Heads up! Keep going!", effect: 'Morale Boost' },
-        { id: 'demand_more', label: 'Demand More', description: "Not good enough! Work harder!", effect: 'Intensity Boost' },
-        { id: 'calm_down', label: 'Calm Down', description: "Relax! Play our game.", effect: 'Composure Boost' },
-        { id: 'get_creative', label: 'Get Creative', description: "Express yourselves!", effect: 'Flair Boost' }
-    ];
+export interface SocialPostData {
+    caption: string;
+    hashtags: string[];
+    likes: string;
+    comments: SocialComment[];
+    sound: string;
+    shareCount: string;
+    estimatedEarnings: string; // New Revenue Field
+}
+
+export const generateSocialPost = async (description: string, teamName: string, eventType: string): Promise<SocialPostData> => {
+    const prompt = `
+    Generate viral social media content (TikTok/Shorts style) for a football clip.
+    Event: ${description}.
+    Team: ${teamName}.
+    
+    Generate:
+    1. A hype caption.
+    2. Trending hashtags.
+    3. Realistic view/like counts (e.g. "2.4M", "450K").
+    4. 4 fake comments.
+    5. A sound name.
+
+    Return JSON:
+    {
+        "caption": "string",
+        "hashtags": ["#tag1", "#tag2"],
+        "likes": "string",
+        "shareCount": "string",
+        "sound": "string",
+        "comments": [
+            { "username": "string", "text": "string", "likes": number }
+        ]
+    }
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        const parsed = JSON.parse(cleanJson(response.text));
+        
+        // --- RPM CALCULATOR AUDIT ---
+        // Logic confirmed by audit: 
+        // 1. Convert string likes (2.4M) to number.
+        // 2. Estimate Views = Likes * 10 (Engagement rate ~10%).
+        // 3. RPM for Shorts in Gaming/Sports = $0.03 (approx).
+        // 4. COST OF GENERATION = ~$0.09 (Video + TTS + Text)
+        // 5. Net Profit = Revenue - Cost
+        
+        let likesNum = 0;
+        const likeStr = (parsed.likes || "0").toUpperCase().replace(/,/g, '');
+        if (likeStr.includes('M')) likesNum = parseFloat(likeStr) * 1000000;
+        else if (likeStr.includes('K')) likesNum = parseFloat(likeStr) * 1000;
+        else likesNum = parseFloat(likeStr);
+        
+        const estViews = likesNum * 10;
+        const revenue = (estViews / 1000) * RPM_SHORTS;
+        const netProfit = revenue - TOTAL_GEN_COST;
+        
+        // Formatted String: "$3.00 (+$2.91 Net)"
+        parsed.estimatedEarnings = `$${revenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${netProfit > 0 ? '+' : ''}$${netProfit.toFixed(2)} Net)`;
+        
+        return parsed;
+    } catch (e) {
+        return {
+            caption: `Scenes! ${teamName}!`,
+            hashtags: ["#football"],
+            likes: "10K",
+            shareCount: "500",
+            sound: "Viral Sound",
+            estimatedEarnings: "$3.00 (+$2.91 Net)",
+            comments: []
+        };
+    }
 };

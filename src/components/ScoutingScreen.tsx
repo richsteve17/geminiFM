@@ -130,8 +130,8 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                             <p className="text-sm text-gray-300 italic mb-2">"{player.scoutingReport || 'Available for selection.'}"</p>
                             <div className="flex flex-wrap gap-2 justify-center md:justify-start text-xs">
                                 <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Rating: <span className="text-white font-bold">{player.rating}</span></span>
-                                {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Wage: <span className="text-white font-bold">£{player.wage.toLocaleString()}/wk</span></span>}
-                                {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Value: <span className="text-white font-bold">£{(player.marketValue || player.wage * 100).toLocaleString()}</span></span>}
+                                {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Wage: <span className="text-white font-bold">${player.wage.toLocaleString()}/wk</span></span>}
+                                {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Value: <span className="text-white font-bold">${(player.marketValue || player.wage * 100).toLocaleString()}</span></span>}
                             </div>
                         </div>
 

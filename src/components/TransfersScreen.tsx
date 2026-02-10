@@ -44,7 +44,7 @@ const TransfersScreen: React.FC<TransfersScreenProps> = ({ targets, onApproachPl
                                     Personality: <span className="font-semibold text-gray-300">{player.personality}</span>
                                 </p>
                                 <p className="text-sm text-gray-400">
-                                    Wage: <span className="font-semibold text-gray-300">£{player.wage.toLocaleString()}/wk</span>
+                                    Wage: <span className="font-semibold text-gray-300">${player.wage.toLocaleString()}/wk</span>
                                 </p>
                             </div>
                         </div>
