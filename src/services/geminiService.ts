@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
 import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData } from '../types';
 
@@ -137,7 +138,7 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
         const jsonStr = cleanJson(response.text);
         const res = JSON.parse(jsonStr);
         
-        return res.players.map((p: any) => ({ 
+        return (res.players || []).map((p: any) => ({ 
             ...p, 
             status: { type: 'Available' }, 
             effects: [], 

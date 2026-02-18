@@ -30,15 +30,17 @@ The v2.6 update fully integrates the "Streamer Mode" mechanics, allowing users t
 
 ---
 
-## 🎨 Dynamic Club Theming (New in v2.6)
+## 🎨 Dynamic Club Theming (New in v2.7)
 
-The UI now adapts to your club's identity.
+The UI now adapts to your club's identity with granular control.
 
-*   **Logic:** Every club has a defined `primary`, `secondary`, and `text` color palette in the database.
+*   **3-Card Kit Selector:** Before starting, visualize your club's identity via three kit cards.
+    *   **Primary:** The classic home strip.
+    *   **Secondary:** The traditional away colors.
+    *   **Third:** The "Unhinged" option. Often neon, dark, or clashing colors (e.g., Chelsea's pink/black) for when you want to break the mold.
 *   **Behavior:**
-    *   **Main Menu:** Selecting a "Favorite Club" instantly themes the Start Screen background and accents.
-    *   **Gameplay:** When managing a team (e.g., Chelsea), the header, buttons, and background gradients shift to Royal Blue and Gold.
-    *   **Fallback:** Defaults to the classic "Manager Green" if no team is selected.
+    *   **Instant Preview:** Clicking a kit card instantly applies that palette to the game UI (headers, buttons, gradients).
+    *   **Gameplay Integration:** The selected palette persists throughout the manager career, coloring the Start Screen background and accentuating important metrics.
 
 ---
 

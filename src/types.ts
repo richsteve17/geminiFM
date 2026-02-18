@@ -90,6 +90,7 @@ export interface Team {
       primary: string;
       secondary: string;
       text: string;
+      third?: string; // The "Unhinged" Kit Option
   };
 }
 
