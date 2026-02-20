@@ -62,6 +62,23 @@ const createEuroTeam = (name: string, flag: string, prestige: number): Team => {
 };
 
 // Returns a list of team names participating, and a map of any NEW teams created (fillers)
+export const generateKnockoutFixtures = (teams: string[], stage: TournamentStage, week: number): Fixture[] => {
+    const fixtures: Fixture[] = [];
+    for (let i = 0; i < teams.length; i += 2) {
+        fixtures.push({
+            id: `cl-${stage}-${week}-${teams[i]}-${teams[i+1]}`,
+            week: week,
+            league: 'Champions League',
+            homeTeam: teams[i],
+            awayTeam: teams[i+1],
+            played: false,
+            stage: stage,
+            isKnockout: true,
+        });
+    }
+    return fixtures;
+};
+
 export const getChampionsLeagueParticipants = (existingTeams: Record<string, Team>): { participants: string[], newTeams: Record<string, Team> } => {
     const participants: string[] = [];
     const newTeams: Record<string, Team> = {};

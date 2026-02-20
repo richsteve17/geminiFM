@@ -42,6 +42,9 @@ export interface Player {
   rating: number;
   age: number;
   nationality: string;
+  potential: number; // 0-100, how good they can become
+  growthRate: number; // Modifier for development speed
+  form: number; // Current form based on recent performance, affects rating temporarily
   personality: PlayerPersonality;
   wage: number;
   status: PlayerStatus;
@@ -74,6 +77,9 @@ export interface Team {
   chairmanPersonality: ChairmanPersonality;
   group?: string;
   balance: number; 
+  weeklyWageBill: number;
+  matchDayRevenue: number;
+  transferBudget: number;
   objectives: string[];
 }
 
@@ -173,6 +179,7 @@ export interface PlayerTalk {
     currentQuestionIndex: number;
     context: 'transfer' | 'renewal';
     teammates?: string[]; // Context for "Who else are you signing?"
+    contractOffer?: { wage: number; duration: number; };
 }
 
 export interface NewsItem {

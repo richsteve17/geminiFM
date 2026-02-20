@@ -14,7 +14,7 @@ interface TeamDetailsProps {
     onTacticChange: (tactic: Partial<Tactic>) => void;
     onNavigateToTransfers: () => void;
     onNavigateToNews: () => void;
-    onStartContractTalk: (player: Player) => void;
+    onStartContractTalk: (player: Player, context: 'transfer' | 'renewal', offer?: { wage: number; duration: number; }) => void;
     onToggleStarter: (playerName: string) => void;
     gameState: GameState;
     subsUsed: number;
@@ -46,7 +46,7 @@ const getEffectIndicators = (player: Player) => {
     return indicators;
 };
 
-const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onToggleStarter, gameState }) => {
+const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onStartContractTalk, onToggleStarter, gameState }) => {
     const [view, setView] = useState<'squad' | 'tactics'>('squad');
     const starters = team.players.filter(p => p.isStarter);
     const isInternational = team.league === 'International';
@@ -57,7 +57,11 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 <div>
                     <h2 className="text-xl font-bold text-green-400">{team.name}</h2>
                     {!isInternational && (
-                        <p className="text-xs text-blue-400 font-mono font-bold uppercase">£{team.balance.toLocaleString()}</p>
+                        <div className="mt-1 text-xs">
+                            <p className="text-blue-400 font-mono font-bold uppercase">Balance: £{team.balance.toLocaleString()}</p>
+                            <p className="text-gray-400 font-mono">Wage Bill: £{team.weeklyWageBill.toLocaleString()}/wk</p>
+                            <p className="text-gray-400 font-mono">Transfer Budget: £{team.transferBudget.toLocaleString()}</p>
+                        </div>
                     )}
                 </div>
                 <div className="flex bg-gray-900 rounded p-1 border border-gray-700 shadow-inner">
@@ -107,6 +111,14 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                                             <div className="flex gap-1">{getEffectIndicators(p)}</div>
                                         </div>
                                         <span className="text-xs font-black text-green-400">{p.rating}</span>
+                                        {!isInternational && p.contractExpires <= 10 && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onStartContractTalk(p, 'renewal', { wage: p.wage * 1.1, duration: 3 }); }}
+                                                className="ml-2 px-2 py-1 text-[8px] bg-yellow-600 hover:bg-yellow-700 text-white rounded-full uppercase font-bold"
+                                            >
+                                                Renew
+                                            </button>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
@@ -122,6 +134,14 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                                             <div className="flex gap-1">{getEffectIndicators(p)}</div>
                                         </div>
                                         <span className="text-xs font-black text-gray-400">{p.rating}</span>
+                                        {!isInternational && p.contractExpires <= 10 && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onStartContractTalk(p, 'renewal', { wage: p.wage * 1.1, duration: 3 }); }}
+                                                className="ml-2 px-2 py-1 text-[8px] bg-yellow-600 hover:bg-yellow-700 text-white rounded-full uppercase font-bold"
+                                            >
+                                                Renew
+                                            </button>
+                                        )}
                                     </li>
                                 ))}
                             </ul>

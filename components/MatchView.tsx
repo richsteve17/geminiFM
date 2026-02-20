@@ -4,7 +4,7 @@ import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team } from
 import { GameState } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
 import { TOUCHLINE_SHOUTS } from '../constants';
-import { getAssistantAnalysis } from '../services/geminiService';
+import { getAssistantAnalysis, generateCommentary, generateInstantReplay } from '../services/geminiService';
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 
@@ -31,13 +31,48 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
     const feedRef = useRef<HTMLDivElement>(null);
     const [assistantAdvice, setAssistantAdvice] = useState<string | null>(null);
     const [isAskingAssistant, setIsAskingAssistant] = useState(false);
+    const [commentaryAudio, setCommentaryAudio] = useState<HTMLAudioElement | null>(null);
+    const [isMuted, setIsMuted] = useState(false);
+    const [replayVideoUri, setReplayVideoUri] = useState<string | null>(null);
+    const [showReplayModal, setShowReplayModal] = useState(false);
 
-    // Auto-scroll feed
+    // Auto-scroll feed and handle new events
     useEffect(() => {
         if (feedRef.current) {
             feedRef.current.scrollTop = feedRef.current.scrollHeight;
         }
-    }, [matchState?.events.length]);
+
+        const lastEvent = matchState?.events[matchState.events.length - 1];
+        if (lastEvent && lastEvent.type === 'goal') {
+            // TTS Commentary
+            if (!isMuted) {
+                generateCommentary(lastEvent.description).then(audioData => {
+                    if (audioData) {
+                        const audio = new Audio(audioData);
+                        audio.play();
+                        setCommentaryAudio(audio);
+                    }
+                });
+            }
+
+            // Veo Instant Replay
+            generateInstantReplay(lastEvent.description).then(videoUri => {
+                if (videoUri) {
+                    setReplayVideoUri(videoUri);
+                }
+            });
+        }
+    }, [matchState?.events.length, isMuted]);
+
+    // Cleanup audio on component unmount or new audio
+    useEffect(() => {
+        return () => {
+            if (commentaryAudio) {
+                commentaryAudio.pause();
+                setCommentaryAudio(null);
+            }
+        };
+    }, [commentaryAudio]);
 
     // Reset advice on new game phase
     useEffect(() => {
@@ -91,6 +126,14 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
                         {event.description} 
                         {event.scoreAfter && <span className="ml-2 text-white border border-gray-600 px-1 rounded bg-gray-800">{event.scoreAfter}</span>}
                     </p>
+                    {event.type === 'goal' && replayVideoUri && (
+                        <button 
+                            onClick={() => setShowReplayModal(true)}
+                            className="ml-2 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-full"
+                        >
+                            Watch Replay
+                        </button>
+                    )}
                 </div>
             </div>
         );
@@ -197,6 +240,19 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
                         <span>{fixture?.league}</span>
                         <span>{fixture?.stage || `Week ${currentWeek}`}</span>
                         <span>{isLoading ? 'Simulating...' : (matchState?.isFinished ? 'Full Time' : `${currentMinute}'`)}</span>
+                        <button onClick={() => setIsMuted(!isMuted)} className="ml-2 p-1 rounded-full bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            {isMuted ? 
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-white">
+                                    <path d="M9.25 13.25a.75.75 0 00.75-.75V6.5a.75.75 0 00-1.5 0v6a.75.75 0 00.75.75z" />
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-8-8a8 8 0 0114.75-4.03l-10.72 10.72A7.962 7.962 0 012 10z" clipRule="evenodd" />
+                                </svg>
+                                : 
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-white">
+                                    <path d="M10 3.75a.75.75 0 00-1.5 0v12.5a.75.75 0 001.5 0V3.75z" />
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-8-8a8 8 0 0114.75-4.03l-10.72 10.72A7.962 7.962 0 012 10z" clipRule="evenodd" />
+                                </svg>
+                            }
+                        </button>
                     </div>
                     <div className="flex justify-between items-center">
                          <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-right">{fixture?.homeTeam}</h3>
@@ -231,6 +287,26 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
                 </div>
                 
                 {gameState === GameState.POST_MATCH && renderWeeklyResults()}
+
+                {/* Replay Modal */}
+                {showReplayModal && replayVideoUri && (
+                    <div className="absolute inset-0 bg-black/90 z-30 flex items-center justify-center p-4">
+                        <div className="relative bg-gray-900 rounded-lg shadow-xl w-full max-w-3xl aspect-video">
+                            <button 
+                                onClick={() => setShowReplayModal(false)}
+                                className="absolute top-2 right-2 text-white text-2xl font-bold z-40"
+                            >
+                                &times;
+                            </button>
+                            <video 
+                                src={replayVideoUri} 
+                                controls 
+                                autoPlay 
+                                className="w-full h-full rounded-lg"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
         );
     };

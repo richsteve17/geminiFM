@@ -20,9 +20,23 @@ import TutorialOverlay from './components/TutorialOverlay';
 import ScoutingScreen from './components/ScoutingScreen';
 import PressConferenceScreen from './components/PressConferenceScreen';
 import { generateWorldCupStructure, NATIONAL_TEAMS } from './international';
-import { getChampionsLeagueParticipants } from './europe';
+import { getChampionsLeagueParticipants, generateKnockoutFixtures } from './europe';
 
 const INTERNATIONAL_BREAK_WEEKS = [10, 20];
+
+const CL_KNOCKOUT_WEEKS = {
+    roundOf16: 35,
+    quarterFinal: 37,
+    semiFinal: 39,
+    final: 41,
+};
+
+const CL_KNOCKOUT_STAGES: TournamentStage[] = [
+    'Round of 16',
+    'Quarter Final',
+    'Semi Final',
+    'Final',
+];
 
 const convertNationalTeam = (nt: NationalTeam): Team => ({
     name: nt.name,
@@ -126,6 +140,18 @@ export default function App() {
     const initializeGame = useCallback((selectedTeamName: string) => {
         setGameMode('Club'); setIsPrologue(false);
         let finalTeamsState = { ...allTeams };
+        // Initialize financial values for all teams
+        Object.keys(finalTeamsState).forEach(teamName => {
+            const team = finalTeamsState[teamName];
+            const totalWage = team.players.reduce((sum, p) => sum + p.wage, 0);
+            finalTeamsState[teamName] = {
+                ...team,
+                balance: 10000000, // Starting balance
+                weeklyWageBill: totalWage,
+                matchDayRevenue: 200000 + (team.prestige * 5000), // Base + prestige bonus
+                transferBudget: 5000000 // Starting transfer budget
+            };
+        });
         const domesticFixtures = generateFixtures(Object.values(allTeams));
         const { participants, newTeams } = getChampionsLeagueParticipants(allTeams);
         finalTeamsState = { ...finalTeamsState, ...newTeams };
@@ -222,6 +248,33 @@ export default function App() {
         proceedToNextWeek();
     };
 
+    const simulateCLKnockoutMatches = (week: number, currentFixtures: Fixture[], allTeams: Record<string, Team>): string[] => {
+        const clKnockoutFixtures = currentFixtures.filter(f => f.week === week && f.league === 'Champions League' && f.isKnockout);
+        const winners: string[] = [];
+
+        clKnockoutFixtures.forEach(fixture => {
+            const homeTeam = allTeams[fixture.homeTeam];
+            const awayTeam = allTeams[fixture.awayTeam];
+            if (!homeTeam || !awayTeam) return;
+
+            const result = simulateQuickMatch(homeTeam, awayTeam);
+            // For simplicity, assuming single-leg knockout. Need to extend for aggregate score if two legs.
+            if (result.homeGoals > result.awayGoals) {
+                winners.push(homeTeam.name);
+            } else if (result.awayGoals > result.homeGoals) {
+                winners.push(awayTeam.name);
+            } else {
+                // Handle draws - simple coin toss for now, could be extra time/penalties
+                if (Math.random() > 0.5) {
+                    winners.push(homeTeam.name);
+                } else {
+                    winners.push(awayTeam.name);
+                }
+            }
+        });
+        return winners;
+    };
+
     const proceedToNextWeek = () => {
         const nextW = currentWeek + 1;
         const results: Fixture[] = [];
@@ -231,17 +284,76 @@ export default function App() {
         });
         setWeeklyResults(results);
         setCurrentWeek(nextW);
+
+        // Player Development and Contract Expiry
+        if (userTeamName) {
+            setTeams(prevTeams => {
+                const updatedTeams = { ...prevTeams };
+                const userTeam = updatedTeams[userTeamName];
+                userTeam.players = userTeam.players.map(player => {
+                    // Simulate match performance for development (placeholder for now)
+                    const matchPerformance = Math.random() * 2 - 1; // -1 to 1
+                    const updatedPlayer = calculatePlayerDevelopment(player, matchPerformance);
+
+                    // Check for contract expiry
+                    if (updatedPlayer.contractExpires === nextW + 4 && updatedPlayer.contractExpires > 0) { // 4 weeks until expiry
+                        setNews(prevNews => [...prevNews, { id: Date.now() + Math.random(), week: nextW, title: `Contract expiring soon!`, body: `${updatedPlayer.name}'s contract expires in 4 weeks.`, type: 'contract-renewal' }]);
+                    }
+                    updatedPlayer.contractExpires = Math.max(0, updatedPlayer.contractExpires - 1);
+                    return updatedPlayer;
+                });
+
+                // Apply weekly financial updates
+                const userTeam = updatedTeams[userTeamName];
+                userTeam.balance -= userTeam.weeklyWageBill; // Deduct wage bill
+                
+                // Add match day revenue if user team played a home game
+                const userMatch = weeklyResults.find(f => f.homeTeam === userTeamName && f.week === currentWeek);
+                if (userMatch) {
+                    userTeam.balance += userTeam.matchDayRevenue;
+                }
+
+                // Check for budget warnings
+                if (userTeam.balance < -1000000) { // Example threshold for warning
+                    setNews(prevNews => [...prevNews, { id: Date.now() + Math.random(), week: nextW, title: `Financial Crisis!`, body: `Your club's balance is critically low. Take action to avoid administration!`, type: 'finance' }]);
+                }
+
+                return updatedTeams;
+            });
+        }
+
+        // Champions League Knockout Stage Progression
+        if (gameMode === 'Club') {
+            if (currentWeek === CL_KNOCKOUT_WEEKS.roundOf16 - 1) {
+                const clTable = leagueTable.filter(t => t.league === 'Champions League').sort((a, b) => b.points - a.points);
+                const qualifiedTeams = clTable.slice(0, 16).map(t => t.teamName);
+                const knockoutFixtures = generateKnockoutFixtures(qualifiedTeams, 'Round of 16', CL_KNOCKOUT_WEEKS.roundOf16);
+                setFixtures(prev => [...prev, ...knockoutFixtures]);
+                setNews(prev => [...prev, { id: Date.now(), week: nextW, title: 'Champions League Knockouts Set', body: 'The Round of 16 draw has been made.', type: 'tournament-result' }]);
+            } else if (CL_KNOCKOUT_STAGES.includes(currentFixture?.stage!) && currentFixture?.isKnockout) {
+                const winners = simulateCLKnockoutMatches(currentWeek, fixtures, teams);
+                const nextStageIndex = CL_KNOCKOUT_STAGES.indexOf(currentFixture.stage!) + 1;
+                if (nextStageIndex < CL_KNOCKOUT_STAGES.length) {
+                    const nextStage = CL_KNOCKOUT_STAGES[nextStageIndex];
+                    const nextWeek = Object.values(CL_KNOCKOUT_WEEKS)[nextStageIndex];
+                    const nextFixtures = generateKnockoutFixtures(winners, nextStage, nextWeek);
+                    setFixtures(prev => [...prev, ...nextFixtures]);
+                    setNews(prev => [...prev, { id: Date.now(), week: nextW, title: `Champions League ${nextStage} Draw`, body: `The draw for the ${nextStage} has been made.`, type: 'tournament-result' }]);
+                }
+            }
+        }
+
         setCurrentFixture(fixtures.find(f => (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && f.week === nextW));
         setMatchState(null); setGameState(GameState.PRE_MATCH); setIsLoading(false);
     };
 
-    const handleStartPlayerTalk = async (player: Player, context: 'transfer' | 'renewal') => {
+    const handleStartPlayerTalk = async (player: Player, context: 'transfer' | 'renewal', offer?: { wage: number; duration: number; }) => {
         if (!userTeamName) return;
         setIsLoading(true); setTalkResult(null); setPlayerTalk(null); setError(null);
         setAppScreen(AppScreen.PLAYER_TALK);
         try {
             const questions = await getPlayerTalkQuestions(player, teams[userTeamName], context);
-            setPlayerTalk({ player, questions, answers: [], currentQuestionIndex: 0, context });
+            setPlayerTalk({ player, questions, answers: [], currentQuestionIndex: 0, context, contractOffer: offer });
         } catch (e) { setError("Negotiations failed."); setAppScreen(AppScreen.GAMEPLAY); } finally { setIsLoading(false); }
     };
 
@@ -253,7 +365,7 @@ export default function App() {
         } else {
             setIsLoading(true);
             try {
-                const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context);
+                const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context, playerTalk.contractOffer);
                 setTalkResult(result);
             } catch (e) { setError("Evaluation failed."); } finally { setIsLoading(false); }
         }
@@ -261,8 +373,20 @@ export default function App() {
 
     const handlePlayerTalkFinish = () => {
         if (talkResult?.convinced && playerTalk && userTeamName) {
-            const newPlayer = { ...playerTalk.player, isStarter: false, contractExpires: 3, status: { type: 'Available' as const }, effects: [] };
-            setTeams(prev => ({ ...prev, [userTeamName]: { ...prev[userTeamName], players: [...prev[userTeamName].players, newPlayer] } }));
+            if (playerTalk.context === 'transfer') {
+                const newPlayer = { ...playerTalk.player, isStarter: false, contractExpires: 3, status: { type: 'Available' as const }, effects: [] };
+                setTeams(prev => ({ ...prev, [userTeamName]: { ...prev[userTeamName], players: [...prev[userTeamName].players, newPlayer] } }));
+            } else if (playerTalk.context === 'renewal' && playerTalk.contractOffer) {
+                setTeams(prev => {
+                    const updatedPlayers = prev[userTeamName].players.map(p => 
+                        p.name === playerTalk.player.name 
+                            ? { ...p, wage: playerTalk.contractOffer!.wage, contractExpires: currentWeek + playerTalk.contractOffer!.duration * 4 } // Assuming duration is in years, 4 weeks per month
+                            : p
+                    );
+                    return { ...prev, [userTeamName]: { ...prev[userTeamName], players: updatedPlayers } };
+                });
+                setNews(prevNews => [...prevNews, { id: Date.now(), week: currentWeek, title: `Contract Renewed!`, body: `${playerTalk.player.name} extends contract with ${userTeamName} for ${playerTalk.contractOffer.duration} years at £${playerTalk.contractOffer.wage/1000}k/week.`, type: 'contract-renewal' }]);
+            }
         }
         setPlayerTalk(null); setTalkResult(null); setAppScreen(AppScreen.GAMEPLAY);
     };
