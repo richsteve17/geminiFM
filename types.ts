@@ -81,6 +81,7 @@ export interface Team {
   matchDayRevenue: number;
   transferBudget: number;
   objectives: string[];
+  weeklyBroadcastRevenue: number;
 }
 
 export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance' | 'objectives'> {

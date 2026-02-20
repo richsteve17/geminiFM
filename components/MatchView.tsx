@@ -34,6 +34,8 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
     const [commentaryAudio, setCommentaryAudio] = useState<HTMLAudioElement | null>(null);
     const [isMuted, setIsMuted] = useState(false);
     const [replayVideoUri, setReplayVideoUri] = useState<string | null>(null);
+    const [lastGoalDescription, setLastGoalDescription] = useState<string | null>(null);
+    const [isGeneratingReplay, setIsGeneratingReplay] = useState(false);
     const [showReplayModal, setShowReplayModal] = useState(false);
 
     // Auto-scroll feed and handle new events
@@ -55,14 +57,24 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
                 });
             }
 
-            // Veo Instant Replay
-            generateInstantReplay(lastEvent.description).then(videoUri => {
-                if (videoUri) {
-                    setReplayVideoUri(videoUri);
-                }
-            });
+            // Store goal description for manual Veo Instant Replay
+            setLastGoalDescription(lastEvent.description);
         }
     }, [matchState?.events.length, isMuted]);
+
+    const handleGenerateReplay = async (goalDescription: string) => {
+        setIsGeneratingReplay(true);
+        try {
+            const videoUri = await generateInstantReplay(goalDescription);
+            if (videoUri) {
+                setReplayVideoUri(videoUri);
+            }
+        } catch (error) {
+            console.error("Error generating replay:", error);
+        } finally {
+            setIsGeneratingReplay(false);
+        }
+    };
 
     // Cleanup audio on component unmount or new audio
     useEffect(() => {
@@ -126,13 +138,23 @@ const MatchView: React.FC<MatchViewProps> = ({ fixture, weeklyResults, matchStat
                         {event.description} 
                         {event.scoreAfter && <span className="ml-2 text-white border border-gray-600 px-1 rounded bg-gray-800">{event.scoreAfter}</span>}
                     </p>
-                    {event.type === 'goal' && replayVideoUri && (
-                        <button 
-                            onClick={() => setShowReplayModal(true)}
-                            className="ml-2 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-full"
-                        >
-                            Watch Replay
-                        </button>
+                    {event.type === 'goal' && lastGoalDescription && (
+                        replayVideoUri ? (
+                            <button 
+                                onClick={() => setShowReplayModal(true)}
+                                className="ml-2 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-full"
+                            >
+                                Watch Replay
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={() => handleGenerateReplay(lastGoalDescription)}
+                                className="ml-2 px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-full"
+                                disabled={isGeneratingReplay}
+                            >
+                                {isGeneratingReplay ? 'Generating...' : 'Generate Replay'}
+                            </button>
+                        )
                     )}
                 </div>
             </div>

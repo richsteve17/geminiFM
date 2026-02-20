@@ -149,7 +149,8 @@ export default function App() {
                 balance: 10000000, // Starting balance
                 weeklyWageBill: totalWage,
                 matchDayRevenue: 200000 + (team.prestige * 5000), // Base + prestige bonus
-                transferBudget: 5000000 // Starting transfer budget
+                transferBudget: 5000000, // Starting transfer budget
+                weeklyBroadcastRevenue: 100000 + (team.prestige * 2500)
             };
         });
         const domesticFixtures = generateFixtures(Object.values(allTeams));
@@ -277,6 +278,16 @@ export default function App() {
 
     const proceedToNextWeek = () => {
         const nextW = currentWeek + 1;
+
+        if (gameMode === 'Club') {
+            const newTeamsState = { ...teams };
+            Object.keys(newTeamsState).forEach(teamName => {
+                const team = newTeamsState[teamName];
+                newTeamsState[teamName].balance -= team.weeklyWageBill;
+                newTeamsState[teamName].balance += team.weeklyBroadcastRevenue;
+            });
+            setTeams(newTeamsState);
+        }
         const results: Fixture[] = [];
         fixtures.filter(f => f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName).forEach(f => {
             const res = simulateQuickMatch(teams[f.homeTeam], teams[f.awayTeam]);
