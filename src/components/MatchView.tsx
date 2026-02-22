@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team, MatchEvent, TacticalShout } from '../types';
 import { GameState } from '../types';
@@ -71,7 +72,7 @@ export default function MatchView({
                 behavior: 'smooth'
             });
         }
-    }, [matchState?.events.length]);
+    }, [matchState?.events?.length]);
 
     // Load Shouts at Halftime
     useEffect(() => {
@@ -91,7 +92,7 @@ export default function MatchView({
 
     // Chant Trigger Logic
     useEffect(() => {
-        if (matchState?.events.length && gameState === GameState.PLAYING) {
+        if (matchState?.events?.length && gameState === GameState.PLAYING) {
             const lastEvent = matchState.events[matchState.events.length - 1];
             if (matchState.currentMinute - lastEvent.minute < 2) {
                 if (lastEvent.type === 'goal') {
@@ -104,7 +105,7 @@ export default function MatchView({
                 }
             }
         }
-    }, [matchState?.events.length, userTeamName, gameState]);
+    }, [matchState?.events?.length, userTeamName, gameState]);
 
     const handleAskAssistant = async () => {
         if (!fixture || !matchState || !userTeamName) return;
@@ -291,13 +292,13 @@ export default function MatchView({
             <div className="flex-1 bg-gray-900/50 p-4 flex flex-col overflow-hidden">
                 {gameState !== GameState.PRE_MATCH && (
                     <div className="flex-shrink-0 mb-4">
-                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events[matchState.events.length-1] || null} />
+                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events?.[matchState.events.length-1] || null} />
                     </div>
                 )}
                 
                 <div ref={feedRef} className="overflow-y-auto space-y-1 scroll-smooth flex-1 pr-2 min-h-0">
-                    {matchState?.events.length === 0 && <div className="text-center text-gray-500 italic mt-10">Match is about to start...</div>}
-                    {matchState?.events.map(renderEvent)}
+                    {(!matchState?.events || matchState.events.length === 0) && <div className="text-center text-gray-500 italic mt-10">Match is about to start...</div>}
+                    {matchState?.events?.map(renderEvent)}
                     {isLoading && <div className="flex justify-center py-4"><FootballIcon className="w-6 h-6 text-green-500 animate-spin" /></div>}
                 </div>
             </div>

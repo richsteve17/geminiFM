@@ -132,6 +132,35 @@ export const generateSwissFixtures = (teams: Team[]): Fixture[] => {
     return fixtures;
 };
 
+export const calculatePlayerDevelopment = (player: Player, matchPerformance: number = 0): Player => {
+    let { rating, age, potential, growthRate, form } = player;
+
+    // Update form based on match performance (simple model)
+    form = Math.max(0, Math.min(100, form + (matchPerformance * 10) - 5)); // Performance can be -1 to 1
+
+    // Age-based development/decline
+    if (age < 23) {
+        growthRate += 0.05; // Young players develop faster
+    } else if (age > 30) {
+        growthRate -= 0.05; // Older players decline
+    }
+    growthRate = Math.max(0.1, Math.min(1, growthRate)); // Keep growth rate within reasonable bounds
+
+    // Calculate potential rating change
+    const potentialRatingChange = (potential - rating) * (growthRate / 10);
+
+    // Apply development/decline
+    rating += potentialRatingChange;
+
+    // Apply form influence (temporary boost/reduction)
+    rating += (form - 50) / 100; 
+
+    // Ensure rating stays within bounds (e.g., 1-100)
+    rating = Math.max(1, Math.min(100, rating));
+
+    return { ...player, rating: Math.round(rating), growthRate, form: Math.round(form) };
+};
+
 export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals: number, awayGoals: number } => {
     const homeRating = homeTeam.players.length ? homeTeam.players.reduce((sum, p) => sum + p.rating, 0) / homeTeam.players.length : 70;
     const awayRating = awayTeam.players.length ? awayTeam.players.reduce((sum, p) => sum + p.rating, 0) / awayTeam.players.length : 70;

@@ -595,10 +595,7 @@ export default function App() {
                         onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} 
                         onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} 
                         onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} 
-                        onThemeSelect={(teamName) => {
-                            const team = allTeams[teamName];
-                            if(team && team.colors) setActiveTheme(team.colors);
-                        }}
+                        onThemeSelect={(colors) => setActiveTheme(colors)}
                     />
                     {localStorage.getItem('gfm_save_v1') && (
                         <div className="text-center pb-8 -mt-8">

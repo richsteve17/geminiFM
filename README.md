@@ -2,7 +2,7 @@
 # ⚽ Gemini Football Manager '27
 **The World's First Multimedia AI Sports Simulation**
 
-> **Current Build:** v2.6 (Stability & Live Engine Update)
+> **Current Build:** v2.7 (The "Unhinged" Kit Update)
 > **Engine:** React 19 · TypeScript · Google GenAI SDK · Tailwind CSS
 
 **Gemini Football Manager '27 (GFM '27)** is a hybrid simulation engine. It combines a rigid, deterministic mathematical core with a creative, generative AI layer to produce a football world that feels alive, visually distinct, and narratively deep.

@@ -9,17 +9,60 @@ interface StartScreenProps {
     onSelectTeam: () => void;
     onStartUnemployed: () => void;
     onStartWorldCup: () => void;
-    onThemeSelect?: (teamName: string) => void;
+    onThemeSelect?: (colors: { primary: string, secondary: string, text: string }) => void;
 }
 
 const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect }) => {
     const [showDevlog, setShowDevlog] = useState(false);
-    const [selectedTeamPreview, setSelectedTeamPreview] = useState<string | null>(null);
+    const [selectedTeam, setSelectedTeam] = useState<string>('Manchester City'); // Default to a team so selector isn't empty
 
-    const handleThemeSelect = (teamName: string) => {
-        setSelectedTeamPreview(teamName);
-        if (onThemeSelect) onThemeSelect(teamName);
+    const handleTeamChange = (teamName: string) => {
+        setSelectedTeam(teamName);
     };
+
+    const handleKitSelect = (colors: { primary: string, secondary: string, text: string }) => {
+        if (onThemeSelect) onThemeSelect(colors);
+    };
+
+    // Helper to generate the 3 kit variations
+    const getKits = (teamName: string) => {
+        const team = TEAMS[teamName];
+        if (!team || !team.colors) return [];
+
+        const { primary, secondary, text, third: thirdColor } = team.colors;
+
+        // Kit 1: Primary (Standard)
+        const prim = {
+            name: 'PRIMARY',
+            bg: primary,
+            border: secondary,
+            text: text,
+            accent: secondary
+        };
+
+        // Kit 2: Secondary (Flipped or Secondary based)
+        const sec = {
+            name: 'SECONDARY',
+            bg: secondary,
+            border: primary,
+            text: primary === '#FFFFFF' ? '#000000' : '#FFFFFF', // Simple contrast logic or assume secondary bg needs contrast
+            accent: primary
+        };
+
+        // Kit 3: Third (Explicit or Wild)
+        const thirdBg = thirdColor || '#1F2937'; // Default dark grey if missing
+        const thirdKit = {
+            name: 'THIRD',
+            bg: thirdBg,
+            border: text,
+            text: '#FFFFFF', // Usually third kits are dark/neon, white text safe
+            accent: primary
+        };
+
+        return [prim, sec, thirdKit];
+    };
+
+    const currentKits = getKits(selectedTeam);
 
     return (
         <div className="relative flex flex-col items-center justify-center min-h-[85vh] px-4 w-full max-w-7xl mx-auto overflow-hidden rounded-2xl bg-gray-900 border border-gray-800 shadow-2xl">
@@ -53,7 +96,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 </h1>
                 
                 <div className="flex items-center justify-center gap-4 text-xs font-mono tracking-widest text-[var(--team-secondary,rgb(74,222,128))] opacity-80 mb-8">
-                    <span>BUILD v2.6</span>
+                    <span>BUILD v2.7</span>
                     <span>•</span>
                     <span>CREATOR ECONOMY LIVE</span>
                     <span>•</span>
@@ -104,19 +147,17 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
             {/* Footer */}
             <div className="z-10 w-full max-w-4xl text-center flex flex-col items-center">
                 
-                {/* Theme Selector - Full Team List */}
+                {/* 3-Card Kit Selector */}
                 {onThemeSelect && (
-                    <div className="mb-6 flex flex-col items-center animate-in fade-in slide-in-from-bottom-4">
-                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Select Favorite Club (Themes UI)</label>
-                        
-                        <div className="flex gap-4 items-center">
-                            <div className="relative inline-block w-64">
+                    <div className="mb-8 w-full animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex flex-col items-center mb-4">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Select Team to Preview</label>
+                            <div className="relative inline-block w-64 mb-4">
                                 <select 
-                                    onChange={(e) => handleThemeSelect(e.target.value)}
+                                    onChange={(e) => handleTeamChange(e.target.value)}
                                     className="block appearance-none w-full bg-gray-800 border border-gray-600 hover:border-gray-500 px-4 py-2 pr-8 rounded shadow leading-tight focus:outline-none focus:shadow-outline text-gray-300 text-xs font-bold uppercase cursor-pointer"
-                                    value={selectedTeamPreview || ""}
+                                    value={selectedTeam}
                                 >
-                                    <option value="">Select a Club...</option>
                                     {Object.keys(TEAMS).sort().map(name => (
                                         <option key={name} value={name}>{name}</option>
                                     ))}
@@ -125,29 +166,33 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                                 </div>
                             </div>
-
-                            {/* Theme Preview Badge */}
-                            {selectedTeamPreview && TEAMS[selectedTeamPreview]?.colors && (
-                                <div 
-                                    className="px-4 py-2 rounded shadow-lg border-l-4 flex items-center gap-2 animate-in zoom-in duration-300"
-                                    style={{
-                                        backgroundColor: TEAMS[selectedTeamPreview].colors?.primary,
-                                        borderColor: TEAMS[selectedTeamPreview].colors?.secondary,
-                                    }}
-                                >
-                                    <div 
-                                        className="text-xs font-black uppercase tracking-widest"
-                                        style={{ color: TEAMS[selectedTeamPreview].colors?.text }}
-                                    >
-                                        {selectedTeamPreview}
-                                    </div>
-                                    <div 
-                                        className="w-2 h-2 rounded-full animate-pulse"
-                                        style={{ backgroundColor: TEAMS[selectedTeamPreview].colors?.secondary }}
-                                    />
-                                </div>
-                            )}
                         </div>
+
+                        {/* Cards Container */}
+                        <div className="flex flex-wrap justify-center gap-4">
+                            {currentKits.map((kit, index) => (
+                                <button
+                                    key={kit.name}
+                                    onClick={() => handleKitSelect({ primary: kit.bg, secondary: kit.accent, text: kit.text })}
+                                    className="relative w-32 h-40 rounded-xl shadow-lg transition-transform hover:scale-105 hover:shadow-xl group overflow-hidden border-2 border-transparent hover:border-white"
+                                    style={{ backgroundColor: kit.bg }}
+                                >
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-2">
+                                        <div className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-80" style={{ color: kit.text }}>
+                                            {kit.name}
+                                        </div>
+                                        <FootballIcon 
+                                            className="w-12 h-12 drop-shadow-md" 
+                                            style={{ color: kit.accent }} 
+                                        />
+                                        <div className="mt-2 text-[8px] font-bold px-2 py-1 rounded bg-black/20 backdrop-blur-sm" style={{ color: kit.text }}>
+                                            APPLY THEME
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-[9px] text-gray-500 mt-3 font-mono">Select a palette to update the Game UI Theme instantly.</p>
                     </div>
                 )}
 
@@ -169,11 +214,11 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                             <li>Streamer Mode Profit Calculation enabled (Revenue - COGS).</li>
                             <li>Net Profit per Clip displayed in Viral Studio.</li>
                         </ul>
-                        <p className="text-blue-400 mt-2">> PATCH NOTES v2.6:</p>
+                        <p className="text-blue-400 mt-2">> PATCH NOTES v2.7:</p>
                         <ul className="list-disc list-inside text-gray-500 pl-2">
-                            <li>Added <strong>Dynamic Club Theming</strong> engine.</li>
-                            <li>Implemented Net Profit calculator for creator mode.</li>
-                            <li>Fixed UI Pacing for live simulation ticks.</li>
+                            <li>Implemented 3-Way Kit Selector (Primary / Secondary / Unhinged Third).</li>
+                            <li>Removed legacy striping artifacts for cleaner UI.</li>
+                            <li>Updated Kit Palette keys for better accessibility.</li>
                         </ul>
                     </div>
                 )}
