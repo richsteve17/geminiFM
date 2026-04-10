@@ -346,14 +346,18 @@ function selectMelody(context: ChantEventContext, usedMelodies: string[]): Songb
 
 async function generateElevenLabsAudio(lyrics: string, melody: SongbookEntry): Promise<string | null> {
     const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
-    if (!elevenLabsApiKey) return null;
+    if (!elevenLabsApiKey) {
+        console.warn('[ElevenLabs] No API key found — falling back to Gemini TTS');
+        return null;
+    }
 
     try {
-        const tempoHint =
-            melody.tempo === 'fast' ? 'upbeat and energetic' :
-            melody.tempo === 'slow' ? 'slow and powerful' :
-            'moderate tempo';
-        const textToSpeak = `Sung to the tune of ${melody.title} by ${melody.artist}, ${tempoHint}:\n\n${lyrics}`;
+        // eleven_v3 supports more expressive/emotional delivery — best for crowd chants
+        const textToSpeak =
+            `You are performing as a massive football stadium crowd of 50,000 fans. ` +
+            `Sing the following chant to the tune of "${melody.title}" by ${melody.artist}. ` +
+            `Match the syllable stress pattern: ${melody.stressPattern}. ` +
+            `Deliver it with full stadium energy — loud, rhythmic, passionate:\n\n${lyrics}`;
 
         const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB', {
             method: 'POST',
@@ -363,22 +367,32 @@ async function generateElevenLabsAudio(lyrics: string, melody: SongbookEntry): P
             },
             body: JSON.stringify({
                 text: textToSpeak,
-                model_id: 'eleven_turbo_v2_5',
+                model_id: 'eleven_v3',
                 voice_settings: {
-                    stability: 0.4,
-                    similarity_boost: 0.75,
-                    style: 0.6,
+                    stability: 0.35,
+                    similarity_boost: 0.70,
+                    style: 0.75,
                     use_speaker_boost: true
                 }
             })
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            console.error(`[ElevenLabs] HTTP ${response.status}:`, errText.slice(0, 200));
+            return null;
+        }
 
         const arrayBuffer = await response.arrayBuffer();
+        if (!arrayBuffer.byteLength) {
+            console.warn('[ElevenLabs] Empty audio response');
+            return null;
+        }
         const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+        console.log('[ElevenLabs] Audio generated successfully, size:', arrayBuffer.byteLength);
         return URL.createObjectURL(blob);
-    } catch {
+    } catch (err) {
+        console.error('[ElevenLabs] Fetch error:', err);
         return null;
     }
 }
