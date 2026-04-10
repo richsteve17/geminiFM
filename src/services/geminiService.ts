@@ -618,16 +618,55 @@ Return JSON: {
 
 export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string, bondContext?: { squadMate: string; competition: string }) => {
     const fallback = [
-        `What are your ambitions for next season?`,
-        `How do you see your role developing at ${t.name}?`,
-        `What would it take to make this deal happen?`
+        c === 'renewal'
+            ? `${p.name} has been here a while. But honestly — does the board see this club reaching the next level? Because my client has options.`
+            : `${t.name} is interested, fine. But so are others. What makes your project worth ${p.name}'s prime years?`,
+        c === 'renewal'
+            ? `The current terms don't reflect what ${p.name} brings to this squad. What are you prepared to put on the table to show real commitment?`
+            : `My client's wage at ${p.name}'s current club is ${p.wage.toLocaleString()} a week. You'll need to do better than that. What's your opening position?`,
     ];
     try {
-        let bondNote = '';
-        if (bondContext) {
-            bondNote = `IMPORTANT: ${p.name} has a strong international bond with ${bondContext.squadMate} already at ${t.name} from the ${bondContext.competition}. Reference this connection in a question to make the negotiation feel personal.`;
-        }
-        const prompt = `Negotiation with ${p.name} (${p.personality}) for ${t.name}. ${bondNote} Generate 3 relevant negotiation questions. JSON: { "questions": [] }`;
+        const contractStatus = p.contractExpires > 0
+            ? `Contract expires in ${p.contractExpires} weeks (${p.contractExpires < 10 ? 'LEVERAGE: player is nearly out of contract' : p.contractExpires > 25 ? 'Club has leverage — long contract remaining' : 'entering final year'})`
+            : 'Free agent — no contract leverage for either side';
+
+        const personalityTone: Record<string, string> = {
+            Ambitious:    'AMBITIOUS — Obsessed with trophies, Champions League, and career legacy. Will challenge the manager on the club\'s project and realistic ambitions. Hard-nosed when it comes to what the club can offer competition-wise.',
+            Volatile:     'VOLATILE — Confrontational and easily offended. May bring up past grievances, perceived disrespect, or frustrations with how the club handled previous business. Will use emotional leverage.',
+            Leader:       'LEADER — Asks pointed questions about his client\'s role in the squad hierarchy, captaincy prospects, and whether the manager truly rates him as indispensable.',
+            Professional: 'PROFESSIONAL — Cold and businesslike. No emotional appeals. Will cite market rate, comparable contracts at rival clubs, and demand the numbers match the player\'s output. Won\'t be charmed.',
+            Eccentric:    'ECCENTRIC — Raises unusual concerns: specific training facilities, squad culture, proximity to family, or bizarre contractual clauses. Unpredictable but genuine.',
+        };
+
+        const bondNote = bondContext
+            ? `BONUS CONTEXT: ${p.name} has a strong personal bond with ${bondContext.squadMate} who is already at ${t.name} from the ${bondContext.competition}. The agent is aware of this and may use it as part of the negotiation — either as a softener or to raise the stakes ("he\'d love to reunite, but not at any price").`
+            : '';
+
+        const prompt = `
+You are the agent for ${p.name}. Generate 2 hard-hitting negotiation questions to ask the manager of ${t.name}.
+
+PLAYER PROFILE:
+- Name: ${p.name}
+- Age: ${p.age} | Rating: ${p.rating}/100 | Position: ${p.position}
+- Personality: ${p.personality} → ${personalityTone[p.personality] || 'Pragmatic agent, focused on best deal'}
+- Current weekly wage: $${p.wage.toLocaleString()}
+- ${contractStatus}
+
+CLUB CONTEXT:
+- Club: ${t.name} (Prestige: ${t.prestige}/100, League: ${t.league})
+- Negotiation type: ${c === 'renewal' ? 'CONTRACT RENEWAL — existing player asking for improved terms' : 'TRANSFER — new signing from outside the club'}
+${bondNote}
+
+RULES FOR QUESTIONS:
+1. The agent speaks IN FIRST PERSON on behalf of the player ("My client...", "He needs to know...", "What ${p.name} wants to understand is...")
+2. Each question must reference specific real context (contract length, wage, prestige, age, etc.)
+3. Questions must be GENUINELY HARD to answer convincingly — about playing time guarantees, wage parity with teammates, trophy ambitions, the club's transfer budget, etc.
+4. Do NOT ask generic questions like "what are your plans?" — be sharp and specific
+5. Questions should reflect the personality tone above
+6. Both questions must be different — one about the PROJECT/AMBITION, one about the MONEY/TERMS
+
+Return JSON: { "questions": ["question1", "question2"] }`;
+
         const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         const parsed = JSON.parse(cleanJson(response.text));
         if (Array.isArray(parsed.questions) && parsed.questions.length > 0) return parsed.questions;
@@ -638,31 +677,64 @@ export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string, bond
 };
 
 export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any, bondContext?: { squadMate: string; competition: string }): Promise<NegotiationResult> => {
-    let bondNote = '';
-    if (bondContext) {
-        bondNote = `REUNION FACTOR: ${p.name} has a Teammate Bond with ${bondContext.squadMate} at ${t.name} from the ${bondContext.competition}. This makes the player MORE willing to sign — the agent should mention it and the wage/fee demand should be slightly lower than normal to reflect this desire to reunite.`;
-    }
+    const fairWageMin = Math.round(p.wage * 1.05 / 1000) * 1000;
+    const fairWageMax = Math.round(p.wage * 1.30 / 1000) * 1000;
+    const isLowball = offer.wage < fairWageMin;
+    const isFair = offer.wage >= fairWageMin && offer.wage <= fairWageMax;
+    const isPremium = offer.wage > fairWageMax;
+    const contractStatus = p.contractExpires > 0
+        ? (p.contractExpires < 10 ? 'nearly out of contract (player has leverage)' : p.contractExpires > 25 ? 'long contract remaining (club has leverage)' : 'entering final year')
+        : 'free agent';
+
+    const bondNote = bondContext
+        ? `BOND FACTOR: ${p.name} has a genuine personal bond with ${bondContext.squadMate} at ${t.name}. The agent acknowledges this makes the player more inclined to sign — but will NOT use it to justify accepting a lowball wage. Mention it as a positive factor that tips the scales IF the offer is fair.`
+        : '';
+
     const prompt = `
-    Roleplay as the Agent for ${p.name}.
-    User offer: $${offer.wage}, ${offer.length} years.
-    History: ${JSON.stringify(ans)}.
-    Context: Negotiation with ${t.name}.
-    Previous Wage: $${p.wage}.
-    ${bondNote}
-    
-    Return JSON: 
-    { 
-        "decision": "accepted" | "rejected" | "counter", 
-        "reasoning": "string (Agent's reply in third person)", 
-        "counterOffer": { "wage": number, "length": number },
-        "extractedPromises": ["string"]
-    }
-    `;
+You are the agent for ${p.name} (${p.personality}, age ${p.age}, rating ${p.rating}/100, ${p.position}).
+Negotiating a ${c === 'renewal' ? 'contract renewal' : 'transfer'} with ${t.name} (Prestige: ${t.prestige}/100).
+
+OFFER ON THE TABLE: $${offer.wage.toLocaleString()}/week for ${offer.length} years.
+PLAYER'S CURRENT WAGE: $${p.wage.toLocaleString()}/week
+FAIR WAGE RANGE: $${fairWageMin.toLocaleString()} – $${fairWageMax.toLocaleString()}/week
+CONTRACT STATUS: ${contractStatus}
+WAGE ASSESSMENT: ${isLowball ? `LOWBALL — this offer is BELOW fair value. The agent should be offended or push back hard.` : isFair ? 'Fair — within acceptable range.' : `Premium — generous offer, agent is impressed.`}
+${bondNote}
+
+MANAGER'S RESPONSES TO AGENT'S QUESTIONS: ${JSON.stringify(ans)}
+
+DECISION LOGIC (follow strictly):
+- LOWBALL offer + bad manager answers → REJECTED outright with sharp commentary
+- LOWBALL offer + decent manager answers → COUNTER at fair wage minimum
+- FAIR offer + bad answers → COUNTER asking for 5-10% more
+- FAIR offer + good compelling answers → ACCEPTED (agent acknowledges the pitch)
+- PREMIUM offer → ACCEPTED unless manager answers were completely unconvincing
+- If player personality is Volatile: be harder to please, more easily offended
+- If Ambitious: reference trophies/league position in reasoning even if accepting
+- If Professional: focus purely on the numbers, no emotional language
+
+Respond as the agent speaking directly to the manager (first person, sharp, professional). The "reasoning" field IS what the agent says out loud in the meeting room.
+
+Return JSON:
+{
+    "decision": "accepted" | "rejected" | "counter",
+    "reasoning": "Agent's spoken response (2-3 sentences, in character, references the specific offer)",
+    "counterOffer": { "wage": number, "length": number },
+    "extractedPromises": ["any verbal promises the manager made that should be tracked"]
+}`;
     try {
         const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
-        return { decision: "accepted", reasoning: "Okay, we have a deal.", extractedPromises: [] };
+        const fallbackWage = isFair || isPremium ? offer.wage : fairWageMin;
+        return {
+            decision: isFair || isPremium ? 'accepted' : 'counter',
+            reasoning: isFair || isPremium
+                ? "We've looked at the terms. My client is satisfied — let's get this signed."
+                : `That's not where we need to be. My client is worth at least $${fairWageMin.toLocaleString()} a week. Come back with something serious.`,
+            counterOffer: { wage: fallbackWage, length: offer.length },
+            extractedPromises: []
+        };
     }
 };
 
