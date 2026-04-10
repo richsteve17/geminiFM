@@ -160,10 +160,17 @@ export default function MatchView({
                     ).then(chant => {
                         onMelodyUsed(chant.melodyId);
 
+                        // Play backing music track at lower volume
                         if (chant.audioUrl) {
-                            const audio = new Audio(chant.audioUrl);
-                            audio.volume = 0.7;
-                            audio.play().catch(() => {});
+                            const music = new Audio(chant.audioUrl);
+                            music.volume = 0.45;
+                            music.play().catch(() => {});
+                        }
+                        // Play vocal layer on top at full volume
+                        if (chant.vocalUrl) {
+                            const vocal = new Audio(chant.vocalUrl);
+                            vocal.volume = 0.9;
+                            vocal.play().catch(() => {});
                         }
 
                         setCurrentChant(chant);

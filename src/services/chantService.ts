@@ -191,7 +191,8 @@ export interface Chant {
     tune: string;
     intensity: 'low' | 'medium' | 'high';
     melodyId: string;
-    audioUrl?: string;
+    audioUrl?: string;   // ElevenLabs /v1/music backing track
+    vocalUrl?: string;   // ElevenLabs TTS vocal layer
 }
 
 // ── WEB AUDIO MELODY PLAYER ────────────────────────────────────────────────
@@ -402,6 +403,55 @@ async function generateElevenLabsMusic(lyrics: string, melody: SongbookEntry): P
     }
 }
 
+async function generateElevenLabsVocal(lyrics: string, melody: SongbookEntry): Promise<string | null> {
+    const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
+    if (!elevenLabsApiKey) return null;
+
+    try {
+        // Format lyrics with rhythm hints so eleven_v3 delivers it as a rhythmic chant
+        const lines = lyrics.split('\n').filter(Boolean);
+        const formattedLyrics = lines.join(' / ');
+        const text =
+            `[Singing as a passionate football stadium crowd, rhythmic chant delivery, ` +
+            `matching the beat pattern ${melody.stressPattern}]: ` +
+            formattedLyrics;
+
+        const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB', {
+            method: 'POST',
+            headers: {
+                'xi-api-key': elevenLabsApiKey,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                text,
+                model_id: 'eleven_v3',
+                voice_settings: {
+                    stability: 0.30,
+                    similarity_boost: 0.65,
+                    style: 0.85,
+                    use_speaker_boost: true
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            console.error(`[ElevenLabs Vocal] HTTP ${response.status}:`, errText.slice(0, 200));
+            return null;
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        if (!arrayBuffer.byteLength) return null;
+
+        const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+        console.log('[ElevenLabs Vocal] Generated successfully, size:', arrayBuffer.byteLength);
+        return URL.createObjectURL(blob);
+    } catch (err) {
+        console.error('[ElevenLabs Vocal] Fetch error:', err);
+        return null;
+    }
+}
+
 async function fallbackTtsChant(lyrics: string, melody?: SongbookEntry): Promise<void> {
     try {
         const tuneHint = melody
@@ -502,6 +552,13 @@ export const generatePunkChant = async (
         ? 'The player is a club legend — emphasize the devotion.'
         : '';
 
+    // Count syllable positions in the stress pattern for the worked example
+    const patternPositions = melody.stressPattern.trim().split(/\s+/).filter(t => !t.startsWith('(')).length;
+    const stressPositions = melody.stressPattern.trim().split(/\s+/)
+        .filter(t => !t.startsWith('('))
+        .map((t, i) => t === t.toUpperCase() && t !== 'da' && t !== 'na' ? i + 1 : null)
+        .filter(Boolean);
+
     const prompt = `
 You are the Capo of the ${teamName} Ultras, leading the terrace choir.
 
@@ -511,24 +568,29 @@ ${personalityHint}
 
 YOUR ASSIGNED MELODY: "${melody.title}" by ${melody.artist}
 STRESS PATTERN: ${melody.stressPattern}
-SYLLABLE GUIDE: ${melody.syllableGuide}
+Each position = one syllable. UPPERCASE = stressed beat, lowercase = unstressed.
+Total syllables per line: approximately ${patternPositions}.
+Stressed beats fall on positions: ${stressPositions.join(', ')}.
 TEMPO: ${melody.tempo}
 EMOTIONAL FEEL: ${melody.emotionalTags.join(', ')}
 
-TASK: Write a ${chantLength} terrace chant that SCANS PERFECTLY to this melody's stress pattern.
+── SYLLABLE MAPPING — THIS IS THE MOST IMPORTANT RULE ──
+You MUST write lyrics where each syllable maps to one position in the stress pattern.
+Do NOT write "We love you Liverpool" and call it done — that is a generic placeholder.
+You MUST adapt the lyrics to fit this specific melody's rhythm.
 
-STRICT RULES:
-1. BEFORE writing the final lyrics, map each syllable to the stress pattern. Every line must fit.
-2. Each line must match the syllable count and stress of the melody.
-3. Must rhyme (AABB or ABAB).
-4. Include the player name "${playerName || teamName}" naturally — it must fit the meter.
-5. Reference the team name at least once.
-6. No generic "Olé Olé". No clichés. Be specific and vivid.
-${isDramatic ? '7. This is a DRAMATIC, historic moment — go big, make it unforgettable.' : ''}
+HOW TO CHECK: Write the line, then split into syllables and mark each one:
+  Pattern:   DUM  da  da  DUM  da  da  DUM
+  Syllables: LIV- er- pool- FIRE- side- an- FIELD  ← each syllable fills one pattern slot ✓
+  Wrong:     "We love you Liverpool FC"  ← too many syllables, doesn't map ✗
 
-VALIDATION: For each line, verify syllable count matches the pattern before including it.
+WRITE YOUR LYRICS LIKE THIS INSIDE THE JSON — syllables must fit the STRESS PATTERN above.
+Rhyme scheme: AABB or ABAB.
+Include "${playerName || teamName}" fitting naturally into the meter.
+${isDramatic ? 'This is a DRAMATIC historic moment — go huge, be unforgettable.' : ''}
+No "Olé Olé". No generic filler. Be vivid and specific to the situation.
 
-Return JSON ONLY:
+Return JSON ONLY (no extra text):
 {
     "lyrics": ["Line 1", "Line 2", "Line 3", "Line 4"${isDramatic ? ', "Line 5", "Line 6"' : ''}],
     "tune": "${melody.title} (${melody.artist})",
@@ -554,9 +616,14 @@ Return JSON ONLY:
 
         const lyricsText = (parsed.lyrics ?? []).join('\n');
 
-        // Try ElevenLabs first; fall back to Gemini TTS if unavailable
-        const audioUrl = await generateElevenLabsMusic(lyricsText, melody);
-        if (!audioUrl) {
+        // Fire both in parallel: music backing track + vocal TTS layer
+        const [audioUrl, vocalUrl] = await Promise.all([
+            generateElevenLabsMusic(lyricsText, melody),
+            generateElevenLabsVocal(lyricsText, melody)
+        ]);
+
+        // Only fall back to Gemini TTS if ElevenLabs vocal also failed
+        if (!vocalUrl) {
             fallbackTtsChant(lyricsText, melody).catch(() => {});
         }
 
@@ -565,7 +632,8 @@ Return JSON ONLY:
             tune: parsed.tune ?? melody.title,
             intensity: parsed.intensity ?? 'medium',
             melodyId: melody.id,
-            audioUrl: audioUrl ?? undefined
+            audioUrl: audioUrl ?? undefined,
+            vocalUrl: vocalUrl ?? undefined
         };
     } catch {
         const fallbackLyrics = [
