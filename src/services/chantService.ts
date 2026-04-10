@@ -21,6 +21,8 @@ export interface SongbookEntry {
     tempo: 'slow' | 'medium' | 'fast';
     emotionalTags: string[];
     bestFor: string[];
+    /** ToS-safe music style description used for ElevenLabs /v1/music prompt — no artist/song names */
+    musicStyle: string;
 }
 
 export const CHANT_SONGBOOK: SongbookEntry[] = [
@@ -32,7 +34,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '7 syllables per line, strong on beats 1, 4, 7',
         tempo: 'medium',
         emotionalTags: ['aggressive', 'anthemic', 'stomping'],
-        bestFor: ['goal', 'winning', 'home_game']
+        bestFor: ['goal', 'winning', 'home_game'],
+        musicStyle: 'driving electric bass guitar repeating DUM-da-da-DUM-da-da-DUM riff, heavy rock stomp, crowd clapping on every beat, powerful stadium march with 50000 fans singing'
     },
     {
         id: 'sloop_john_b',
@@ -42,7 +45,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: 'Waltz feel, 3/4 time, lilt on every 3rd beat',
         tempo: 'medium',
         emotionalTags: ['jovial', 'singalong', 'friendly'],
-        bestFor: ['goal', 'winning', 'away_game']
+        bestFor: ['goal', 'winning', 'away_game'],
+        musicStyle: 'cheerful seafaring shanty in 3/4 waltz time, acoustic guitar strumming, jovial group singalong with brass band accompaniment, upbeat and friendly crowd chant'
     },
     {
         id: 'go_west',
@@ -52,7 +56,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '8 syllables, heavy on beats 1 and 5, crowd echo on beats 3-4',
         tempo: 'medium',
         emotionalTags: ['euphoric', 'stadium', 'crowd'],
-        bestFor: ['goal', 'winning', 'hat_trick']
+        bestFor: ['goal', 'winning', 'hat_trick'],
+        musicStyle: 'powerful anthemic synth march, four-on-the-floor kick drum, massive male choir echo call-and-response, euphoric hands-in-the-air stadium anthem with crowd of 50000'
     },
     {
         id: 'freed_from_desire',
@@ -62,7 +67,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '8 syllables, stress on 1, 4, 7 — chant player name in verse',
         tempo: 'fast',
         emotionalTags: ['ecstatic', 'rave', 'high-energy'],
-        bestFor: ['hat_trick', 'goal', 'comeback']
+        bestFor: ['hat_trick', 'goal', 'comeback'],
+        musicStyle: 'upbeat 130 BPM Eurodance rave, four-on-the-floor electronic kick drum, euphoric synth hook with NA-na-na-NA pattern, massive crowd of 50000 fans singing in ecstasy'
     },
     {
         id: 'bella_ciao',
@@ -72,7 +78,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '10 syllables, alternating stress on odd beats',
         tempo: 'medium',
         emotionalTags: ['passionate', 'european', 'defiant'],
-        bestFor: ['comeback', 'champions_league', 'away_goal']
+        bestFor: ['comeback', 'champions_league', 'away_goal'],
+        musicStyle: 'traditional Italian folk march in 3/4 time, passionate accordion and acoustic guitar, rousing defiant crowd singalong, 50000 fans united in song'
     },
     {
         id: 'youll_never_walk_alone',
@@ -82,7 +89,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '8 syllables per verse, slow build to powerful chorus',
         tempo: 'slow',
         emotionalTags: ['emotional', 'anthemic', 'tearjerking'],
-        bestFor: ['comeback_winner', 'relegation_battle', 'season_finale', 'injury_time_winner']
+        bestFor: ['comeback_winner', 'relegation_battle', 'season_finale', 'injury_time_winner'],
+        musicStyle: 'slow emotional orchestral anthem building from gentle piano to full choir and soaring strings, tearjerking key change, 50000 fans in emotional unison, spine-tingling stadium moment'
     },
     {
         id: 'sweet_caroline',
@@ -92,7 +100,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '9 syllables + crowd response "Bum Bum Bum", stress on 1, 3, 7',
         tempo: 'medium',
         emotionalTags: ['joyful', 'universal', 'crowd-response'],
-        bestFor: ['winning', 'goal', 'home_game']
+        bestFor: ['winning', 'goal', 'home_game'],
+        musicStyle: 'upbeat classic singalong with piano and brass, crowd call-and-response BUM-BUM-BUM, 120 BPM joyful celebration, 50000 fans clapping and singing in joy'
     },
     {
         id: 'wonderwall',
@@ -102,7 +111,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '10 syllables, stress on 1, 4, 6, 9 — Britpop lilt',
         tempo: 'medium',
         emotionalTags: ['nostalgic', 'english', 'singalong'],
-        bestFor: ['goal', 'winning', 'home_game']
+        bestFor: ['goal', 'winning', 'home_game'],
+        musicStyle: 'British indie rock singalong, strumming acoustic guitar with Britpop lilt, melancholic mid-tempo, passionate crowd of 50000 English football fans belting the chorus'
     },
     {
         id: 'angels',
@@ -112,7 +122,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '10 syllables, slow build, powerful on "protection"',
         tempo: 'slow',
         emotionalTags: ['emotional', 'dramatic', 'powerful'],
-        bestFor: ['comeback_winner', 'injury_time_winner', 'relegation_battle', 'season_finale']
+        bestFor: ['comeback_winner', 'injury_time_winner', 'relegation_battle', 'season_finale'],
+        musicStyle: 'slow emotional power ballad, grand piano building to swelling orchestral strings, dramatic crescendo, 50000 fans singing in powerful emotional unison, stadium lights swaying'
     },
     {
         id: 'allez_allez_allez',
@@ -122,7 +133,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '6 syllables repeating, stress on "lez" each time, builds in volume',
         tempo: 'fast',
         emotionalTags: ['triumphant', 'european', 'conquering'],
-        bestFor: ['champions_league', 'comeback', 'away_goal', 'hat_trick']
+        bestFor: ['champions_league', 'comeback', 'away_goal', 'hat_trick'],
+        musicStyle: 'fast energetic football terrace march, relentless driving percussion, building crowd volume from chant to roar, 50000 fans stomping in triumphant unison, relentless repetitive rhythm'
     },
     {
         id: 'rasputin',
@@ -132,7 +144,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '10 syllables, syncopated — swap "Rasputin" for player name',
         tempo: 'fast',
         emotionalTags: ['villain', 'swagger', 'high-energy', 'intimidating'],
-        bestFor: ['goal', 'hat_trick', 'villain_player']
+        bestFor: ['goal', 'hat_trick', 'villain_player'],
+        musicStyle: 'fast 128 BPM disco-stomp, urgent syncopated rhythm, thundering bass with punchy brass stabs, dramatic flair, crowd of 50000 fans stomping and chanting with swagger'
     },
     {
         id: 'lose_yourself',
@@ -142,7 +155,8 @@ export const CHANT_SONGBOOK: SongbookEntry[] = [
         syllableGuide: '12 syllables, rapid-fire, stress on "had", "shot", "one", "opportunity"',
         tempo: 'fast',
         emotionalTags: ['underdog', 'comeback', 'intense', 'motivational'],
-        bestFor: ['comeback', 'comeback_winner', 'relegation_battle', 'losing']
+        bestFor: ['comeback', 'comeback_winner', 'relegation_battle', 'losing'],
+        musicStyle: 'intense dramatic build with heavy kick drum and urgent string ostinato, rapid-fire motivational chant delivery, 50000 fans united in desperate belief, powerful underdog anthem energy'
     }
 ];
 
@@ -344,7 +358,7 @@ function selectMelody(context: ChantEventContext, usedMelodies: string[]): Songb
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
-async function generateElevenLabsAudio(lyrics: string, melody: SongbookEntry): Promise<string | null> {
+async function generateElevenLabsMusic(lyrics: string, melody: SongbookEntry): Promise<string | null> {
     const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     if (!elevenLabsApiKey) {
         console.warn('[ElevenLabs] No API key found — falling back to Gemini TTS');
@@ -352,47 +366,38 @@ async function generateElevenLabsAudio(lyrics: string, melody: SongbookEntry): P
     }
 
     try {
-        // eleven_v3 supports more expressive/emotional delivery — best for crowd chants
-        const textToSpeak =
-            `You are performing as a massive football stadium crowd of 50,000 fans. ` +
-            `Sing the following chant to the tune of "${melody.title}" by ${melody.artist}. ` +
-            `Match the syllable stress pattern: ${melody.stressPattern}. ` +
-            `Deliver it with full stadium energy — loud, rhythmic, passionate:\n\n${lyrics}`;
+        // Build a ToS-safe prompt: describe style, not song/artist names.
+        // Include the actual lyrics so the AI sings them.
+        const prompt =
+            `${melody.musicStyle}. ` +
+            `A crowd of 50000 passionate football fans singing this chant: "${lyrics.replace(/\n/g, ' / ')}"`;
 
-        const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB', {
+        const response = await fetch('https://api.elevenlabs.io/v1/music', {
             method: 'POST',
             headers: {
                 'xi-api-key': elevenLabsApiKey,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                text: textToSpeak,
-                model_id: 'eleven_v3',
-                voice_settings: {
-                    stability: 0.35,
-                    similarity_boost: 0.70,
-                    style: 0.75,
-                    use_speaker_boost: true
-                }
-            })
+            body: JSON.stringify({ prompt, duration_seconds: 15 })
         });
 
         if (!response.ok) {
             const errText = await response.text().catch(() => '');
-            console.error(`[ElevenLabs] HTTP ${response.status}:`, errText.slice(0, 200));
+            console.error(`[ElevenLabs Music] HTTP ${response.status}:`, errText.slice(0, 300));
             return null;
         }
 
         const arrayBuffer = await response.arrayBuffer();
         if (!arrayBuffer.byteLength) {
-            console.warn('[ElevenLabs] Empty audio response');
+            console.warn('[ElevenLabs Music] Empty audio response');
             return null;
         }
+
         const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
-        console.log('[ElevenLabs] Audio generated successfully, size:', arrayBuffer.byteLength);
+        console.log('[ElevenLabs Music] Generated successfully, size:', arrayBuffer.byteLength);
         return URL.createObjectURL(blob);
     } catch (err) {
-        console.error('[ElevenLabs] Fetch error:', err);
+        console.error('[ElevenLabs Music] Fetch error:', err);
         return null;
     }
 }
@@ -550,7 +555,7 @@ Return JSON ONLY:
         const lyricsText = (parsed.lyrics ?? []).join('\n');
 
         // Try ElevenLabs first; fall back to Gemini TTS if unavailable
-        const audioUrl = await generateElevenLabsAudio(lyricsText, melody);
+        const audioUrl = await generateElevenLabsMusic(lyricsText, melody);
         if (!audioUrl) {
             fallbackTtsChant(lyricsText, melody).catch(() => {});
         }
