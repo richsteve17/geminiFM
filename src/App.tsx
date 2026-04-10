@@ -101,7 +101,8 @@ export default function App() {
     const [managerReputation, setManagerReputation] = useState<number>(0);
     
     // --- CHANT STATE ---
-    const [currentChant, setCurrentChant] = useState<Chant | null>(null);
+    // Season-level melody tracker — persists across matches within a season
+    const [seasonUsedMelodies, setSeasonUsedMelodies] = useState<string[]>([]);
 
     // --- WORLD CUP STATE ---
     const [wcKnockoutResults, setWcKnockoutResults] = useState<Fixture[]>([]);
@@ -421,6 +422,7 @@ export default function App() {
         const initialTable = allWcTeams.map((t: Team) => ({ teamName: t.name, league: 'International' as const, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, group: t.group }));
         setLeagueTable(initialTable);
         setCurrentWeek(1); setGameState(GameState.PRE_MATCH);
+        setSeasonUsedMelodies([]);
         setNews([{ id: Date.now(), week: 1, title: 'World Cup 2026 Begins', body: '48 teams. 12 Groups. 104 Matches. The road to glory starts now.', type: 'tournament-result' }]);
         setAppScreen(AppScreen.GAMEPLAY);
         const week1Fixtures = groupFixtures.filter(f => f.week === 1);
@@ -456,6 +458,7 @@ export default function App() {
         const initialTable: LeagueTableEntry[] = Object.values(finalTeamsState).map(t => ({ teamName: t.name, league: t.league, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, }));
         setWeeksInSeason(Math.max(...finalFixtures.map(f => f.week)) + 10);
         setLeagueTable(initialTable); setFixtures(finalFixtures); setCurrentWeek(1);
+        setSeasonUsedMelodies([]);
         setTeams(finalTeamsState); setUserTeamName(selectedTeamName); setAppScreen(AppScreen.GAMEPLAY);
         setCurrentFixture(finalFixtures.find(f => (f.homeTeam === selectedTeamName || f.awayTeam === selectedTeamName) && f.week === 1));
 
@@ -1368,11 +1371,6 @@ export default function App() {
                 if (!userTeam) return <div>Loading...</div>;
                 return (
                     <div className="relative">
-                        {gameState !== GameState.PRE_MATCH && matchState && userTeamName && (
-                            <div className="mb-4">
-                                <AtmosphereWidget chant={currentChant} momentum={matchState.momentum || 0} teamName={userTeamName} />
-                            </div>
-                        )}
                         <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
                         {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
@@ -1399,7 +1397,9 @@ export default function App() {
                                 leagueTable={leagueTable} 
                                 isLoading={isLoading} 
                                 currentWeek={currentWeek} 
-                                teams={teams} 
+                                teams={teams}
+                                usedMelodies={seasonUsedMelodies}
+                                onMelodyUsed={(id) => setSeasonUsedMelodies(prev => [...prev, id])}
                             />
                         </div>
                         <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} knockoutResults={gameMode === 'WorldCup' ? [...wcKnockoutResults, ...fixtures.filter(f => f.isKnockout && !wcKnockoutResults.find(r => r.id === f.id))] : []} /></div>
