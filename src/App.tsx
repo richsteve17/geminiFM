@@ -1,14 +1,14 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect, PlayerEffect, WorldCupResult, WorldCupOutcome } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect, PlayerEffect, WorldCupResult, WorldCupOutcome, NegotiationMessage } from './types';
 import { AppScreen, GameState } from './types';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
 import AtmosphereWidget from './components/AtmosphereWidget';
-import { simulateMatchSegment, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, scoutFollowUp, getInternationalBreakSummary, getInterviewOpeningMessage, continueInterviewChat, generatePressConferenceOpener, continuePressConferenceChat, getTeammateTournamentRivalry, getPlayerPostTournamentMorale, type ChatMessage, type InterviewContext, type PressConferenceContext } from './services/geminiService';
+import { simulateMatchSegment, evaluateInterview, scoutPlayers, scoutFollowUp, getInternationalBreakSummary, getInterviewOpeningMessage, continueInterviewChat, generatePressConferenceOpener, continuePressConferenceChat, getTeammateTournamentRivalry, getPlayerPostTournamentMorale, continueNegotiationChat, evaluateNegotiationOffer, type ChatMessage, type InterviewContext, type PressConferenceContext } from './services/geminiService';
 import type { ScoutArchetype, ScoutReport } from './services/geminiService';
 import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS } from './utils';
@@ -1214,56 +1214,85 @@ export default function App() {
         setMatchState(prev => prev ? ({ ...prev, subsUsed: { home: isHome ? prev.subsUsed.home + 1 : prev.subsUsed.home, away: !isHome ? prev.subsUsed.away + 1 : prev.subsUsed.away }, events: [...prev.events, { id: Date.now(), minute: prev.currentMinute, type: 'sub', description: `SUB: ${playerIn.name} ON, ${playerOut.name} OFF`, teamName: userTeamName }] }) : null);
     };
 
+    const getBondContext = (playerName: string, context: 'transfer' | 'renewal'): { squadMate: string; competition: string } | undefined => {
+        if (context !== 'transfer' || !userTeamName) return undefined;
+        const userSquad = teams[userTeamName]?.players || [];
+        for (const squadMate of userSquad) {
+            const bondEff = squadMate.effects.find(e => e.type === 'TeammateBond' && e.with === playerName);
+            if (bondEff && bondEff.type === 'TeammateBond') {
+                return { squadMate: squadMate.name, competition: 'international tournament' };
+            }
+        }
+        return undefined;
+    };
+
     const handleStartPlayerTalk = async (player: Player, context: 'transfer' | 'renewal') => {
         if (!userTeamName) return;
         setIsLoading(true); setTalkResult(null); setPlayerTalk(null); setError(null); setPendingContractTerms(null);
         setAppScreen(AppScreen.PLAYER_TALK);
         try {
-            // Check for teammate bond context (for transfer negotiations)
-            // Only triggers when a squad member has a concrete TeammateBond directed at this specific player by name
-            let bondContext: { squadMate: string; competition: string } | undefined;
-            if (context === 'transfer') {
-                const userSquad = teams[userTeamName]?.players || [];
-                for (const squadMate of userSquad) {
-                    const bondEff = squadMate.effects.find(e => e.type === 'TeammateBond' && e.with === player.name);
-                    if (bondEff && bondEff.type === 'TeammateBond') {
-                        bondContext = { squadMate: squadMate.name, competition: 'international tournament' };
-                        break;
-                    }
-                }
-            }
-            const questions = await getPlayerTalkQuestions(player, teams[userTeamName], context, bondContext);
-            setPlayerTalk({ player, questions, answers: [], currentQuestionIndex: 0, context, negotiationHistory: [] });
-        } catch (e) { setError("Negotiations failed."); setAppScreen(AppScreen.GAMEPLAY); } finally { setIsLoading(false); }
+            const bondContext = getBondContext(player.name, context);
+            const { reply, nextPhase } = await continueNegotiationChat(player, teams[userTeamName], context, [], bondContext);
+            setPlayerTalk({
+                player,
+                context,
+                messages: [{ role: 'agent', text: reply }],
+                phase: nextPhase === 'offer' ? 'offer' : 'talking',
+                bondContext,
+            });
+        } catch (e) {
+            setError("The agent didn't show up. Try again.");
+            setAppScreen(AppScreen.GAMEPLAY);
+        } finally { setIsLoading(false); }
     };
 
-    const handlePlayerTalkAnswer = async (answer: string, offer?: { wage: number, length: number }) => {
+    const handlePlayerTalkMessage = async (text: string, offer?: { wage: number; length: number }) => {
         if (!playerTalk || !userTeamName) return;
-        const newAnswers = [...playerTalk.answers, answer];
-        
-        if (offer) {
-            setPendingContractTerms(offer);
-            setIsLoading(true);
-            try {
-                // Determine bond context for evaluation
-                // Only applies when there is a concrete named TeammateBond with the player being negotiated
-                let bondContext: { squadMate: string; competition: string } | undefined;
-                if (playerTalk.context === 'transfer') {
-                    const userSquad = teams[userTeamName]?.players || [];
-                    for (const squadMate of userSquad) {
-                        const bondEff = squadMate.effects.find(e => e.type === 'TeammateBond' && e.with === playerTalk.player.name);
-                        if (bondEff && bondEff.type === 'TeammateBond') {
-                            bondContext = { squadMate: squadMate.name, competition: 'international tournament' };
-                            break;
-                        }
-                    }
+
+        const managerMsg: NegotiationMessage = { role: 'manager', text: text || '' };
+        const updatedMessages: NegotiationMessage[] = [...playerTalk.messages, managerMsg];
+        setPlayerTalk({ ...playerTalk, messages: updatedMessages });
+        setIsLoading(true);
+
+        try {
+            if (offer) {
+                // Manager is submitting an offer — evaluate it
+                setPendingContractTerms(offer);
+                const result = await evaluateNegotiationOffer(
+                    playerTalk.player, teams[userTeamName], playerTalk.context,
+                    updatedMessages, offer, playerTalk.bondContext
+                );
+                const agentReply: NegotiationMessage = { role: 'agent', text: result.reasoning };
+                if (result.decision === 'counter' && result.counterOffer) {
+                    // Counter: update sliders, keep conversation going — no final result screen
+                    setPendingContractTerms(result.counterOffer);
+                    setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentReply], phase: 'offer' } : prev);
+                } else {
+                    // Accepted or rejected: show final result
+                    setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentReply], phase: 'offer' } : prev);
+                    setTalkResult(result);
                 }
-                const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context, offer, bondContext);
-                setTalkResult(result);
-            } catch (e) { setError("Evaluation failed."); } finally { setIsLoading(false); }
-        } else if (playerTalk.currentQuestionIndex < playerTalk.questions.length - 1) {
-            setPlayerTalk({ ...playerTalk, answers: newAnswers, currentQuestionIndex: playerTalk.currentQuestionIndex + 1 });
-        }
+            } else {
+                // Continuing conversation
+                const { reply, nextPhase } = await continueNegotiationChat(
+                    playerTalk.player, teams[userTeamName], playerTalk.context,
+                    updatedMessages, playerTalk.bondContext
+                );
+                const agentMsg: NegotiationMessage = { role: 'agent', text: reply };
+                const newPhase: 'talking' | 'offer' = nextPhase === 'walkout'
+                    ? 'talking' // walkout shows as a final message then result
+                    : nextPhase === 'offer' ? 'offer' : 'talking';
+
+                if (nextPhase === 'walkout') {
+                    setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentMsg] } : prev);
+                    setTalkResult({ decision: 'rejected', reasoning: reply, extractedPromises: [] });
+                } else {
+                    setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentMsg], phase: newPhase } : prev);
+                }
+            }
+        } catch (e) {
+            setError("Something went wrong in negotiations.");
+        } finally { setIsLoading(false); }
     };
 
     const handlePlayerTalkFinish = () => {
@@ -1367,7 +1396,7 @@ export default function App() {
             case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen teamName={interviewTeamName} chairmanPersonality={interviewPersonality} isLoading={isLoading} error={error} jobOffer={jobOffer} chatHistory={interviewChatHistory} onSendMessage={handleJobInterviewAnswer} onFinish={(acc) => { if (acc && interviewTeamName) initializeGame(interviewTeamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
             case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen chatHistory={pressChatHistory} isLoading={isLoading} isDone={pressConferenceDone} onSendMessage={handlePressSendMessage} onFinish={handlePressConferenceFinish} />;
             case AppScreen.TRANSFERS: return <TransfersScreen targets={transferMarket} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
-            case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={handlePlayerTalkFinish} />;
+            case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onSendMessage={handlePlayerTalkMessage} onFinish={handlePlayerTalkFinish} />;
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;
                 return (

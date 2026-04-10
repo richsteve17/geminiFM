@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
-import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData, ShoutEffect, RiftSeverity, RiftScope } from '../types';
+import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData, ShoutEffect, RiftSeverity, RiftScope, NegotiationMessage } from '../types';
 
 const API_KEY = process.env.API_KEY || '';
 
@@ -746,6 +746,155 @@ Return JSON:
             reasoning: isFair || isPremium
                 ? "We've looked at the terms. My client is satisfied — let's get this signed."
                 : `That's not where we need to be. My client is worth at least $${fairWageMin.toLocaleString()} a week. Come back with something serious.`,
+            counterOffer: { wage: fallbackWage, length: offer.length },
+            extractedPromises: []
+        };
+    }
+};
+
+// ── CONVERSATIONAL NEGOTIATION ───────────────────────────────────────────────
+
+export const continueNegotiationChat = async (
+    p: Player,
+    t: Team,
+    context: 'transfer' | 'renewal',
+    history: NegotiationMessage[],
+    bondContext?: { squadMate: string; competition: string }
+): Promise<{ reply: string; nextPhase: 'talking' | 'offer' | 'walkout' }> => {
+    const isOpening = history.length === 0;
+    const transcript = history.map(m => `${m.role === 'agent' ? 'Agent' : 'Manager'}: ${m.text}`).join('\n');
+
+    const prestigeTier = t.prestige >= 80
+        ? `ELITE CLUB (${t.prestige}/100): ${t.name} already wins at the highest level. Never question their ambition — ask about guaranteed starts in a packed squad, wage parity with the club's top earners, specific role in Champions League nights.`
+        : t.prestige >= 55
+        ? `MID-TIER CLUB (${t.prestige}/100): Solid but unproven at the top. Probe the trophy timeline, transfer budget, and who else is being signed.`
+        : `LOWER-PRESTIGE CLUB (${t.prestige}/100): A step down from this player's calibre. The agent is visibly skeptical — challenge whether the club is serious.`;
+
+    const personalityNote: Record<string, string> = {
+        Ambitious:    'Cares deeply about trophies and European competition. Challenges vague answers. Will not accept "trust the process" without specifics.',
+        Volatile:     'Confrontational. Holds grudges. Will bring up perceived disrespect or past slights. Pushes back hard when deflected.',
+        Leader:       'Focused on squad role, captaincy prospects, and respect in the dressing room. Wants to know where he stands in the hierarchy.',
+        Professional: 'Cold and numerical. Only the terms matter. Will cite market rate. Not charmed by speeches.',
+        Eccentric:    'Has surprising concerns — training facilities, squad culture, superstitions, proximity to family. Unpredictable.',
+    };
+
+    const bondNote = bondContext
+        ? `PERSONAL CONTEXT: ${p.name} has a bond with ${bondContext.squadMate} already at ${t.name}. The agent can reference this — but won't use it to justify a bad offer.`
+        : '';
+
+    const managerResponses = history.filter(m => m.role === 'manager');
+    const recentManagerMsgs = managerResponses.slice(-2).map(m => m.text);
+    const evasionCount = recentManagerMsgs.filter(txt =>
+        txt.trim().endsWith('?') || txt.trim().split(' ').length < 5
+    ).length;
+
+    const prompt = `
+You are the hard-nosed agent for ${p.name} (${p.personality}, age ${p.age}, rating ${p.rating}/100, ${p.position}).
+Negotiating a ${context === 'renewal' ? 'CONTRACT RENEWAL' : 'TRANSFER'} with ${t.name}.
+Player's current wage: $${p.wage.toLocaleString()}/week. Contract: ${p.contractExpires > 0 ? `expires in ${p.contractExpires} weeks` : 'free agent'}.
+
+${prestigeTier}
+Agent personality: ${personalityNote[p.personality] || 'Pragmatic, deal-focused.'}
+${bondNote}
+
+${isOpening
+    ? `This is the OPENING of the meeting. Greet the manager briefly and raise your FIRST specific concern — something real about this player's situation and this particular club. Do not mention money yet. Keep it to 2–3 sentences. Make it feel like a real meeting starting.`
+    : `Full conversation so far:\n${transcript}\n\nThe manager just said: "${history[history.length - 1]?.text}"\n\nRespond naturally. React directly to what they said — if they gave a strong answer, acknowledge it and probe further. If they deflected or asked a question back, call it out. Keep it to 2–3 sentences. Sound like a real agent in a real meeting room, not a chatbot.`
+}
+
+PHASE RULES:
+- Do NOT jump to money talk in the first 2 exchanges. Cover the project/role concerns first.
+- After at least 2 manager responses have addressed your concerns, you may transition to offer stage by ending with something like "Right. So let's see what you're actually putting on the table."
+- If the manager has been evasive in ${evasionCount >= 2 ? 'MULTIPLE recent responses' : 'responses'}: ${evasionCount >= 2 ? 'call it out directly and signal a walkout.' : 'push back with a sharper follow-up.'}
+- WALKOUT if: manager is blatantly dismissive, rude, or has given 2+ non-answers in a row.
+
+Return JSON:
+{
+  "reply": "agent's spoken words (2-3 sentences, natural, in-character)",
+  "nextPhase": "talking" | "offer" | "walkout"
+}
+"offer" = ready to discuss financial terms now.
+"walkout" = agent is leaving, negotiation over.`;
+
+    try {
+        const response = await getAI().models.generateContent({
+            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+        });
+        const parsed = JSON.parse(cleanJson(response.text));
+        return { reply: parsed.reply || "Where were we?", nextPhase: parsed.nextPhase || 'talking' };
+    } catch (e) {
+        const fallback = isOpening
+            ? `Good to meet you. Before we get into numbers, I need to understand exactly what role ${p.name} would have here — because he has options and I need to give him a real answer.`
+            : "Look, I need a straight answer. What is this club actually offering my client?";
+        return { reply: fallback, nextPhase: history.length >= 4 ? 'offer' : 'talking' };
+    }
+};
+
+export const evaluateNegotiationOffer = async (
+    p: Player,
+    t: Team,
+    context: 'transfer' | 'renewal',
+    history: NegotiationMessage[],
+    offer: { wage: number; length: number },
+    bondContext?: { squadMate: string; competition: string }
+): Promise<NegotiationResult> => {
+    const fairWageMin = Math.round(p.wage * 1.05 / 1000) * 1000;
+    const fairWageMax = Math.round(p.wage * 1.30 / 1000) * 1000;
+    const isLowball = offer.wage < fairWageMin;
+    const isPremium = offer.wage > fairWageMax;
+    const transcript = history.map(m => `${m.role === 'agent' ? 'Agent' : 'Manager'}: ${m.text}`).join('\n');
+
+    const managerAnswers = history.filter(m => m.role === 'manager').map(m => m.text);
+    const weakAnswers = managerAnswers.filter(t => t.trim().endsWith('?') || t.trim().split(' ').length < 5).length;
+    const conversationQuality = weakAnswers >= Math.ceil(managerAnswers.length / 2) ? 'POOR (manager was mostly evasive or gave non-answers)' : 'SOLID (manager engaged genuinely)';
+
+    const bondNote = bondContext
+        ? `BOND FACTOR: ${p.name} has a personal connection with ${bondContext.squadMate} at ${t.name}. Tip scales toward acceptance IF the offer is fair.`
+        : '';
+
+    const prompt = `
+You are the agent for ${p.name} (${p.personality}, age ${p.age}, rating ${p.rating}/100).
+Evaluating final offer from ${t.name} (Prestige: ${t.prestige}/100) for a ${context === 'renewal' ? 'contract renewal' : 'transfer'}.
+
+FULL NEGOTIATION CONVERSATION:
+${transcript || '(No conversation — manager jumped straight to an offer)'}
+
+OFFER: $${offer.wage.toLocaleString()}/week for ${offer.length} years.
+Current wage: $${p.wage.toLocaleString()}/week | Fair range: $${fairWageMin.toLocaleString()}–$${fairWageMax.toLocaleString()}/week
+Wage assessment: ${isLowball ? 'LOWBALL — below fair value' : isPremium ? 'PREMIUM — above market' : 'FAIR — within expected range'}
+Conversation quality: ${conversationQuality}
+${bondNote}
+
+DECISION MATRIX:
+- Lowball + poor conversation → REJECTED (sharp, walk out)
+- Lowball + solid conversation → COUNTER at $${fairWageMin.toLocaleString()}
+- Fair + poor conversation → COUNTER with small increase (agent wasn't convinced)
+- Fair + solid conversation → ACCEPTED
+- Premium + any conversation → ACCEPTED (unless manager was openly hostile)
+- Personality modifier: ${p.personality === 'Volatile' ? 'One tier harder — Volatile agents reject even fair deals after bad conversations.' : p.personality === 'Professional' ? 'Numbers-only evaluation. Great conversation does not compensate for low wages.' : p.personality === 'Ambitious' ? 'If manager made genuine commitments about trophies/competition, weigh that positively.' : 'Standard.'}
+
+Speak as the agent in the room — sharp, direct, referencing both the specific number and what was said.
+
+Return JSON:
+{
+  "decision": "accepted" | "rejected" | "counter",
+  "reasoning": "2-3 sentences spoken by the agent in the room",
+  "counterOffer": { "wage": number, "length": number },
+  "extractedPromises": ["verbal commitments manager made that should be tracked as promises"]
+}`;
+
+    try {
+        const response = await getAI().models.generateContent({
+            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        const fallbackWage = isLowball ? fairWageMin : offer.wage;
+        return {
+            decision: isLowball ? 'counter' : 'accepted',
+            reasoning: isLowball
+                ? `$${offer.wage.toLocaleString()} a week? That's not serious money for a player of this calibre. We need at least $${fairWageMin.toLocaleString()}.`
+                : "We've had a good conversation. My client is ready to commit.",
             counterOffer: { wage: fallbackWage, length: offer.length },
             extractedPromises: []
         };

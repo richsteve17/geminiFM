@@ -216,14 +216,17 @@ export interface Interview {
     chairmanPersonality: ChairmanPersonality;
 }
 
+export interface NegotiationMessage {
+    role: 'agent' | 'manager';
+    text: string;
+}
+
 export interface PlayerTalk {
     player: Player;
-    questions: string[];
-    answers: string[];
-    currentQuestionIndex: number;
     context: 'transfer' | 'renewal';
-    teammates?: string[];
-    negotiationHistory: { offer: { wage: number, length: number }, response: string }[];
+    messages: NegotiationMessage[];
+    phase: 'talking' | 'offer';
+    bondContext?: { squadMate: string; competition: string };
 }
 
 export interface NegotiationResult {
