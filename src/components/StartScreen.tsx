@@ -205,16 +205,16 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
 
                 {showDevlog && (
                     <div className="mt-6 bg-black/80 border border-gray-800 p-6 rounded-lg text-left max-h-48 overflow-y-auto font-mono text-xs w-full">
-                        <p className="text-green-500 mb-2">> SYSTEM INITIALIZED</p>
-                        <p className="text-gray-400 mb-1">> LOADING MODULE: GEMINI-2.0-FLASH-EXP... OK</p>
-                        <p className="text-gray-400 mb-1">> LOADING MODULE: VEO-3.1... OK</p>
-                        <p className="text-blue-400 mt-2">> ECONOMIC AUDIT COMPLETE:</p>
+                        <p className="text-green-500 mb-2">{'>'} SYSTEM INITIALIZED</p>
+                        <p className="text-gray-400 mb-1">{'>'} LOADING MODULE: GEMINI-2.0-FLASH-EXP... OK</p>
+                        <p className="text-gray-400 mb-1">{'>'} LOADING MODULE: VEO-3.1... OK</p>
+                        <p className="text-blue-400 mt-2">{'>'} ECONOMIC AUDIT COMPLETE:</p>
                         <ul className="list-disc list-inside text-gray-500 pl-2 mb-2">
                             <li>FIFA vs GFM Cost Crossover confirmed at Month 4.</li>
                             <li>Streamer Mode Profit Calculation enabled (Revenue - COGS).</li>
                             <li>Net Profit per Clip displayed in Viral Studio.</li>
                         </ul>
-                        <p className="text-blue-400 mt-2">> PATCH NOTES v2.7:</p>
+                        <p className="text-blue-400 mt-2">{'>'} PATCH NOTES v2.7:</p>
                         <ul className="list-disc list-inside text-gray-500 pl-2">
                             <li>Implemented 3-Way Kit Selector (Primary / Secondary / Unhinged Third).</li>
                             <li>Removed legacy striping artifacts for cleaner UI.</li>
