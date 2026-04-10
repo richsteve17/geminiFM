@@ -195,6 +195,12 @@ export interface Chant {
     vocalUrl?: string;   // ElevenLabs TTS vocal layer
 }
 
+// ── ELEVENLABS TOGGLE ───────────────────────────────────────────────────────
+// Default OFF to avoid unintentional API credit burn. Enable via setElevenLabsEnabled(true).
+let _elevenLabsEnabled = false;
+export function setElevenLabsEnabled(on: boolean): void { _elevenLabsEnabled = on; }
+export function isElevenLabsEnabled(): boolean { return _elevenLabsEnabled; }
+
 // ── SHARED AUDIO CONTEXT (bypasses autoplay restrictions) ──────────────────
 type WebkitWindow = typeof window & { webkitAudioContext?: typeof AudioContext };
 let _sharedCtx: AudioContext | null = null;
@@ -665,23 +671,26 @@ Return JSON ONLY (no extra text):
     ];
 
     // ── STEP 2: Generate audio (isolated try — never affects lyrics return) ──
+    // Only runs when ElevenLabs is explicitly enabled (OFF by default to protect credits).
     let audioUrl: string | undefined;
     let vocalUrl: string | undefined;
 
-    try {
-        const lyricsText = lyrics.join('\n');
-        const [a, v] = await Promise.all([
-            generateElevenLabsMusic(lyricsText, melody),
-            generateElevenLabsVocal(lyricsText, melody)
-        ]);
-        audioUrl = a ?? undefined;
-        vocalUrl = v ?? undefined;
-        if (!vocalUrl) {
-            fallbackTtsChant(lyricsText, melody).catch(() => {});
+    if (_elevenLabsEnabled) {
+        try {
+            const lyricsText = lyrics.join('\n');
+            const [a, v] = await Promise.all([
+                generateElevenLabsMusic(lyricsText, melody),
+                generateElevenLabsVocal(lyricsText, melody)
+            ]);
+            audioUrl = a ?? undefined;
+            vocalUrl = v ?? undefined;
+            if (!vocalUrl) {
+                fallbackTtsChant(lyricsText, melody).catch(() => {});
+            }
+        } catch (err) {
+            console.error('[Chant] Audio generation failed:', err);
+            fallbackTtsChant(lyrics.join('\n'), melody).catch(() => {});
         }
-    } catch (err) {
-        console.error('[Chant] Audio generation failed:', err);
-        fallbackTtsChant(lyrics.join('\n'), melody).catch(() => {});
     }
 
     return { lyrics, tune: melody.title, intensity, melodyId: melody.id, audioUrl, vocalUrl };

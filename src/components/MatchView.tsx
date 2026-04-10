@@ -14,7 +14,7 @@ import { analyzeTactics, FORMATION_SLOTS } from '../utils';
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 import AtmosphereWidget from './AtmosphereWidget';
-import { generatePunkChant, playBlobUrl, type Chant } from '../services/chantService';
+import { generatePunkChant, playBlobUrl, setElevenLabsEnabled, isElevenLabsEnabled, type Chant } from '../services/chantService';
 
 interface MatchViewProps {
     fixture: Fixture | undefined;
@@ -71,6 +71,7 @@ export default function MatchView({
     const [availableShouts, setAvailableShouts] = useState<TacticalShout[]>([]);
     const [selectedShout, setSelectedShout] = useState<TacticalShout | null>(null);
     const [currentChant, setCurrentChant] = useState<Chant | null>(null);
+    const [elevenLabsOn, setElevenLabsOn] = useState<boolean>(isElevenLabsEnabled());
 
     const [customShout, setCustomShout] = useState('');
     const [isShouting, setIsShouting] = useState(false);
@@ -380,7 +381,25 @@ export default function MatchView({
             )}
 
             {gameState !== GameState.PRE_MATCH && (
-                <AtmosphereWidget chant={currentChant} momentum={matchState?.momentum || 0} teamName={userTeamName || "Home"} />
+                <div className="relative">
+                    <AtmosphereWidget chant={currentChant} momentum={matchState?.momentum || 0} teamName={userTeamName || "Home"} />
+                    <button
+                        onClick={() => {
+                            const next = !elevenLabsOn;
+                            setElevenLabsOn(next);
+                            setElevenLabsEnabled(next);
+                        }}
+                        title={elevenLabsOn ? 'ElevenLabs AI singing ON — click to disable (saves credits)' : 'ElevenLabs AI singing OFF — click to enable'}
+                        className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${
+                            elevenLabsOn
+                                ? 'bg-purple-600 border-purple-400 text-white'
+                                : 'bg-gray-700 border-gray-500 text-gray-400 hover:border-purple-500 hover:text-purple-300'
+                        }`}
+                    >
+                        <MusicalNoteIcon className="w-3 h-3" />
+                        {elevenLabsOn ? 'AI SINGING ON' : 'AI SINGING OFF'}
+                    </button>
+                </div>
             )}
 
             <div className="bg-black p-4 rounded-t-lg border-b border-gray-700 flex-shrink-0">
