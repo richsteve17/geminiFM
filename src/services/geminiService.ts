@@ -140,9 +140,11 @@ ACTIVE SHOUT EFFECT (apply to this segment):
         });
     }
     
+    const segLen = targetMinute - currentMatchState.currentMinute;
+    const expectedGoals = Math.max(1, Math.round(segLen / 22));
     const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
     Current State: Minute ${currentMatchState.currentMinute}, Score ${currentMatchState.homeScore}-${currentMatchState.awayScore}, Momentum ${currentMatchState.momentum}.
-    Task: Simulate ONLY from minute ${currentMatchState.currentMinute + 1} to ${targetMinute}.
+    Task: Simulate ONLY from minute ${currentMatchState.currentMinute + 1} to ${targetMinute} (${segLen} minutes). Expect roughly ${expectedGoals} goal(s) total across both teams in this segment.
     
     ${userInstruction}
     ${formationMentalityBlock}
@@ -155,10 +157,11 @@ ACTIVE SHOUT EFFECT (apply to this segment):
     2. If a player has [FATIGUED] flag, they MUST make an error or be substituted — mention them specifically.
     3. If a player has [MISPLACED] flag, they are 50% less effective — generate events showing their struggles.
     4. If a player is Out of Position (e.g. ST in Goal), specific events MUST mention them failing at their role.
-    5. Events must be realistic to the clock. Don't score 5 goals in 10 minutes unless efficiency is 0%.
+    5. GOAL FREQUENCY (CRITICAL — do not ignore): A real football match produces 2–4 goals total across 90 minutes. Per 15-minute segment that means roughly 0–1 goals per team. You MUST score goals. "Balanced" or "Attacking" teams MUST combine for at least 1 goal somewhere across the 4 segments. Do NOT simulate an entire match with homeScoreAdded=0 and awayScoreAdded=0 for every segment — that is broken. If no goal in previous segments, increase pressure now.
     6. Mentality and formation MUST visibly shape what events are generated (not just vibe words).
     7. If there are active rifts, occasionally generate a "commentary" event referencing the miscommunication between the named players.
     8. If there are active bonds, occasionally generate a "commentary" event highlighting their chemistry.
+    9. When a goal is scored, you MUST add a "goal" type event with the scorer's name in the "player" field AND set homeScoreAdded or awayScoreAdded to 1. Both the event and the score counter must reflect the goal.
     
     Respond ONLY in JSON format: { 
         "homeScoreAdded": number, 

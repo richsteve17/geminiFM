@@ -115,12 +115,44 @@ const PitchView: React.FC<PitchViewProps> = ({
         if (lastEvent?.type === 'goal') {
             setIsGoalAnim(true);
             setAnimTeam(lastEvent.teamName === homeTeamName ? 'home' : 'away');
+            // Synthetic crowd roar via Web Audio
+            try {
+                const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const duration = 2.8;
+                // White noise buffer for crowd roar
+                const bufSize = ctx.sampleRate * duration;
+                const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+                const data = buf.getChannelData(0);
+                for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = ctx.createBufferSource();
+                noise.buffer = buf;
+                // Band-pass around crowd frequencies
+                const bp = ctx.createBiquadFilter();
+                bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = 0.4;
+                // Gain envelope: swell up then fade
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + 0.3);
+                gain.gain.linearRampToValueAtTime(0.28, ctx.currentTime + 1.0);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+                noise.connect(bp); bp.connect(gain); gain.connect(ctx.destination);
+                noise.start(); noise.stop(ctx.currentTime + duration);
+                // Triumphant tone underneath
+                const osc = ctx.createOscillator();
+                const oscGain = ctx.createGain();
+                osc.frequency.value = 523; osc.type = 'sine';
+                oscGain.gain.setValueAtTime(0, ctx.currentTime);
+                oscGain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.1);
+                oscGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+                osc.connect(oscGain); oscGain.connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + 1.2);
+            } catch (_) {}
             const timer = setTimeout(() => { setIsGoalAnim(false); setAnimTeam(null); }, 3000);
             return () => clearTimeout(timer);
         }
     }, [lastEvent, homeTeamName]);
 
-    const momentumShift = (fieldPos - 50) / 50 * 5;
+    const momentumShift = (fieldPos - 50) / 50 * 16;
 
     const hasFormationData = !!(homeFormation && homeStarters?.length && awayFormation && awayStarters?.length);
     const homeDots = hasFormationData ? buildFormationDots(homeFormation!, homeStarters!, true) : null;

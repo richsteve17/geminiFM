@@ -38,9 +38,12 @@ const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({
 
     if (isLoading && chatHistory.length === 0) {
         return (
-            <div className="text-center mt-20 flex flex-col items-center justify-center min-h-[200px]">
+            <div className="text-center mt-20 flex flex-col items-center justify-center min-h-[200px] gap-6">
                 <NewspaperIcon className="w-12 h-12 text-gray-400 animate-pulse mb-4" />
                 <p className="text-xl font-semibold animate-pulse">Journalists are gathering...</p>
+                <button onClick={onSkip} className="text-xs font-bold text-gray-500 hover:text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700 px-4 py-2 rounded transition-colors">
+                    Skip Press Conference
+                </button>
             </div>
         );
     }

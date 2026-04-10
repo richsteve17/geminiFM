@@ -249,11 +249,11 @@ export default function App() {
                             if (!t) return prev;
                             const updatedPlayers = t.players.map(p => {
                                 if (!p.isStarter) return p;
-                                const baseDrain = p.condition < 70 ? 7 : 5;
+                                const baseDrain = p.condition < 65 ? 5 : 3;
                                 const isPressingRole = ['ST', 'CF', 'LW', 'RW', 'AM', 'CM', 'LM', 'RM'].includes(p.position);
-                                const pressBonus = (activeShoutEffect && activeShoutEffect.attackModifier >= 2 && isPressingRole) ? 3 : 0;
-                                const namedBonus = (activeShoutEffect?.targetPlayers?.includes(p.name)) ? 4 : 0;
-                                return { ...p, condition: Math.max(20, p.condition - baseDrain - pressBonus - namedBonus) };
+                                const pressBonus = (activeShoutEffect && activeShoutEffect.attackModifier >= 2 && isPressingRole) ? 1 : 0;
+                                const namedBonus = (activeShoutEffect?.targetPlayers?.includes(p.name)) ? 2 : 0;
+                                return { ...p, condition: Math.max(25, p.condition - baseDrain - pressBonus - namedBonus) };
                             });
                             return { ...prev, [userTeamName!]: { ...t, players: updatedPlayers } };
                         });
@@ -706,6 +706,7 @@ export default function App() {
         setPressChatHistory([]);
         setPressConferenceContext(null);
         setPressConferenceDone(false);
+        setAppScreen(AppScreen.GAMEPLAY);
         proceedToNextWeek();
     };
 
