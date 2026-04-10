@@ -10,7 +10,7 @@ function getAI(): GoogleGenAI {
     }
     return _ai;
 }
-const model = 'gemini-2.0-flash-exp';
+const model = 'gemini-2.0-flash';
 
 export interface SongbookEntry {
     id: string;
@@ -600,57 +600,59 @@ Return JSON ONLY (no extra text):
 
     // Start the melody immediately — plays even while Gemini generates lyrics
     const stopMelody = playMelodyRiff(melody.id, melody.tempo, 4);
+    setTimeout(stopMelody, 18000);
+
+    // ── STEP 1: Generate lyrics (isolated try — audio cannot kill this) ─────
+    let generatedLyrics: string[] = [];
+    let intensity: 'low' | 'medium' | 'high' = trigger === 'losing' ? 'low' : isDramatic ? 'high' : 'medium';
 
     try {
         const response = await getAI().models.generateContent({
             model: model,
             contents: prompt
         });
-        const raw = response.text || "{}";
-        const cleanText = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
-        // Extract first complete JSON object
+        const raw = response.text ?? '';
+        const cleanText = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
         const start = cleanText.indexOf('{');
         const end = cleanText.lastIndexOf('}');
-        const jsonStr = start !== -1 && end > start ? cleanText.slice(start, end + 1) : cleanText;
-        const parsed = JSON.parse(jsonStr) as { lyrics: string[]; tune: string; intensity: 'low' | 'medium' | 'high' };
+        const jsonStr = start !== -1 && end > start ? cleanText.slice(start, end + 1) : '{}';
+        const parsed = JSON.parse(jsonStr) as { lyrics?: string[]; tune?: string; intensity?: string };
+        if (Array.isArray(parsed.lyrics) && parsed.lyrics.length > 0) {
+            generatedLyrics = parsed.lyrics;
+        }
+        if (parsed.intensity === 'low' || parsed.intensity === 'medium' || parsed.intensity === 'high') {
+            intensity = parsed.intensity;
+        }
+    } catch (err) {
+        console.error('[Chant] Lyrics generation failed:', err);
+    }
 
-        const lyricsText = (parsed.lyrics ?? []).join('\n');
+    const lyrics = generatedLyrics.length > 0 ? generatedLyrics : [
+        `${teamName} till I die,`,
+        `${teamName} till I die,`,
+        `I know I am, I'm sure I am,`,
+        `${teamName} till I die!`
+    ];
 
-        // Fire both in parallel: music backing track + vocal TTS layer
-        const [audioUrl, vocalUrl] = await Promise.all([
+    // ── STEP 2: Generate audio (isolated try — never affects lyrics return) ──
+    let audioUrl: string | undefined;
+    let vocalUrl: string | undefined;
+
+    try {
+        const lyricsText = lyrics.join('\n');
+        const [a, v] = await Promise.all([
             generateElevenLabsMusic(lyricsText, melody),
             generateElevenLabsVocal(lyricsText, melody)
         ]);
-
-        // Only fall back to Gemini TTS if ElevenLabs vocal also failed
+        audioUrl = a ?? undefined;
+        vocalUrl = v ?? undefined;
         if (!vocalUrl) {
             fallbackTtsChant(lyricsText, melody).catch(() => {});
         }
-
-        return {
-            lyrics: parsed.lyrics ?? [],
-            tune: parsed.tune ?? melody.title,
-            intensity: parsed.intensity ?? 'medium',
-            melodyId: melody.id,
-            audioUrl: audioUrl ?? undefined,
-            vocalUrl: vocalUrl ?? undefined
-        };
-    } catch {
-        const fallbackLyrics = [
-            `We love you ${teamName}, we do!`,
-            `We love you ${teamName}, we do!`,
-            `We love you ${teamName}, we do!`,
-            `Oh ${teamName} we love you!`
-        ];
-        fallbackTtsChant(fallbackLyrics.join('\n'), melody).catch(() => {});
-        return {
-            lyrics: fallbackLyrics,
-            tune: melody.title,
-            intensity: 'medium',
-            melodyId: melody.id
-        };
-    } finally {
-        // Stop melody after a generous window (TTS should be done by then)
-        setTimeout(stopMelody, 18000);
+    } catch (err) {
+        console.error('[Chant] Audio generation failed:', err);
+        fallbackTtsChant(lyrics.join('\n'), melody).catch(() => {});
     }
+
+    return { lyrics, tune: melody.title, intensity, melodyId: melody.id, audioUrl, vocalUrl };
 };

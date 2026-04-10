@@ -478,7 +478,7 @@ export default function MatchView({
                         )}
 
                         {gameState === GameState.PAUSED && (
-                            <div className="space-y-3">
+                            <div className="space-y-3 overflow-y-auto max-h-[45vh] pr-1">
                                 <div className="flex items-center justify-between bg-gray-700/50 p-2 rounded">
                                     <p className="text-xs text-yellow-400 font-bold uppercase">
                                         {currentMinute === 45 ? 'HALF TIME' : `${currentMinute}' — SEGMENT BREAK`}
