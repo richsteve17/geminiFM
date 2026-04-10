@@ -617,13 +617,24 @@ Return JSON: {
 
 
 export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string, bondContext?: { squadMate: string; competition: string }) => {
-    let bondNote = '';
-    if (bondContext) {
-        bondNote = `IMPORTANT: ${p.name} has a strong international bond with ${bondContext.squadMate} already at ${t.name} from the ${bondContext.competition}. Reference this connection in a question to make the negotiation feel personal.`;
+    const fallback = [
+        `What are your ambitions for next season?`,
+        `How do you see your role developing at ${t.name}?`,
+        `What would it take to make this deal happen?`
+    ];
+    try {
+        let bondNote = '';
+        if (bondContext) {
+            bondNote = `IMPORTANT: ${p.name} has a strong international bond with ${bondContext.squadMate} already at ${t.name} from the ${bondContext.competition}. Reference this connection in a question to make the negotiation feel personal.`;
+        }
+        const prompt = `Negotiation with ${p.name} (${p.personality}) for ${t.name}. ${bondNote} Generate 3 relevant negotiation questions. JSON: { "questions": [] }`;
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const parsed = JSON.parse(cleanJson(response.text));
+        if (Array.isArray(parsed.questions) && parsed.questions.length > 0) return parsed.questions;
+    } catch (e) {
+        console.warn('getPlayerTalkQuestions failed, using fallback:', e);
     }
-    const prompt = `Negotiation with ${p.name} (${p.personality}) for ${t.name}. ${bondNote} Generate 3 relevant negotiation questions. JSON: { "questions": [] }`;
-    const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text)).questions;
+    return fallback;
 };
 
 export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any, bondContext?: { squadMate: string; competition: string }): Promise<NegotiationResult> => {

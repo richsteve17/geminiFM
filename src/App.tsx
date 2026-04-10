@@ -30,7 +30,9 @@ import WorldCupResultScreen from './components/WorldCupResultScreen';
 
 const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
 const SIMULATION_CHUNK_MINUTES = 10; 
-const TICK_DELAY_MS = 1500; 
+const TICK_DELAY_MS = 1200; 
+const TICK_DELAY_GOAL_MS = 6000;
+const TICK_DELAY_EVENT_MS = 2500;
 
 const convertNationalTeam = (nt: NationalTeam): Team => ({
     name: nt.name,
@@ -248,22 +250,21 @@ export default function App() {
 
                 // --- PLAYBACK ---
                 const nextMinute = currentPlaybackMinute + 1;
-                setCurrentPlaybackMinute(nextMinute);
-
                 const eventsNow = pendingEvents.filter(e => e.minute === nextMinute);
                 
                 if (eventsNow.length > 0) {
+                    const hasGoal = eventsNow.some(e => e.type === 'goal');
+                    const hasCard = eventsNow.some(e => e.type === 'card');
                     setMatchState(prev => prev ? ({
                         ...prev,
                         events: [...prev.events, ...eventsNow],
                         currentMinute: nextMinute 
                     }) : null);
-                    
-                    const hasGoal = eventsNow.some(e => e.type === 'goal');
-                    timeoutId = setTimeout(() => {}, hasGoal ? 4000 : TICK_DELAY_MS);
+                    const delay = hasGoal ? TICK_DELAY_GOAL_MS : hasCard ? TICK_DELAY_EVENT_MS : TICK_DELAY_MS;
+                    timeoutId = setTimeout(() => setCurrentPlaybackMinute(nextMinute), delay);
                 } else {
                     setMatchState(prev => prev ? ({ ...prev, currentMinute: nextMinute }) : null);
-                    timeoutId = setTimeout(() => {}, TICK_DELAY_MS);
+                    timeoutId = setTimeout(() => setCurrentPlaybackMinute(nextMinute), TICK_DELAY_MS);
                 }
             }
         };

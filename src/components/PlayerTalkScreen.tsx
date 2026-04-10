@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PlayerTalk, NegotiationResult } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
 import { UserIcon } from './icons/UserIcon';
@@ -23,15 +23,15 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
     const [hasNegotiated, setHasNegotiated] = useState(false);
 
     // Initialize defaults when talk loads
-    useMemo(() => {
-        if (talk && wageOffer === 0) {
-            setWageOffer(talk.player.wage);
-            setContractLength(talk.player.contractExpires || 3);
+    useEffect(() => {
+        if (talk) {
+            setWageOffer(talk.player.wage || 10000);
+            setContractLength(3);
         }
-    }, [talk]);
+    }, [talk?.player?.name]);
 
     // Update state if AI counters
-    useMemo(() => {
+    useEffect(() => {
         if (talkResult?.decision === 'counter' && talkResult.counterOffer) {
             setWageOffer(talkResult.counterOffer.wage);
             setContractLength(talkResult.counterOffer.length);
