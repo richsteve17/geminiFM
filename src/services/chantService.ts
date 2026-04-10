@@ -180,6 +180,98 @@ export interface Chant {
     audioUrl?: string;
 }
 
+// ── WEB AUDIO MELODY PLAYER ────────────────────────────────────────────────
+// Each entry: [frequency_hz, beat_count]. Beat duration set by tempo.
+const MELODY_NOTES: Record<string, [number, number][]> = {
+    seven_nation_army:  [[329.6,2],[329.6,1],[392,1],[329.6,2],[293.7,1],[261.6,1],[246.9,4]],
+    freed_from_desire:  [[392,1],[392,1],[440,1],[392,1],[349.2,2],[329.6,1],[293.7,1],[329.6,2]],
+    go_west:            [[261.6,1],[329.6,1],[392,1],[329.6,1],[392,1],[440,1],[392,2],[329.6,2]],
+    sloop_john_b:       [[392,2],[392,1],[440,1],[523.3,2],[493.9,2],[440,1],[392,3]],
+    bella_ciao:         [[392,1],[329.6,1],[349.2,1],[329.6,1],[293.7,1],[261.6,1],[293.7,1],[261.6,2]],
+    youll_never_walk_alone: [[523.3,2],[587.3,1],[659.3,1],[523.3,2],[659.3,1],[698.5,1],[784,4]],
+    sweet_caroline:     [[392,1],[440,1],[493.9,1],[392,1],[440,1],[493.9,1],[587.3,2],[659.3,1],[587.3,1],[493.9,2]],
+    wonderwall:         [[440,1],[329.6,1],[440,1],[523.3,1],[659.3,2],[523.3,2]],
+    angels:             [[440,2],[493.9,1],[587.3,1],[440,1],[493.9,1],[392,2],[329.6,4]],
+    allez_allez_allez:  [[659.3,1],[659.3,1],[784,1],[659.3,1],[587.3,2],[523.3,2]],
+    rasputin:           [[392,1],[349.2,1],[329.6,1],[293.7,1],[329.6,1],[293.7,1],[261.6,1],[246.9,2]],
+    lose_yourself:      [[440,1],[523.3,1],[587.3,1],[659.3,2],[587.3,1],[523.3,1],[440,1],[392,2]],
+};
+const MELODY_BPM: Record<string, number> = {
+    youll_never_walk_alone: 60, angels: 65,
+    sloop_john_b: 110, wonderwall: 105, bella_ciao: 115, go_west: 118, sweet_caroline: 118,
+    seven_nation_army: 124, allez_allez_allez: 130,
+    freed_from_desire: 138, rasputin: 142, lose_yourself: 172,
+};
+
+export function playMelodyRiff(melodyId: string, tempo: 'slow' | 'medium' | 'fast', loops = 3): () => void {
+    const notes = MELODY_NOTES[melodyId];
+    if (!notes || notes.length === 0) return () => {};
+
+    const bpm = MELODY_BPM[melodyId] ?? (tempo === 'slow' ? 72 : tempo === 'fast' ? 140 : 112);
+    const beat = 60 / bpm;
+
+    try {
+        const ctx = new AudioContext();
+        const master = ctx.createGain();
+        master.gain.value = 0.28;
+        master.connect(ctx.destination);
+
+        // Light stadium echo
+        const delay = ctx.createDelay(1.0);
+        delay.delayTime.value = 0.2;
+        const echo = ctx.createGain();
+        echo.gain.value = 0.22;
+        delay.connect(echo);
+        echo.connect(delay);
+        echo.connect(master);
+
+        const loopDur = notes.reduce((s, [, b]) => s + b * beat, 0);
+        const allOscs: OscillatorNode[] = [];
+
+        for (let loop = 0; loop < loops; loop++) {
+            let t = ctx.currentTime + 0.1 + loop * loopDur;
+            notes.forEach(([freq, beats]) => {
+                const dur = beats * beat;
+                // Main tone (triangle = choir-like)
+                const osc = ctx.createOscillator();
+                osc.type = 'triangle';
+                osc.frequency.value = freq;
+                const env = ctx.createGain();
+                env.gain.setValueAtTime(0, t);
+                env.gain.linearRampToValueAtTime(0.65, t + 0.03);
+                env.gain.linearRampToValueAtTime(0.55, t + dur - 0.04);
+                env.gain.linearRampToValueAtTime(0, t + dur);
+                osc.connect(env);
+                env.connect(delay);
+                env.connect(master);
+                osc.start(t);
+                osc.stop(t + dur + 0.02);
+                allOscs.push(osc);
+
+                // Harmony a perfect fifth above (×1.5) for crowd chorus
+                const harm = ctx.createOscillator();
+                harm.type = 'sine';
+                harm.frequency.value = freq * 1.5;
+                const hEnv = ctx.createGain();
+                hEnv.gain.setValueAtTime(0, t);
+                hEnv.gain.linearRampToValueAtTime(0.18, t + 0.05);
+                hEnv.gain.linearRampToValueAtTime(0, t + dur);
+                harm.connect(hEnv);
+                hEnv.connect(master);
+                harm.start(t);
+                harm.stop(t + dur + 0.02);
+                allOscs.push(harm);
+
+                t += dur;
+            });
+        }
+
+        return () => { allOscs.forEach(o => { try { o.stop(); } catch {} }); ctx.close(); };
+    } catch {
+        return () => {};
+    }
+}
+
 function selectMelody(context: ChantEventContext, usedMelodies: string[]): SongbookEntry {
     const { trigger, teamName, playerPersonality, minute, isHome } = context;
 
@@ -291,11 +383,19 @@ async function generateElevenLabsAudio(lyrics: string, melody: SongbookEntry): P
     }
 }
 
-async function fallbackTtsChant(lyrics: string): Promise<void> {
+async function fallbackTtsChant(lyrics: string, melody?: SongbookEntry): Promise<void> {
     try {
+        const tuneHint = melody
+            ? `This is sung to the tune of "${melody.title}" by ${melody.artist}. ` +
+              `The rhythm is: ${melody.stressPattern}. Tempo: ${melody.tempo}. `
+            : '';
+        const instruction = `${tuneHint}You are 50,000 passionate football fans singing this chant in a stadium. ` +
+            `Deliver it with powerful crowd energy — rhythmic, loud, emotional. ` +
+            `Match the syllable stress and beat of the melody:\n\n${lyrics}`;
+
         const response = await getAI().models.generateContent({
             model: 'gemini-2.5-flash-preview-tts',
-            contents: [{ parts: [{ text: `Passionate crowd singing a football chant: ${lyrics}` }] }],
+            contents: [{ parts: [{ text: instruction }] }],
             config: {
                 responseModalities: ['AUDIO'],
                 speechConfig: {
@@ -417,28 +517,34 @@ Return JSON ONLY:
 }
 `;
 
+    // Start the melody immediately — plays even while Gemini generates lyrics
+    const stopMelody = playMelodyRiff(melody.id, melody.tempo, 4);
+
     try {
         const response = await getAI().models.generateContent({
             model: model,
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
+            contents: prompt
         });
-        const text = response.text || "{}";
-        const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        const parsed = JSON.parse(cleanText) as { lyrics: string[]; tune: string; intensity: 'low' | 'medium' | 'high' };
+        const raw = response.text || "{}";
+        const cleanText = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+        // Extract first complete JSON object
+        const start = cleanText.indexOf('{');
+        const end = cleanText.lastIndexOf('}');
+        const jsonStr = start !== -1 && end > start ? cleanText.slice(start, end + 1) : cleanText;
+        const parsed = JSON.parse(jsonStr) as { lyrics: string[]; tune: string; intensity: 'low' | 'medium' | 'high' };
 
-        const lyricsText = parsed.lyrics?.join('\n') || '';
+        const lyricsText = (parsed.lyrics ?? []).join('\n');
 
         // Try ElevenLabs first; fall back to Gemini TTS if unavailable
         const audioUrl = await generateElevenLabsAudio(lyricsText, melody);
         if (!audioUrl) {
-            fallbackTtsChant(lyricsText).catch(() => {});
+            fallbackTtsChant(lyricsText, melody).catch(() => {});
         }
 
         return {
-            lyrics: parsed.lyrics,
-            tune: parsed.tune,
-            intensity: parsed.intensity,
+            lyrics: parsed.lyrics ?? [],
+            tune: parsed.tune ?? melody.title,
+            intensity: parsed.intensity ?? 'medium',
             melodyId: melody.id,
             audioUrl: audioUrl ?? undefined
         };
@@ -449,12 +555,15 @@ Return JSON ONLY:
             `We love you ${teamName}, we do!`,
             `Oh ${teamName} we love you!`
         ];
-        fallbackTtsChant(fallbackLyrics.join('\n')).catch(() => {});
+        fallbackTtsChant(fallbackLyrics.join('\n'), melody).catch(() => {});
         return {
             lyrics: fallbackLyrics,
-            tune: 'Standard Terrace Chant',
+            tune: melody.title,
             intensity: 'medium',
             melodyId: melody.id
         };
+    } finally {
+        // Stop melody after a generous window (TTS should be done by then)
+        setTimeout(stopMelody, 18000);
     }
 };
