@@ -409,6 +409,10 @@ export default function MatchView({
                             lastEvent={matchState?.events?.[matchState.events.length-1] || null}
                             userMentality={userMentality}
                             userIsHome={isUserHome}
+                            homeFormation={fixture ? teams[fixture.homeTeam]?.tactic?.formation : undefined}
+                            homeStarters={fixture ? teams[fixture.homeTeam]?.players?.filter(p => p.isStarter) : undefined}
+                            awayFormation={fixture ? teams[fixture.awayTeam]?.tactic?.formation : undefined}
+                            awayStarters={fixture ? teams[fixture.awayTeam]?.players?.filter(p => p.isStarter) : undefined}
                         />
                     </div>
                 )}
