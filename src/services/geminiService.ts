@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
-import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData, ShoutEffect } from '../types';
+import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData, ShoutEffect, RiftSeverity, RiftScope } from '../types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
@@ -71,6 +71,8 @@ export interface SegmentContext {
         defensiveModifier: number;
         attackModifier: number;
     };
+    riftPairs?: { playerA: string; playerB: string; severity: string }[];
+    bondPairs?: { playerA: string; playerB: string }[];
 }
 
 export const simulateMatchSegment = async (
@@ -116,6 +118,20 @@ ACTIVE SHOUT EFFECT (apply to this segment):
 `;
     }
     
+    let chemistryInfo = "";
+    if (context.riftPairs && context.riftPairs.length > 0) {
+        chemistryInfo += `\nACTIVE RIFTS (increases Miscommunication probability):\n`;
+        context.riftPairs.forEach(r => {
+            chemistryInfo += `- ${r.playerA} vs ${r.playerB} (${r.severity} rift) — their interactions may cause errors, miscommunications or poor passing.\n`;
+        });
+    }
+    if (context.bondPairs && context.bondPairs.length > 0) {
+        chemistryInfo += `\nACTIVE BONDS (positive chemistry modifier):\n`;
+        context.bondPairs.forEach(b => {
+            chemistryInfo += `- ${b.playerA} and ${b.playerB} have international bond — their combination play is sharper than usual.\n`;
+        });
+    }
+    
     const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
     Current State: Minute ${currentMatchState.currentMinute}, Score ${currentMatchState.homeScore}-${currentMatchState.awayScore}, Momentum ${currentMatchState.momentum}.
     Task: Simulate ONLY from minute ${currentMatchState.currentMinute + 1} to ${targetMinute}.
@@ -124,6 +140,7 @@ ACTIVE SHOUT EFFECT (apply to this segment):
     ${formationMentalityBlock}
     ${shoutEffectBlock}
     ${tacticalInfo}
+    ${chemistryInfo}
     
     CRITICAL INSTRUCTIONS:
     1. If a team has low Tactical Efficiency (<50%), they MUST make mistakes.
@@ -132,6 +149,8 @@ ACTIVE SHOUT EFFECT (apply to this segment):
     4. If a player is Out of Position (e.g. ST in Goal), specific events MUST mention them failing at their role.
     5. Events must be realistic to the clock. Don't score 5 goals in 10 minutes unless efficiency is 0%.
     6. Mentality and formation MUST visibly shape what events are generated (not just vibe words).
+    7. If there are active rifts, occasionally generate a "commentary" event referencing the miscommunication between the named players.
+    8. If there are active bonds, occasionally generate a "commentary" event highlighting their chemistry.
     
     Respond ONLY in JSON format: { 
         "homeScoreAdded": number, 
@@ -589,19 +608,28 @@ Return JSON: {
 };
 
 
-export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
-    const prompt = `Negotiation with ${p.name}. JSON: { "questions": [] }`;
+export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string, bondContext?: { squadMate: string; competition: string }) => {
+    let bondNote = '';
+    if (bondContext) {
+        bondNote = `IMPORTANT: ${p.name} has a strong international bond with ${bondContext.squadMate} already at ${t.name} from the ${bondContext.competition}. Reference this connection in a question to make the negotiation feel personal.`;
+    }
+    const prompt = `Negotiation with ${p.name} (${p.personality}) for ${t.name}. ${bondNote} Generate 3 relevant negotiation questions. JSON: { "questions": [] }`;
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(cleanJson(response.text)).questions;
 };
 
-export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any): Promise<NegotiationResult> => {
+export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any, bondContext?: { squadMate: string; competition: string }): Promise<NegotiationResult> => {
+    let bondNote = '';
+    if (bondContext) {
+        bondNote = `REUNION FACTOR: ${p.name} has a Teammate Bond with ${bondContext.squadMate} at ${t.name} from the ${bondContext.competition}. This makes the player MORE willing to sign — the agent should mention it and the wage/fee demand should be slightly lower than normal to reflect this desire to reunite.`;
+    }
     const prompt = `
     Roleplay as the Agent for ${p.name}.
     User offer: $${offer.wage}, ${offer.length} years.
     History: ${JSON.stringify(ans)}.
     Context: Negotiation with ${t.name}.
     Previous Wage: $${p.wage}.
+    ${bondNote}
     
     Return JSON: 
     { 
@@ -670,6 +698,102 @@ Give concise, specific advice (2–3 sentences). Reference specific players by n
     }
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
     return response.text || "No advice.";
+};
+
+export interface TournamentRivalryResult {
+    riftSeverity: RiftSeverity;
+    duration: number;
+    reason: string;
+    affectedScope: RiftScope;
+}
+
+export const getTeammateTournamentRivalry = async (
+    playerA: { name: string; personality: string; nationality: string },
+    playerB: { name: string; personality: string; nationality: string },
+    competition: 'World Cup' | 'Euros' | 'Copa America' | 'Qualifier' | 'Friendly',
+    round: 'Final' | 'Semi Final' | 'Quarter Final' | 'Round of 16' | 'Group Stage',
+    result: 'won' | 'lost' | 'draw',
+    involvement: 'scorer' | 'assist-or-save' | 'full-match' | 'minimal'
+): Promise<TournamentRivalryResult> => {
+    const prompt = `
+You are a football psychology AI. Assess the rift between two club teammates who faced each other in an international tournament.
+
+Player A: ${playerA.name} (${playerA.personality}, ${playerA.nationality}) — they LOST this match.
+Player B: ${playerB.name} (${playerB.personality}, ${playerB.nationality}) — they WON this match.
+Competition: ${competition}
+Round: ${round}
+Player A's involvement: ${involvement}
+
+PERSONALITY RULES (apply strictly):
+- Leader / Professional: Separates club from country. Even a World Cup Final defeat = mild, short rift.
+- Volatile: Loss amplifies the rift significantly. Even low-stakes losses can cause flare-ups.
+- Mercenary: Image-driven. A big-stage loss = brand damage. May extend rift to ALL players from the rival nation (affectedScope: "nation-wide"), not just Player B.
+- Ambitious: A club teammate winning what they lost creates jealousy — they may demand to be clear first choice.
+- Young Prospect: May idolise opponent and take it lightly, or be devastated — use context to decide.
+- Loyal: Most forgiving. Rift is suppressed easily.
+
+SEVERITY MATRIX:
+- Competition weight: World Cup highest, Euros/Copa America high, Qualifier/Friendly very low
+- Round weight: Final > Semi > Quarter > R16 > Group Stage
+- Involvement weight: Scorer of decider = maximum; assist/save = high; full match = low; minimal = minimal (0-2 weeks)
+
+Return JSON:
+{
+    "riftSeverity": "none" | "minor" | "moderate" | "serious",
+    "duration": number (weeks, 0–16),
+    "reason": "string (one vivid sentence explaining the rift)",
+    "affectedScope": "direct" | "nation-wide"
+}
+If result is 'draw' or involvement is 'minimal' and competition is low-stakes, riftSeverity should be "none" or "minor".
+`;
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { riftSeverity: 'none', duration: 0, reason: 'No significant rift.', affectedScope: 'direct' };
+    }
+};
+
+export interface PostTournamentMoraleResult {
+    morale: 'Winner' | 'FiredUp' | 'Disappointed';
+    message: string;
+    durationWeeks: number;
+}
+
+export const getPlayerPostTournamentMorale = async (
+    player: { name: string; personality: string },
+    result: 'won' | 'lost' | 'group-exit',
+    competition: string,
+    round: string
+): Promise<PostTournamentMoraleResult> => {
+    const prompt = `
+You are a football psychology AI. Determine the post-tournament morale effect for a player returning to their club.
+
+Player: ${player.name} (Personality: ${player.personality})
+Tournament: ${competition}, exited at: ${round}
+Result: ${result}
+
+RULES:
+- Mercenary who WON a major tournament: massive ego boost, returns demanding more playing time. morale: "Winner", high duration (8-12 weeks).
+- Leader who LOST: recovers quickly, professional. morale: "Disappointed", low duration (1-3 weeks).
+- Volatile who LOST: deeply affected, morale "Disappointed", moderate duration (4-8 weeks).
+- Ambitious who LOST a final to a club teammate: jealousy, morale "FiredUp" but edgy, moderate duration.
+- Young Prospect who WON: thrilled, morale "FiredUp", moderate duration.
+- Loyal who WON: quietly pleased, morale "Winner", low-moderate duration.
+
+Return JSON:
+{
+    "morale": "Winner" | "FiredUp" | "Disappointed",
+    "message": "string (one sentence flavour text for the squad feed)",
+    "durationWeeks": number (1–12)
+}
+`;
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { morale: 'Disappointed', message: `${player.name} returns from international duty.`, durationWeeks: 2 };
+    }
 };
 
 export const getInternationalBreakSummary = async (week: number) => {

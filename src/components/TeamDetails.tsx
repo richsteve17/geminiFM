@@ -141,6 +141,19 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
             if (eff.type === 'BadChemistry') {
                 effects.push(<span key={`c-${i}`} className="text-xs" title={`Chemistry Rift with ${eff.with}`}><BrokenLinkIcon className="w-3 h-3 text-orange-500 inline" /></span>);
             }
+            if (eff.type === 'InternationalRift') {
+                const color = eff.severity === 'serious' ? 'text-red-500' : eff.severity === 'moderate' ? 'text-orange-500' : 'text-yellow-500';
+                effects.push(
+                    <span key={`ir-${i}`} className="text-xs" title={`International Rift (${eff.severity}) with ${eff.with}: ${eff.message}`}>
+                        <BrokenLinkIcon className={`w-3 h-3 ${color} inline`} />
+                    </span>
+                );
+            }
+            if (eff.type === 'TeammateBond') {
+                effects.push(
+                    <span key={`tb-${i}`} className="text-xs" title={`Teammate Bond with ${eff.with}: ${eff.message}`}>🤝</span>
+                );
+            }
         });
 
         // Check if out of position (only relevant for starters list if we want to show it there too)

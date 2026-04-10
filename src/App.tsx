@@ -1,14 +1,14 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect, WorldCupResult, WorldCupOutcome } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect, PlayerEffect, WorldCupResult, WorldCupOutcome } from './types';
 import { AppScreen, GameState } from './types';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
 import AtmosphereWidget from './components/AtmosphereWidget';
-import { simulateMatchSegment, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, scoutFollowUp, getInternationalBreakSummary, getInterviewOpeningMessage, continueInterviewChat, generatePressConferenceOpener, continuePressConferenceChat, type ChatMessage, type InterviewContext, type PressConferenceContext } from './services/geminiService';
+import { simulateMatchSegment, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, scoutFollowUp, getInternationalBreakSummary, getInterviewOpeningMessage, continueInterviewChat, generatePressConferenceOpener, continuePressConferenceChat, getTeammateTournamentRivalry, getPlayerPostTournamentMorale, type ChatMessage, type InterviewContext, type PressConferenceContext } from './services/geminiService';
 import type { ScoutArchetype, ScoutReport } from './services/geminiService';
 import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS } from './utils';
@@ -188,6 +188,22 @@ export default function App() {
                     const opponentFormation = opponentTeam?.tactic?.formation;
                     const opponentMentality = opponentTeam?.tactic?.mentality;
 
+                    // Build rift and bond pairs for chemistry injection
+                    const riftPairs: { playerA: string; playerB: string; severity: string }[] = [];
+                    const bondPairs: { playerA: string; playerB: string }[] = [];
+                    if (userTeam) {
+                        userTeam.players.forEach(p => {
+                            p.effects.forEach(eff => {
+                                if (eff.type === 'InternationalRift' && eff.severity !== 'none') {
+                                    riftPairs.push({ playerA: p.name, playerB: eff.with, severity: eff.severity });
+                                }
+                                if (eff.type === 'TeammateBond') {
+                                    bondPairs.push({ playerA: p.name, playerB: eff.with });
+                                }
+                            });
+                        });
+                    }
+
                     const result = await simulateMatchSegment(
                         teams[currentFixture.homeTeam], 
                         teams[currentFixture.awayTeam], 
@@ -205,7 +221,9 @@ export default function App() {
                                 momentumDelta: activeShoutEffect.momentumDelta,
                                 defensiveModifier: activeShoutEffect.defensiveModifier,
                                 attackModifier: activeShoutEffect.attackModifier
-                            } : undefined
+                            } : undefined,
+                            riftPairs,
+                            bondPairs
                         }
                     );
 
@@ -855,9 +873,281 @@ export default function App() {
             }
         }
 
+        if (gameMode === 'Club' && INTERNATIONAL_BREAK_WEEKS.includes(nextW) && userTeamName) {
+            await processInternationalBreak(nextW, userTeamName);
+        }
+
+        // Decay all player effects by 1 week and remove expired ones
+        if (userTeamName) {
+            setTeams(prev => {
+                const team = prev[userTeamName];
+                if (!team) return prev;
+                const updatedPlayers = team.players.map(p => ({
+                    ...p,
+                    effects: p.effects
+                        .map(eff => ({ ...eff, until: eff.until - 1 }))
+                        .filter(eff => eff.until > 0)
+                }));
+                return { ...prev, [userTeamName]: { ...team, players: updatedPlayers } };
+            });
+        }
+
         setWeeklyResults(results); setCurrentWeek(nextW);
         setCurrentFixture(fixtures.find(f => (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && f.week === nextW));
         setMatchState(null); setGameState(GameState.PRE_MATCH); setIsLoading(false);
+    };
+
+    const processInternationalBreak = async (week: number, teamName: string) => {
+        const userTeamData = teams[teamName];
+        if (!userTeamData) return;
+
+        const squad = userTeamData.players;
+        const newNewsItems: NewsItem[] = [];
+
+        // Simulate a random international tournament context for this break
+        const ROUNDS = ['Final', 'Semi Final', 'Quarter Final', 'Round of 16', 'Group Stage'] as const;
+        const INVOLVEMENTS = ['scorer', 'assist-or-save', 'full-match', 'minimal'] as const;
+        type CompetitionType = 'World Cup' | 'Euros' | 'Copa America' | 'Qualifier' | 'Friendly';
+
+        // Pick a competition based on the break index for realism
+        const competitionOptions: CompetitionType[] = ['Qualifier', 'Euros', 'World Cup'];
+        const competition: CompetitionType = competitionOptions[INTERNATIONAL_BREAK_WEEKS.indexOf(week)] ?? 'Qualifier';
+
+        // Group squad players by nationality
+        const byNationality: Record<string, Player[]> = {};
+        squad.forEach(p => {
+            if (!byNationality[p.nationality]) byNationality[p.nationality] = [];
+            byNationality[p.nationality].push(p);
+        });
+
+        const nationalities = Object.keys(byNationality);
+        if (nationalities.length < 2) {
+            // Not enough different nationalities for rivalries; just add summary
+            const summary = await getInternationalBreakSummary(week);
+            newNewsItems.push({ id: Date.now(), week, title: summary.newsTitle, body: summary.newsBody, type: 'call-up' });
+            setNews(prev => [...newNewsItems, ...prev]);
+            return;
+        }
+
+        // --- TEAMMATE BONDS ---
+        // Players of same nationality who "went on a deep run together"
+        // Simulate: if competition is high-stakes (Euros/WC), pairs from same nation get bond
+        const bondRound = competition === 'World Cup' ? 'Semi Final' : competition === 'Euros' ? 'Quarter Final' : null;
+        if (bondRound) {
+            for (const nat of nationalities) {
+                const natPlayers = byNationality[nat];
+                if (natPlayers.length >= 2) {
+                    // Apply bond between all pairs of same-nation players
+                    const bondDuration = competition === 'World Cup' ? 12 : 8;
+                    for (let i = 0; i < natPlayers.length; i++) {
+                        for (let j = i + 1; j < natPlayers.length; j++) {
+                            const pA = natPlayers[i];
+                            const pB = natPlayers[j];
+                            const bondMsg = `Shared glory with ${pB.name} at the ${competition} — chemistry boosted.`;
+                            const bondMsgB = `Shared glory with ${pA.name} at the ${competition} — chemistry boosted.`;
+                            setTeams(prev => {
+                                const t = prev[teamName];
+                                const updated = t.players.map(p => {
+                                    if (p.name === pA.name) {
+                                        const hasBond = p.effects.some(e => e.type === 'TeammateBond' && e.with === pB.name);
+                                        if (hasBond) return p;
+                                        return { ...p, effects: [...p.effects, { type: 'TeammateBond' as const, with: pB.name, message: bondMsg, until: bondDuration }] };
+                                    }
+                                    if (p.name === pB.name) {
+                                        const hasBond = p.effects.some(e => e.type === 'TeammateBond' && e.with === pA.name);
+                                        if (hasBond) return p;
+                                        return { ...p, effects: [...p.effects, { type: 'TeammateBond' as const, with: pA.name, message: bondMsgB, until: bondDuration }] };
+                                    }
+                                    return p;
+                                });
+                                return { ...prev, [teamName]: { ...t, players: updated } };
+                            });
+                        }
+                    }
+                    if (natPlayers.length >= 2) {
+                        newNewsItems.push({
+                            id: Date.now() + Math.random(),
+                            week,
+                            title: `${nat} Teammates Bond at ${competition}`,
+                            body: `${natPlayers.map(p => p.name).join(' & ')} return from ${competition} ${bondRound} duty with a strengthened partnership. Expect sharper combination play at club level.`,
+                            type: 'teammate-bond'
+                        });
+                    }
+                }
+            }
+        }
+
+        // --- RIVALRY RIFTS ---
+        // Pick pairs of players from different nations who "faced each other"
+        const processedPairs = new Set<string>();
+        const riftPromises: Promise<void>[] = [];
+
+        for (let i = 0; i < nationalities.length; i++) {
+            for (let j = i + 1; j < nationalities.length; j++) {
+                const natA = nationalities[i];
+                const natB = nationalities[j];
+                const playersA = byNationality[natA];
+                const playersB = byNationality[natB];
+
+                // Pick one representative pair per nation matchup
+                const pA = playersA[Math.floor(Math.random() * playersA.length)];
+                const pB = playersB[Math.floor(Math.random() * playersB.length)];
+                const pairKey = [pA.name, pB.name].sort().join('|');
+                if (processedPairs.has(pairKey)) continue;
+                processedPairs.add(pairKey);
+
+                const round = ROUNDS[Math.floor(Math.random() * ROUNDS.length)];
+                const involvement = INVOLVEMENTS[Math.floor(Math.random() * INVOLVEMENTS.length)];
+                // pA "lost" in our simulation
+                const result = 'lost' as const;
+
+                const riftTask = async () => {
+                    try {
+                        const riftResult = await getTeammateTournamentRivalry(
+                            { name: pA.name, personality: pA.personality, nationality: natA },
+                            { name: pB.name, personality: pB.personality, nationality: natB },
+                            competition,
+                            round,
+                            result,
+                            involvement
+                        );
+
+                        if (riftResult.riftSeverity === 'none') return;
+
+                        // All rival-nationality squad members to rift against (for nation-wide scope)
+                        const allNatBPlayers = byNationality[natB] || [];
+
+                        setTeams(prev => {
+                            const t = prev[teamName];
+                            let updatedPlayers = t.players.map(p => {
+                                if (p.name === pA.name) {
+                                    // pA gets a rift effect for each natB player in the squad
+                                    // On direct scope: only with pB. On nation-wide: with every natB player.
+                                    const targetsForA = riftResult.affectedScope === 'nation-wide'
+                                        ? allNatBPlayers
+                                        : allNatBPlayers.filter(bp => bp.name === pB.name);
+
+                                    let newEffects = p.effects.filter(e => {
+                                        if (e.type !== 'InternationalRift') return true;
+                                        // Remove old rifts against any natB player (will be replaced)
+                                        return !targetsForA.some(bp => e.with === bp.name);
+                                    });
+                                    for (const target of targetsForA) {
+                                        const riftEff: PlayerEffect = {
+                                            type: 'InternationalRift',
+                                            with: target.name,
+                                            severity: riftResult.riftSeverity,
+                                            scope: riftResult.affectedScope,
+                                            rivalNationality: riftResult.affectedScope === 'nation-wide' ? natB : undefined,
+                                            message: riftResult.reason,
+                                            until: riftResult.duration
+                                        };
+                                        newEffects = [...newEffects, riftEff];
+                                    }
+                                    return { ...p, effects: newEffects };
+                                }
+                                return p;
+                            });
+                            return { ...prev, [teamName]: { ...t, players: updatedPlayers } };
+                        });
+
+                        // Add news for significant rifts
+                        if (riftResult.riftSeverity === 'serious') {
+                            newNewsItems.push({
+                                id: Date.now() + Math.random(),
+                                week,
+                                title: `Serious Rift: ${pA.name} vs ${pB.name}`,
+                                body: `${riftResult.reason} Manager decision required: bench ${pA.name}, bench ${pB.name}, or risk playing both together.`,
+                                type: 'serious-rift',
+                                riftDecision: { riftPlayerA: pA.name, riftPlayerB: pB.name }
+                            });
+                        } else if (riftResult.riftSeverity === 'moderate') {
+                            newNewsItems.push({
+                                id: Date.now() + Math.random(),
+                                week,
+                                title: `Chemistry Rift: ${pA.name} & ${pB.name}`,
+                                body: `${riftResult.reason} (${riftResult.duration} weeks)`,
+                                type: 'chemistry-rift'
+                            });
+                        }
+
+                        // Post-tournament morale for pA (the loser)
+                        const moraleResult = await getPlayerPostTournamentMorale(
+                            { name: pA.name, personality: pA.personality },
+                            'lost',
+                            competition,
+                            round
+                        );
+                        const moraleEffect: PlayerEffect = {
+                            type: 'PostTournamentMorale',
+                            morale: moraleResult.morale,
+                            message: moraleResult.message,
+                            until: moraleResult.durationWeeks
+                        };
+                        setTeams(prev => {
+                            const t = prev[teamName];
+                            const updated = t.players.map(p => {
+                                if (p.name === pA.name) {
+                                    const filtered = p.effects.filter(e => e.type !== 'PostTournamentMorale');
+                                    return { ...p, effects: [...filtered, moraleEffect] };
+                                }
+                                return p;
+                            });
+                            return { ...prev, [teamName]: { ...t, players: updated } };
+                        });
+                    } catch (err) {
+                        console.error('Rift processing error', err);
+                    }
+                };
+
+                riftPromises.push(riftTask());
+            }
+        }
+
+        // Wait for all rift calculations
+        await Promise.allSettled(riftPromises);
+
+        // Also apply morale for winners (pB side)
+        for (let i = 0; i < nationalities.length; i++) {
+            for (let j = i + 1; j < nationalities.length; j++) {
+                const natB = nationalities[j];
+                const playersB = byNationality[natB];
+                const pB = playersB[0];
+                if (!pB) continue;
+                try {
+                    const round = ROUNDS[Math.floor(Math.random() * ROUNDS.length)];
+                    const moraleResult = await getPlayerPostTournamentMorale(
+                        { name: pB.name, personality: pB.personality },
+                        'won',
+                        competition,
+                        round
+                    );
+                    const moraleEffect: PlayerEffect = {
+                        type: 'PostTournamentMorale',
+                        morale: moraleResult.morale,
+                        message: moraleResult.message,
+                        until: moraleResult.durationWeeks
+                    };
+                    setTeams(prev => {
+                        const t = prev[teamName];
+                        const updated = t.players.map(p => {
+                            if (p.name === pB.name) {
+                                const filtered = p.effects.filter(e => e.type !== 'PostTournamentMorale');
+                                return { ...p, effects: [...filtered, moraleEffect] };
+                            }
+                            return p;
+                        });
+                        return { ...prev, [teamName]: { ...t, players: updated } };
+                    });
+                } catch { /* ignore */ }
+            }
+        }
+
+        // General summary
+        const summary = await getInternationalBreakSummary(week);
+        newNewsItems.unshift({ id: Date.now(), week, title: summary.newsTitle, body: summary.newsBody, type: 'call-up' });
+
+        setNews(prev => [...newNewsItems, ...prev]);
     };
 
     const handleStartMatch = () => {
@@ -925,7 +1215,20 @@ export default function App() {
         setIsLoading(true); setTalkResult(null); setPlayerTalk(null); setError(null); setPendingContractTerms(null);
         setAppScreen(AppScreen.PLAYER_TALK);
         try {
-            const questions = await getPlayerTalkQuestions(player, teams[userTeamName], context);
+            // Check for teammate bond context (for transfer negotiations)
+            // Only triggers when a squad member has a concrete TeammateBond directed at this specific player by name
+            let bondContext: { squadMate: string; competition: string } | undefined;
+            if (context === 'transfer') {
+                const userSquad = teams[userTeamName]?.players || [];
+                for (const squadMate of userSquad) {
+                    const bondEff = squadMate.effects.find(e => e.type === 'TeammateBond' && e.with === player.name);
+                    if (bondEff && bondEff.type === 'TeammateBond') {
+                        bondContext = { squadMate: squadMate.name, competition: 'international tournament' };
+                        break;
+                    }
+                }
+            }
+            const questions = await getPlayerTalkQuestions(player, teams[userTeamName], context, bondContext);
             setPlayerTalk({ player, questions, answers: [], currentQuestionIndex: 0, context, negotiationHistory: [] });
         } catch (e) { setError("Negotiations failed."); setAppScreen(AppScreen.GAMEPLAY); } finally { setIsLoading(false); }
     };
@@ -938,7 +1241,20 @@ export default function App() {
             setPendingContractTerms(offer);
             setIsLoading(true);
             try {
-                const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context, offer);
+                // Determine bond context for evaluation
+                // Only applies when there is a concrete named TeammateBond with the player being negotiated
+                let bondContext: { squadMate: string; competition: string } | undefined;
+                if (playerTalk.context === 'transfer') {
+                    const userSquad = teams[userTeamName]?.players || [];
+                    for (const squadMate of userSquad) {
+                        const bondEff = squadMate.effects.find(e => e.type === 'TeammateBond' && e.with === playerTalk.player.name);
+                        if (bondEff && bondEff.type === 'TeammateBond') {
+                            bondContext = { squadMate: squadMate.name, competition: 'international tournament' };
+                            break;
+                        }
+                    }
+                }
+                const result = await evaluatePlayerTalk(playerTalk.player, playerTalk.questions, newAnswers, teams[userTeamName], playerTalk.context, offer, bondContext);
                 setTalkResult(result);
             } catch (e) { setError("Evaluation failed."); } finally { setIsLoading(false); }
         } else if (playerTalk.currentQuestionIndex < playerTalk.questions.length - 1) {
@@ -991,6 +1307,33 @@ export default function App() {
             }
         }
         setPlayerTalk(null); setTalkResult(null); setPendingContractTerms(null); setAppScreen(AppScreen.GAMEPLAY);
+    };
+
+    const handleRiftDecision = (newsId: number, playerA: string, playerB: string, choice: 'bench-a' | 'bench-b' | 'risk-it') => {
+        // Record the decision on the news item
+        setNews(prev => prev.map(item =>
+            item.id === newsId && item.riftDecision
+                ? { ...item, riftDecision: { ...item.riftDecision, choice } }
+                : item
+        ));
+
+        if (!userTeamName) return;
+
+        // Apply the manager's decision
+        if (choice === 'bench-a') {
+            setTeams(prev => {
+                const t = prev[userTeamName];
+                const updated = t.players.map(p => p.name === playerA ? { ...p, isStarter: false } : p);
+                return { ...prev, [userTeamName]: { ...t, players: updated } };
+            });
+        } else if (choice === 'bench-b') {
+            setTeams(prev => {
+                const t = prev[userTeamName];
+                const updated = t.players.map(p => p.name === playerB ? { ...p, isStarter: false } : p);
+                return { ...prev, [userTeamName]: { ...t, players: updated } };
+            });
+        }
+        // 'risk-it' leaves both players in — rift effect stays active, increasing miscommunication in next match
     };
 
     const worldCupTeams = NATIONAL_TEAMS.map(convertNationalTeam);
@@ -1083,7 +1426,7 @@ export default function App() {
                 onBack={() => setAppScreen(AppScreen.GAMEPLAY)}
                 onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)}
             />;
-            case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} />;
+            case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onRiftDecision={handleRiftDecision} />;
             case AppScreen.WORLD_CUP_RESULT: return wcResult ? (
                 <WorldCupResultScreen
                     result={wcResult}

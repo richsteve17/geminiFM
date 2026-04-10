@@ -57,3 +57,34 @@ Output goes to `dist/`.
 ## Deployment
 
 Deployed as a static site. Build command: `npm run build`. Public directory: `dist`.
+
+## Chemistry Rift & International Bond System (Task #2)
+
+### New Types (`src/types.ts`)
+- `RiftSeverity`: `'none' | 'minor' | 'moderate' | 'serious'`
+- `RiftScope`: `'direct' | 'nation-wide'`
+- `PlayerEffect` extended with `InternationalRift` and `TeammateBond` variants
+- `NewsItem` extended with `serious-rift` and `teammate-bond` types
+- `RiftDecisionChoice` interface for manager bench/risk decisions
+
+### New AI Functions (`src/services/geminiService.ts`)
+- `getTeammateTournamentRivalry()` — returns rift severity, duration, reason, and scope using the full personality multiplier matrix
+- `getPlayerPostTournamentMorale()` — returns personality-weighted morale effect for returning players
+
+### International Break Processing (`src/App.tsx`)
+- `processInternationalBreak()` — called every international break week; groups squad by nationality, simulates rivalries and bonds
+- **Teammate Bonds**: same-nationality players who went deep apply `TeammateBond` effect to each other
+- **Rifts**: cross-nationality pairs get `InternationalRift` effects with severity/duration from AI
+- **Nation-wide scope**: Mercenary-type rifts apply to all players of the rival nationality in the squad
+- **Serious Rift events**: fire `serious-rift` news with bench A / bench B / risk-it decision buttons
+- **Effects decay**: all player effects decrement `until` counter each week and expire at 0
+
+### Match Integration
+- Rift pairs and bond pairs injected into `simulateMatchSegment` context for Miscommunication/chemistry commentary
+
+### Transfer Integration
+- `getPlayerTalkQuestions` and `evaluatePlayerTalk` accept optional `bondContext` to reference international connections and lower wage demands
+
+### UI Updates
+- `TeamDetails.tsx`: shows 🤝 for bonds, colored broken link icons for rift severity levels
+- `NewsScreen.tsx`: styled rift/bond news cards with decision buttons for serious rifts

@@ -12,6 +12,7 @@ import { ArrowLeftStartOnRectangleIcon } from './icons/ArrowLeftStartOnRectangle
 interface NewsScreenProps {
     news: NewsItem[];
     onBack: () => void;
+    onRiftDecision?: (newsId: number, playerA: string, playerB: string, choice: 'bench-a' | 'bench-b' | 'risk-it') => void;
 }
 
 const getIconForType = (type: NewsItem['type']) => {
@@ -20,14 +21,24 @@ const getIconForType = (type: NewsItem['type']) => {
         case 'tournament-result': return <GlobeAltIcon className="w-6 h-6 text-yellow-400" />;
         case 'player-return': return <UserIcon className="w-6 h-6 text-green-400" />;
         case 'chemistry-rift': return <BrokenLinkIcon className="w-6 h-6 text-orange-400" />;
+        case 'serious-rift': return <BrokenLinkIcon className="w-6 h-6 text-red-500" />;
+        case 'teammate-bond': return <UserGroupIcon className="w-6 h-6 text-emerald-400" />;
         case 'contract-renewal': return <DocumentCheckIcon className="w-6 h-6 text-teal-400" />;
         case 'player-departure': return <ArrowLeftStartOnRectangleIcon className="w-6 h-6 text-red-400" />;
         default: return <NewspaperIcon className="w-6 h-6 text-gray-400" />;
     }
 }
 
+const getBorderForType = (type: NewsItem['type']) => {
+    switch (type) {
+        case 'serious-rift': return 'border-red-700 bg-red-950/30';
+        case 'chemistry-rift': return 'border-orange-800 bg-orange-950/20';
+        case 'teammate-bond': return 'border-emerald-800 bg-emerald-950/20';
+        default: return 'border-gray-700 bg-gray-800/50';
+    }
+};
 
-const NewsScreen: React.FC<NewsScreenProps> = ({ news, onBack }) => {
+const NewsScreen: React.FC<NewsScreenProps> = ({ news, onBack, onRiftDecision }) => {
     return (
         <div className="mt-8 max-w-3xl mx-auto">
             <div className="text-center mb-8">
@@ -41,14 +52,50 @@ const NewsScreen: React.FC<NewsScreenProps> = ({ news, onBack }) => {
                     </div>
                 ) : (
                     news.map(item => (
-                        <div key={item.id} className="bg-gray-800/50 rounded-lg shadow-lg border border-gray-700 p-4 flex items-start gap-4">
+                        <div key={item.id} className={`rounded-lg shadow-lg border p-4 flex items-start gap-4 ${getBorderForType(item.type)}`}>
                             <div className="flex-shrink-0 w-10 h-10 bg-gray-700/50 rounded-full flex items-center justify-center">
                                 {getIconForType(item.type)}
                             </div>
-                            <div>
+                            <div className="flex-1 min-w-0">
                                 <p className="text-sm text-gray-400">Week {item.week}</p>
-                                <h3 className="font-bold text-lg text-green-400">{item.title}</h3>
+                                <h3 className={`font-bold text-lg ${item.type === 'serious-rift' ? 'text-red-400' : item.type === 'teammate-bond' ? 'text-emerald-400' : 'text-green-400'}`}>
+                                    {item.title}
+                                </h3>
                                 <p className="text-gray-300 mt-1">{item.body}</p>
+
+                                {item.type === 'serious-rift' && item.riftDecision && onRiftDecision && (
+                                    <div className="mt-3">
+                                        {item.riftDecision.choice ? (
+                                            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                                Decision: {item.riftDecision.choice === 'bench-a' ? `Bench ${item.riftDecision.riftPlayerA}` : item.riftDecision.choice === 'bench-b' ? `Bench ${item.riftDecision.riftPlayerB}` : 'Risk it — both play'}
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <p className="text-xs font-bold text-red-300 mb-2 uppercase tracking-wider">Manager Decision Required:</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <button
+                                                        onClick={() => onRiftDecision(item.id, item.riftDecision!.riftPlayerA, item.riftDecision!.riftPlayerB, 'bench-a')}
+                                                        className="text-xs font-bold bg-yellow-900/60 border border-yellow-700 text-yellow-200 px-3 py-1.5 rounded hover:bg-yellow-800 transition-colors"
+                                                    >
+                                                        Bench {item.riftDecision.riftPlayerA}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => onRiftDecision(item.id, item.riftDecision!.riftPlayerA, item.riftDecision!.riftPlayerB, 'bench-b')}
+                                                        className="text-xs font-bold bg-yellow-900/60 border border-yellow-700 text-yellow-200 px-3 py-1.5 rounded hover:bg-yellow-800 transition-colors"
+                                                    >
+                                                        Bench {item.riftDecision.riftPlayerB}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => onRiftDecision(item.id, item.riftDecision!.riftPlayerA, item.riftDecision!.riftPlayerB, 'risk-it')}
+                                                        className="text-xs font-bold bg-red-900/60 border border-red-700 text-red-200 px-3 py-1.5 rounded hover:bg-red-800 transition-colors"
+                                                    >
+                                                        Risk it — both play
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))

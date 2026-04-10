@@ -38,10 +38,15 @@ export type PlayerStatus =
     | { type: 'Suspended'; until: number }
     | { type: 'SentOff' };
 
+export type RiftSeverity = 'none' | 'minor' | 'moderate' | 'serious';
+export type RiftScope = 'direct' | 'nation-wide';
+
 export type PlayerEffect = 
     | { type: 'PostTournamentMorale'; morale: 'Winner' | 'FiredUp' | 'Disappointed'; message: string; until: number }
     | { type: 'BadChemistry'; with: string; message: string; until: number }
-    | { type: 'PromiseBroken'; message: string; until: number };
+    | { type: 'PromiseBroken'; message: string; until: number }
+    | { type: 'InternationalRift'; with: string; severity: RiftSeverity; scope: RiftScope; rivalNationality?: string; message: string; until: number }
+    | { type: 'TeammateBond'; with: string; message: string; until: number };
 
 export type PlayerPosition = 
     | 'GK' 
@@ -228,12 +233,19 @@ export interface NegotiationResult {
     extractedPromises?: string[]; // New field for extracted text promises
 }
 
+export interface RiftDecisionChoice {
+    riftPlayerA: string;
+    riftPlayerB: string;
+    choice?: 'bench-a' | 'bench-b' | 'risk-it';
+}
+
 export interface NewsItem {
     id: number;
     week: number;
     title: string;
     body: string;
-    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance' | 'promise-broken';
+    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance' | 'promise-broken' | 'serious-rift' | 'teammate-bond';
+    riftDecision?: RiftDecisionChoice;
 }
 
 export interface ExperienceLevel {
