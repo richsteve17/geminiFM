@@ -38,6 +38,14 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({
         }
     }, [talk?.player?.name]);
 
+    // Sync sliders to agent's counter suggestion when one arrives
+    useEffect(() => {
+        if (talk?.counterSuggestion) {
+            setWageOffer(talk.counterSuggestion.wage);
+            setContractLength(talk.counterSuggestion.length);
+        }
+    }, [talk?.counterSuggestion?.wage]);
+
     // Auto-scroll to latest message
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });

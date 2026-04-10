@@ -808,25 +808,26 @@ PHASE RULES:
 - If the manager has been evasive in ${evasionCount >= 2 ? 'MULTIPLE recent responses' : 'responses'}: ${evasionCount >= 2 ? 'call it out directly and signal a walkout.' : 'push back with a sharper follow-up.'}
 - WALKOUT if: manager is blatantly dismissive, rude, or has given 2+ non-answers in a row.
 
-Return JSON:
-{
-  "reply": "agent's spoken words (2-3 sentences, natural, in-character)",
-  "nextPhase": "talking" | "offer" | "walkout"
-}
-"offer" = ready to discuss financial terms now.
-"walkout" = agent is leaving, negotiation over.`;
+nextPhase values: "talking" = keep the conversation going, "offer" = signal ready for financial terms, "walkout" = agent is leaving.
+
+Respond with ONLY valid JSON, no other text:
+{ "reply": "...", "nextPhase": "talking" }`;
 
     try {
+        // Use plain text response + cleanJson to avoid JSON-mode parse failures
         const response = await getAI().models.generateContent({
-            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+            model: MODEL_TEXT, contents: prompt
         });
         const parsed = JSON.parse(cleanJson(response.text));
-        return { reply: parsed.reply || "Where were we?", nextPhase: parsed.nextPhase || 'talking' };
+        if (!parsed.reply) throw new Error('Missing reply field');
+        return { reply: parsed.reply, nextPhase: parsed.nextPhase || 'talking' };
     } catch (e) {
+        console.error('[continueNegotiationChat] API/parse error:', e);
         const fallback = isOpening
-            ? `Good to meet you. Before we get into numbers, I need to understand exactly what role ${p.name} would have here — because he has options and I need to give him a real answer.`
-            : "Look, I need a straight answer. What is this club actually offering my client?";
-        return { reply: fallback, nextPhase: history.length >= 4 ? 'offer' : 'talking' };
+            ? `Good to meet you. Before we get into numbers, I need to understand exactly what ${p.name} would be walking into here — squad role, expectations, the full picture.`
+            : `I hear you, but I need something more specific than that. What exactly is the plan for my client here?`;
+        // Never auto-trigger offer phase from fallback — let the conversation develop
+        return { reply: fallback, nextPhase: 'talking' };
     }
 };
 
@@ -901,16 +902,19 @@ Return JSON:
 
     try {
         const response = await getAI().models.generateContent({
-            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+            model: MODEL_TEXT, contents: prompt
         });
-        return JSON.parse(cleanJson(response.text));
+        const parsed = JSON.parse(cleanJson(response.text));
+        if (!parsed.decision) throw new Error('Missing decision field');
+        return parsed;
     } catch (e) {
+        console.error('[evaluateNegotiationOffer] API/parse error:', e);
         const fallbackWage = isLowball ? fairWageMin : offer.wage;
         return {
             decision: isLowball ? 'counter' : 'accepted',
             reasoning: isLowball
-                ? `$${offer.wage.toLocaleString()} a week? That's not serious money for a player of this calibre. We need at least $${fairWageMin.toLocaleString()}.`
-                : "We've had a good conversation. My client is ready to commit.",
+                ? `$${offer.wage.toLocaleString()} a week is below what we need. My client expects at least $${fairWageMin.toLocaleString()} — come back with a real number.`
+                : "The terms work for us. Let's get this done.",
             counterOffer: { wage: fallbackWage, length: offer.length },
             extractedPromises: []
         };

@@ -227,6 +227,7 @@ export interface PlayerTalk {
     messages: NegotiationMessage[];
     phase: 'talking' | 'offer';
     bondContext?: { squadMate: string; competition: string };
+    counterSuggestion?: { wage: number; length: number };
 }
 
 export interface NegotiationResult {

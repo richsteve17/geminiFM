@@ -1249,9 +1249,12 @@ export default function App() {
     const handlePlayerTalkMessage = async (text: string, offer?: { wage: number; length: number }) => {
         if (!playerTalk || !userTeamName) return;
 
-        const managerMsg: NegotiationMessage = { role: 'manager', text: text || '' };
-        const updatedMessages: NegotiationMessage[] = [...playerTalk.messages, managerMsg];
-        setPlayerTalk({ ...playerTalk, messages: updatedMessages });
+        // Don't add an empty manager message when submitting an offer with no text
+        const messageText = text?.trim() || '';
+        const messagesToUpdate: NegotiationMessage[] = messageText
+            ? [...playerTalk.messages, { role: 'manager' as const, text: messageText }]
+            : [...playerTalk.messages];
+        if (messageText) setPlayerTalk({ ...playerTalk, messages: messagesToUpdate });
         setIsLoading(true);
 
         try {
@@ -1260,16 +1263,21 @@ export default function App() {
                 setPendingContractTerms(offer);
                 const result = await evaluateNegotiationOffer(
                     playerTalk.player, teams[userTeamName], playerTalk.context,
-                    updatedMessages, offer, playerTalk.bondContext
+                    messagesToUpdate, offer, playerTalk.bondContext
                 );
                 const agentReply: NegotiationMessage = { role: 'agent', text: result.reasoning };
                 if (result.decision === 'counter' && result.counterOffer) {
-                    // Counter: update sliders, keep conversation going — no final result screen
+                    // Counter: store suggestion so sliders update, keep conversation going
                     setPendingContractTerms(result.counterOffer);
-                    setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentReply], phase: 'offer' } : prev);
+                    setPlayerTalk(prev => prev ? {
+                        ...prev,
+                        messages: [...messagesToUpdate, agentReply],
+                        phase: 'offer',
+                        counterSuggestion: result.counterOffer
+                    } : prev);
                 } else {
                     // Accepted or rejected: show final result
-                    setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentReply], phase: 'offer' } : prev);
+                    setPlayerTalk(prev => prev ? { ...prev, messages: [...messagesToUpdate, agentReply], phase: 'offer' } : prev);
                     setTalkResult(result);
                 }
             } else {
