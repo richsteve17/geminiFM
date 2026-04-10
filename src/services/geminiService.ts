@@ -33,7 +33,16 @@ const mediaCache = new Map<string, string | AudioBuffer>();
 
 // --- MEDIA HELPERS ---
 
-const cleanJson = (text?: string) => (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
+const cleanJson = (text?: string): string => {
+    const s = (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
+    // Extract the first complete JSON object or array from the response,
+    // even if the model added preamble text around it
+    const objMatch = s.match(/\{[\s\S]*\}/);
+    if (objMatch) return objMatch[0];
+    const arrMatch = s.match(/\[[\s\S]*\]/);
+    if (arrMatch) return arrMatch[0];
+    return s;
+};
 
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
@@ -1101,24 +1110,19 @@ export const processTouchlineInteraction = async (
         ? `\nPlayers on the pitch:\n${starters.map(s => `- ${s.name} (${s.position}, ${s.condition}% stamina)`).join('\n')}\n`
         : '';
 
-    const prompt = `You are a passionate football touchline analyst. The manager of ${team.name} just shouted: "${userShout}"
-Match: ${matchState.homeScore}-${matchState.awayScore}, Minute ${matchState.currentMinute || 0}, Momentum ${matchState.momentum}.${lineupBlock}
-Your job: Analyse the instruction and produce a vivid, specific response.
+    const prompt = `Touchline shout analyzer. Output JSON only — no explanation, no markdown, just the raw JSON object.
 
-CRITICAL — if the manager mentioned a player by name (e.g. "push Wertz", "get Henderson pressing"):
-- Your commentary MUST acknowledge that specific player and what they will do
-- Describe the consequence: e.g. "Wertz surges into their half, pressing their right back — but he's burning stamina fast and leaving a gap behind him."
-- If that player has low stamina (<70%), warn they may not last
-- Add their name to targetPlayers array
+Manager of ${team.name} shouts: "${userShout}"
+Score: ${matchState.homeScore}-${matchState.awayScore} | Minute: ${matchState.currentMinute || 0} | Momentum: ${matchState.momentum}${lineupBlock}
+Write vivid, specific commentary (2 sentences). If a player is named, describe exactly what they do and any risk.
+Pick numbers:
+- Pressing/attacking → momentumDelta:2, attackModifier:2, defensiveModifier:1
+- Defensive/hold → momentumDelta:0, defensiveModifier:-3, attackModifier:-1
+- All-out attack → momentumDelta:3, attackModifier:3, defensiveModifier:2
+- Calm/reassure → momentumDelta:1, defensiveModifier:-1, attackModifier:0
+If a player name is mentioned, add it to targetPlayers.
 
-Rules for numbers:
-- Pressing/attacking shout → momentumDelta +2, attackModifier +2, defensiveModifier +1
-- Defensive shout → momentumDelta 0, defensiveModifier -3, attackModifier -1
-- All-out attack → momentumDelta +3, attackModifier +3, defensiveModifier +2 (warns backline exposed)
-- Reassuring/calm → momentumDelta +1, defensiveModifier -1, attackModifier 0
-
-Respond with ONLY valid JSON, no other text:
-{ "momentumDelta": 0, "defensiveModifier": 0, "attackModifier": 0, "commentary": "...", "effectDescription": "...", "targetPlayers": [] }`;
+{"momentumDelta":0,"defensiveModifier":0,"attackModifier":0,"commentary":"...","effectDescription":"...","targetPlayers":[]}`;
 
     try {
         const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
