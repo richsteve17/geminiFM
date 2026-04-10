@@ -4,7 +4,7 @@ An AI-powered football management simulation game built with React + Vite and Go
 
 ## Project Overview
 
-Players take on the role of a football manager. The game uses AI (Google Gemini) to generate match narratives, conduct job interviews, simulate press conferences, and provide scouting data.
+Players take on the role of a football manager. The game uses AI (Google Gemini) to generate match narratives, conduct free-form chat-based job interviews, simulate context-aware press conferences, and provide scouting data. Contract crisis opening events fire when a career begins with expiring player contracts.
 
 ## Tech Stack
 

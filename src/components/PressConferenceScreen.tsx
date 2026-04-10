@@ -1,99 +1,135 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NewspaperIcon } from './icons/NewspaperIcon';
+import { UserIcon } from './icons/UserIcon';
+import type { ChatMessage } from '../services/geminiService';
 
 interface PressConferenceScreenProps {
-    questions: string[];
+    chatHistory: ChatMessage[];
+    isLoading: boolean;
+    isDone: boolean;
+    onSendMessage: (message: string) => void;
     onFinish: () => void;
 }
 
-const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({ questions, onFinish }) => {
-    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [answer, setAnswer] = useState('');
-    const [history, setHistory] = useState<{q: string, a: string}[]>([]);
+const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({
+    chatHistory,
+    isLoading,
+    isDone,
+    onSendMessage,
+    onFinish
+}) => {
+    const [input, setInput] = useState('');
+    const bottomRef = useRef<HTMLDivElement>(null);
 
-    const currentQuestion = questions[currentQuestionIndex];
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatHistory, isLoading, isDone]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!answer.trim()) return;
-
-        const newHistory = [...history, { q: currentQuestion, a: answer }];
-        setHistory(newHistory);
-        setAnswer('');
-
-        if (currentQuestionIndex < questions.length - 1) {
-            setCurrentQuestionIndex(currentQuestionIndex + 1);
-        } else {
-            // End of conference
-            onFinish();
+        if (input.trim() && !isLoading) {
+            onSendMessage(input.trim());
+            setInput('');
         }
     };
 
+    if (isLoading && chatHistory.length === 0) {
+        return (
+            <div className="text-center mt-20 flex flex-col items-center justify-center min-h-[200px]">
+                <NewspaperIcon className="w-12 h-12 text-gray-400 animate-pulse mb-4" />
+                <p className="text-xl font-semibold animate-pulse">Journalists are gathering...</p>
+            </div>
+        );
+    }
+
     return (
-        <div className="mt-12 max-w-3xl mx-auto px-4">
-            <div className="text-center mb-8">
-                <div className="inline-block p-3 bg-gray-800 rounded-full mb-4">
-                    <NewspaperIcon className="w-8 h-8 text-gray-200" />
+        <div className="mt-8 max-w-2xl mx-auto flex flex-col" style={{ minHeight: '70vh' }}>
+            <div className="text-center mb-6">
+                <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
+                    <NewspaperIcon className="w-7 h-7 text-gray-200" />
                 </div>
-                <h2 className="text-3xl font-bold text-white mb-2">Post-Match Press Conference</h2>
-                <p className="text-lg text-gray-400">The media is waiting for your comments.</p>
+                <h2 className="text-3xl font-bold text-white mb-1">Post-Match Press Conference</h2>
+                <p className="text-gray-400 text-sm">
+                    <span className="inline-flex items-center gap-1">
+                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        Live
+                    </span>
+                </p>
             </div>
 
-            <div className="space-y-6">
-                {/* History */}
-                {history.map((item, idx) => (
-                    <div key={idx} className="opacity-60">
-                        <div className="bg-gray-800 p-3 rounded-t-lg border-b border-gray-700">
-                            <span className="text-xs font-bold text-blue-400 uppercase">Journalist</span>
-                            <p className="text-gray-300 mt-1">{item.q}</p>
+            <div className="flex-grow bg-gray-800/50 border border-gray-700 rounded-xl p-4 overflow-y-auto space-y-4 mb-4" style={{ maxHeight: '55vh' }}>
+                {chatHistory.map((msg, i) => (
+                    <div
+                        key={i}
+                        className={`flex items-start gap-3 ${msg.role === 'manager' ? 'flex-row-reverse' : ''}`}
+                    >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'manager' ? 'bg-green-900' : 'bg-gray-700'}`}>
+                            {msg.role === 'manager'
+                                ? <UserIcon className="w-5 h-5 text-green-300" />
+                                : <NewspaperIcon className="w-5 h-5 text-gray-300" />
+                            }
                         </div>
-                        <div className="bg-gray-700/50 p-3 rounded-b-lg text-right">
-                            <span className="text-xs font-bold text-green-400 uppercase">You</span>
-                            <p className="text-white mt-1 italic">"{item.a}"</p>
+                        <div className={`max-w-[80%] flex flex-col ${msg.role === 'manager' ? 'items-end' : 'items-start'}`}>
+                            <span className={`text-xs font-bold mb-1 ${msg.role === 'manager' ? 'text-green-400 text-right' : 'text-blue-400'}`}>
+                                {msg.role === 'manager' ? 'You' : 'Journalist'}
+                            </span>
+                            <div className={`rounded-xl px-4 py-2 text-sm leading-relaxed ${msg.role === 'manager' ? 'bg-green-800/60 text-white' : 'bg-gray-700 text-gray-100'}`}>
+                                {msg.text}
+                            </div>
                         </div>
                     </div>
                 ))}
 
-                {/* Current Question */}
-                {currentQuestionIndex < questions.length && (
-                    <div className="bg-gray-800 border-2 border-blue-500 rounded-xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-                        <div className="p-6 bg-gray-900 border-b border-gray-700">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest">Live Question</span>
-                            </div>
-                            <h3 className="text-xl md:text-2xl font-bold text-white leading-relaxed">
-                                "{currentQuestion}"
-                            </h3>
+                {isLoading && chatHistory.length > 0 && (
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-gray-700">
+                            <NewspaperIcon className="w-5 h-5 text-gray-300" />
                         </div>
-                        
-                        <div className="p-6 bg-gray-800">
-                            <form onSubmit={handleSubmit}>
-                                <label htmlFor="answer" className="block text-sm font-bold text-gray-400 mb-2">Your Response</label>
-                                <textarea
-                                    id="answer"
-                                    value={answer}
-                                    onChange={(e) => setAnswer(e.target.value)}
-                                    rows={3}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
-                                    placeholder="Type your answer here..."
-                                    autoFocus
-                                />
-                                <div className="mt-4 flex justify-end">
-                                    <button
-                                        type="submit"
-                                        disabled={!answer.trim()}
-                                        className={`px-6 py-2 bg-green-600 text-white font-bold rounded-lg transition-colors ${!answer.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'}`}
-                                    >
-                                        {currentQuestionIndex === questions.length - 1 ? 'Finish' : 'Next Question'}
-                                    </button>
-                                </div>
-                            </form>
+                        <div className="bg-gray-700 rounded-xl px-4 py-3">
+                            <div className="flex gap-1">
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
                         </div>
                     </div>
                 )}
+
+                {isDone && (
+                    <div className="text-center py-4">
+                        <p className="text-gray-400 text-sm mb-4">Press conference concluded.</p>
+                        <button
+                            onClick={onFinish}
+                            className="py-2 px-8 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                            Continue
+                        </button>
+                    </div>
+                )}
+
+                <div ref={bottomRef} />
             </div>
+
+            {!isDone && (
+                <form onSubmit={handleSubmit} className="flex gap-2">
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        disabled={isLoading}
+                        className="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
+                        placeholder={isLoading ? "Journalist is speaking..." : "Type your response..."}
+                    />
+                    <button
+                        type="submit"
+                        disabled={isLoading || !input.trim()}
+                        className="py-2 px-5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Respond
+                    </button>
+                </form>
+            )}
         </div>
     );
 };

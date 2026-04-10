@@ -1,14 +1,14 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect } from './types';
 import { AppScreen, GameState } from './types';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
 import AtmosphereWidget from './components/AtmosphereWidget';
-import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, scoutFollowUp, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
+import { simulateMatchSegment, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, scoutFollowUp, getInternationalBreakSummary, getInterviewOpeningMessage, continueInterviewChat, generatePressConferenceOpener, continuePressConferenceChat, type ChatMessage, type InterviewContext, type PressConferenceContext } from './services/geminiService';
 import type { ScoutArchetype, ScoutReport } from './services/geminiService';
 import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS } from './utils';
@@ -72,8 +72,18 @@ export default function App() {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [weeklyResults, setWeeklyResults] = useState<Fixture[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [interview, setInterview] = useState<Interview | null>(null);
     const [jobOffer, setJobOffer] = useState<{ offer: boolean; reasoning: string } | null>(null);
+
+    // --- CHAT-BASED INTERVIEW STATE ---
+    const [interviewTeamName, setInterviewTeamName] = useState<string | null>(null);
+    const [interviewPersonality, setInterviewPersonality] = useState<string | null>(null);
+    const [interviewChatHistory, setInterviewChatHistory] = useState<ChatMessage[]>([]);
+    const [interviewContext, setInterviewContext] = useState<InterviewContext | null>(null);
+
+    // --- CHAT-BASED PRESS CONFERENCE STATE ---
+    const [pressChatHistory, setPressChatHistory] = useState<ChatMessage[]>([]);
+    const [pressConferenceContext, setPressConferenceContext] = useState<PressConferenceContext | null>(null);
+    const [pressConferenceDone, setPressConferenceDone] = useState(false);
     
     // Negotiation States
     const [playerTalk, setPlayerTalk] = useState<PlayerTalk | null>(null);
@@ -85,7 +95,7 @@ export default function App() {
 
     const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
     const [activeShoutEffect, setActiveShoutEffect] = useState<ShoutEffect | undefined>(undefined);
-    const [pressQuestions, setPressQuestions] = useState<string[]>([]);
+    const [scoutResults, setScoutResults] = useState<Player[]>([]);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     const [managerReputation, setManagerReputation] = useState<number>(0);
     
@@ -380,6 +390,35 @@ export default function App() {
         setLeagueTable(initialTable); setFixtures(finalFixtures); setCurrentWeek(1);
         setTeams(finalTeamsState); setUserTeamName(selectedTeamName); setAppScreen(AppScreen.GAMEPLAY);
         setCurrentFixture(finalFixtures.find(f => (f.homeTeam === selectedTeamName || f.awayTeam === selectedTeamName) && f.week === 1));
+
+        // --- CONTRACT CRISIS OPENING EVENTS ---
+        const selectedTeam = finalTeamsState[selectedTeamName];
+        if (selectedTeam) {
+            const expiringPlayers = selectedTeam.players.filter(p => p.contractExpires <= 1 + 8);
+            const contractNewsItems: NewsItem[] = expiringPlayers.map(p => {
+                const wantsMap: Record<string, string> = {
+                    'Ambitious': 'a significant wage increase and a starring role',
+                    'Mercenary': 'top-of-market wages and likely has other offers',
+                    'Loyal': 'fair terms and reassurance about their place in the squad',
+                    'Young Prospect': 'game time guarantees and a clear development path',
+                    'Leader': 'a leadership role and long-term commitment from the club',
+                    'Professional': 'clarity on their future and a reasonable extension',
+                    'Volatile': 'immediate answers — delays could turn ugly',
+                };
+                const wants = wantsMap[p.personality] || 'contract clarity';
+                return {
+                    id: Date.now() + Math.random(),
+                    week: 1,
+                    title: `Contract Alert: ${p.name}`,
+                    body: `${p.name} (${p.position}, ${p.age}) has only ${p.contractExpires} week(s) left on their contract. As a ${p.personality.toLowerCase()} personality, they will want ${wants}. This needs addressing soon or you risk losing them on a free transfer.`,
+                    type: 'contract-renewal' as const,
+                };
+            });
+            if (contractNewsItems.length > 0) {
+                setNews(contractNewsItems);
+            }
+        }
+
         startTutorial();
     }, []);
 
@@ -405,26 +444,60 @@ export default function App() {
     }
 
     const handleApplyForJob = async (teamName: string) => {
-        setAppScreen(AppScreen.JOB_INTERVIEW); setIsLoading(true); setInterview(null); setJobOffer(null); setError(null);
         const team = allTeams[teamName];
-        if (!team) { setError("Team not found."); setIsLoading(false); return; }
+        if (!team) { setError("Team not found."); return; }
+
+        setAppScreen(AppScreen.JOB_INTERVIEW);
+        setIsLoading(true);
+        setJobOffer(null);
+        setError(null);
+        setInterviewChatHistory([]);
+        setInterviewTeamName(teamName);
+        setInterviewPersonality(team.chairmanPersonality);
+
+        const ctx: InterviewContext = {
+            teamName,
+            league: team.league,
+            chairmanPersonality: team.chairmanPersonality,
+            boardObjectives: team.objectives || [],
+            managerReputation,
+        };
+        setInterviewContext(ctx);
+
         try {
-            const questions = await getInterviewQuestions(teamName, team.chairmanPersonality, team.league);
-            setInterview({ teamName: teamName, questions: questions, answers: [], currentQuestionIndex: 0, chairmanPersonality: team.chairmanPersonality });
-        } catch (e) { setError("The Chairman refused to meet."); } finally { setIsLoading(false); }
+            const opening = await getInterviewOpeningMessage(ctx);
+            setInterviewChatHistory([{ role: 'chairman', text: opening }]);
+        } catch (e) {
+            setError("The Chairman refused to meet.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleJobInterviewAnswer = async (answer: string) => {
-        if (!interview) return;
-        const newAnswers = [...interview.answers, answer];
-        if (interview.currentQuestionIndex < interview.questions.length - 1) {
-            setInterview({ ...interview, answers: newAnswers, currentQuestionIndex: interview.currentQuestionIndex + 1 });
-        } else {
-            setIsLoading(true);
-            try {
-                const result = await evaluateInterview(interview.teamName, interview.questions, newAnswers, interview.chairmanPersonality);
-                setJobOffer(result);
-            } catch (e) { setError("Evaluation failed."); } finally { setIsLoading(false); }
+        if (!interviewContext || isLoading) return;
+        const updatedHistory: ChatMessage[] = [...interviewChatHistory, { role: 'manager', text: answer }];
+        setInterviewChatHistory(updatedHistory);
+        setIsLoading(true);
+        try {
+            const result = await continueInterviewChat(interviewContext, updatedHistory);
+            if (result.isDecision) {
+                const finalHistory: ChatMessage[] = [...updatedHistory, { role: 'chairman', text: result.message }];
+                setInterviewChatHistory(finalHistory);
+                const evalResult = await evaluateInterview(
+                    interviewContext.teamName,
+                    finalHistory,
+                    interviewContext.chairmanPersonality,
+                    interviewContext.boardObjectives
+                );
+                setJobOffer(evalResult);
+            } else {
+                setInterviewChatHistory([...updatedHistory, { role: 'chairman', text: result.message }]);
+            }
+        } catch (e) {
+            setError("An error occurred during the interview.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -469,9 +542,67 @@ export default function App() {
 
     const handleAdvanceWeek = async () => {
         setIsLoading(true);
-        if (gameState === GameState.POST_MATCH && matchState && userTeamName) {
-            try { const qs = await generatePressConference("Match finished."); setPressQuestions(qs); setAppScreen(AppScreen.PRESS_CONFERENCE); setIsLoading(false); return; } catch (e) {}
+        if (gameState === GameState.POST_MATCH && matchState && userTeamName && currentFixture) {
+            try {
+                const isHome = currentFixture.homeTeam === userTeamName;
+                const opponentName = isHome ? currentFixture.awayTeam : currentFixture.homeTeam;
+                const opponentTeam = teams[opponentName];
+                const leaguePos = leagueTable.filter(e => e.league === (userTeam?.league || 'Premier League')).sort((a, b) => b.points - a.points).findIndex(e => e.teamName === userTeamName) + 1;
+                const keyEvents = matchState.events.filter(e => e.type === 'goal' || e.type === 'card').map(e => e.description).slice(0, 5);
+
+                const activeRifts = (userTeam?.players || [])
+                    .flatMap(p => (p.effects || []).filter(e => e.type === 'BadChemistry' || e.type === 'PromiseBroken').map(e => `${p.name}: ${e.message}`));
+
+                const ctx: PressConferenceContext = {
+                    teamName: userTeamName,
+                    opponentName,
+                    homeScore: matchState.homeScore,
+                    awayScore: matchState.awayScore,
+                    isHome,
+                    keyEvents,
+                    leaguePosition: leaguePos || 1,
+                    opponentPrestige: opponentTeam?.prestige || 50,
+                    activePromises: (userTeam?.activePromises || []).filter(p => p.status === 'pending').map(p => p.description),
+                    activeRifts,
+                    currentWeek,
+                };
+                setPressConferenceContext(ctx);
+                setPressChatHistory([]);
+                setPressConferenceDone(false);
+
+                const opener = await generatePressConferenceOpener(ctx);
+                setPressChatHistory([{ role: 'journalist', text: opener }]);
+                setAppScreen(AppScreen.PRESS_CONFERENCE);
+                setIsLoading(false);
+                return;
+            } catch (e) {}
         }
+        proceedToNextWeek();
+    };
+
+    const handlePressSendMessage = async (message: string) => {
+        if (!pressConferenceContext || isLoading) return;
+        const updated: ChatMessage[] = [...pressChatHistory, { role: 'manager', text: message }];
+        setPressChatHistory(updated);
+        setIsLoading(true);
+        try {
+            const result = await continuePressConferenceChat(pressConferenceContext, updated);
+            setPressChatHistory([...updated, { role: 'journalist', text: result.message }]);
+            if (result.isDone) {
+                setPressConferenceDone(true);
+                setManagerReputation(r => Math.max(0, Math.min(100, r + result.reputationDelta)));
+            }
+        } catch (e) {
+            setPressConferenceDone(true);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handlePressConferenceFinish = () => {
+        setPressChatHistory([]);
+        setPressConferenceContext(null);
+        setPressConferenceDone(false);
         proceedToNextWeek();
     };
 
@@ -648,7 +779,8 @@ export default function App() {
             case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={worldCupTeams} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.CREATE_MANAGER: return <CreateManagerScreen onCreate={handleCreateManager} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_CENTRE: return <JobCentreScreen jobs={availableJobs} onApply={handleApplyForJob} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
-            case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen interview={interview} isLoading={isLoading} error={error} jobOffer={jobOffer} onAnswerSubmit={handleJobInterviewAnswer} onFinish={(acc) => { if(acc && interview) initializeGame(interview.teamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
+            case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen teamName={interviewTeamName} chairmanPersonality={interviewPersonality} isLoading={isLoading} error={error} jobOffer={jobOffer} chatHistory={interviewChatHistory} onSendMessage={handleJobInterviewAnswer} onFinish={(acc) => { if (acc && interviewTeamName) initializeGame(interviewTeamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
+            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen chatHistory={pressChatHistory} isLoading={isLoading} isDone={pressConferenceDone} onSendMessage={handlePressSendMessage} onFinish={handlePressConferenceFinish} />;
             case AppScreen.TRANSFERS: return <TransfersScreen targets={transferMarket} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={handlePlayerTalkFinish} />;
             case AppScreen.GAMEPLAY:

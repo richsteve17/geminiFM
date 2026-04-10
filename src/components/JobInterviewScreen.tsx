@@ -1,110 +1,151 @@
 
-import React, { useState } from 'react';
-import type { Interview } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import type { ChatMessage } from '../services/geminiService';
 import { FootballIcon } from './icons/FootballIcon';
 import { UserIcon } from './icons/UserIcon';
 
 interface JobInterviewScreenProps {
-    interview: Interview | null;
+    teamName: string | null;
+    chairmanPersonality: string | null;
     isLoading: boolean;
     error: string | null;
     jobOffer: { offer: boolean; reasoning: string } | null;
-    onAnswerSubmit: (answer: string) => void;
+    chatHistory: ChatMessage[];
+    onSendMessage: (message: string) => void;
     onFinish: (accepted: boolean) => void;
 }
 
-const JobInterviewScreen: React.FC<JobInterviewScreenProps> = ({ interview, isLoading, error, jobOffer, onAnswerSubmit, onFinish }) => {
-    const [currentAnswer, setCurrentAnswer] = useState('');
+const JobInterviewScreen: React.FC<JobInterviewScreenProps> = ({
+    teamName,
+    chairmanPersonality,
+    isLoading,
+    error,
+    jobOffer,
+    chatHistory,
+    onSendMessage,
+    onFinish
+}) => {
+    const [input, setInput] = useState('');
+    const bottomRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatHistory, isLoading, jobOffer]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (currentAnswer.trim()) {
-            onAnswerSubmit(currentAnswer);
-            setCurrentAnswer('');
+        if (input.trim() && !isLoading) {
+            onSendMessage(input.trim());
+            setInput('');
         }
     };
 
-    if (isLoading && !jobOffer) {
+    if (isLoading && chatHistory.length === 0) {
         return (
             <div className="text-center mt-20 flex flex-col items-center justify-center min-h-[200px]">
                 <FootballIcon className="w-12 h-12 text-green-400 animate-spin mb-4" />
-                <p className="text-xl font-semibold animate-pulse">{interview ? "Evaluating answers..." : "Contacting the chairman..."}</p>
+                <p className="text-xl font-semibold animate-pulse">Contacting the chairman...</p>
             </div>
         );
     }
-    
+
     if (error) {
-         return (
-             <div className="mt-20 max-w-2xl mx-auto text-center p-8 bg-red-900/50 border border-red-700 rounded-lg">
+        return (
+            <div className="mt-20 max-w-2xl mx-auto text-center p-8 bg-red-900/50 border border-red-700 rounded-lg">
                 <h2 className="text-2xl font-bold text-red-400 mb-4">Interview Cancelled</h2>
                 <p className="text-white">{error}</p>
             </div>
-         );
-    }
-
-    if (jobOffer) {
-        return (
-             <div className="mt-20 max-w-2xl mx-auto text-center p-8 bg-gray-800/50 border border-gray-700 rounded-lg">
-                <h2 className={`text-3xl font-bold mb-4 ${jobOffer.offer ? 'text-green-400' : 'text-red-400'}`}>
-                    {jobOffer.offer ? "You're Hired!" : "Application Unsuccessful"}
-                </h2>
-                <div className="text-left bg-gray-900/50 p-4 rounded-md my-6">
-                    <p className="italic text-gray-300">" {jobOffer.reasoning} "</p>
-                </div>
-                {jobOffer.offer ? (
-                    <button onClick={() => onFinish(true)} className="py-2 px-6 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors">
-                        Accept Job
-                    </button>
-                ) : (
-                    <button onClick={() => onFinish(false)} className="py-2 px-6 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors">
-                        Return to Job Centre
-                    </button>
-                )}
-            </div>
         );
     }
 
-    if (!interview) return null;
-
-    const currentQuestion = interview.questions[interview.currentQuestionIndex];
-
     return (
-        <div className="mt-8 max-w-2xl mx-auto">
-            <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Job Interview: {interview.teamName}</h2>
-                <p className="text-lg text-gray-400">The chairman has some questions for you.</p>
+        <div className="mt-8 max-w-2xl mx-auto flex flex-col" style={{ minHeight: '70vh' }}>
+            <div className="text-center mb-6">
+                <h2 className="text-3xl font-bold text-white mb-1">Job Interview</h2>
+                {teamName && <p className="text-lg text-gray-400">{teamName} — <span className="text-blue-400">{chairmanPersonality}</span></p>}
             </div>
 
-            <div className="space-y-4 bg-gray-800/50 border border-gray-700 rounded-lg p-6">
-                <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-full bg-blue-900 flex items-center justify-center flex-shrink-0">
-                         <UserIcon className="w-6 h-6 text-blue-300" />
+            <div className="flex-grow bg-gray-800/50 border border-gray-700 rounded-xl p-4 overflow-y-auto space-y-4 mb-4" style={{ maxHeight: '55vh' }}>
+                {chatHistory.map((msg, i) => (
+                    <div
+                        key={i}
+                        className={`flex items-start gap-3 ${msg.role === 'manager' ? 'flex-row-reverse' : ''}`}
+                    >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'manager' ? 'bg-green-900' : 'bg-blue-900'}`}>
+                            <UserIcon className={`w-5 h-5 ${msg.role === 'manager' ? 'text-green-300' : 'text-blue-300'}`} />
+                        </div>
+                        <div className={`max-w-[80%] ${msg.role === 'manager' ? 'items-end' : 'items-start'} flex flex-col`}>
+                            <span className={`text-xs font-bold mb-1 ${msg.role === 'manager' ? 'text-green-400 text-right' : 'text-blue-400'}`}>
+                                {msg.role === 'manager' ? 'You' : 'Chairman'}
+                            </span>
+                            <div className={`rounded-xl px-4 py-2 text-sm leading-relaxed ${msg.role === 'manager' ? 'bg-green-800/60 text-white' : 'bg-gray-700 text-gray-100'}`}>
+                                {msg.text}
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <p className="font-bold text-blue-400">Chairman</p>
-                        <p className="text-white mt-1">{currentQuestion}</p>
+                ))}
+
+                {isLoading && chatHistory.length > 0 && (
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-blue-900">
+                            <UserIcon className="w-5 h-5 text-blue-300" />
+                        </div>
+                        <div className="bg-gray-700 rounded-xl px-4 py-3">
+                            <div className="flex gap-1">
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                <form onSubmit={handleSubmit} className="flex items-start gap-4 pt-4 border-t border-gray-700/50">
-                    <div className="w-10 h-10 rounded-full bg-green-900 flex items-center justify-center flex-shrink-0">
-                         <UserIcon className="w-6 h-6 text-green-300" />
+                )}
+
+                {jobOffer && (
+                    <div className={`rounded-xl p-6 text-center border ${jobOffer.offer ? 'bg-green-900/40 border-green-600' : 'bg-red-900/40 border-red-600'}`}>
+                        <h3 className={`text-2xl font-bold mb-3 ${jobOffer.offer ? 'text-green-400' : 'text-red-400'}`}>
+                            {jobOffer.offer ? "Job Offer!" : "Application Unsuccessful"}
+                        </h3>
+                        <p className="text-gray-200 italic mb-5">"{jobOffer.reasoning}"</p>
+                        {jobOffer.offer ? (
+                            <button
+                                onClick={() => onFinish(true)}
+                                className="py-2 px-8 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                                Accept Job
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => onFinish(false)}
+                                className="py-2 px-8 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                Return to Job Centre
+                            </button>
+                        )}
                     </div>
-                    <div className="flex-grow">
-                        <textarea
-                            value={currentAnswer}
-                            onChange={(e) => setCurrentAnswer(e.target.value)}
-                            className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-green-500 focus:border-green-500"
-                            placeholder="Your answer..."
-                            rows={4}
-                            required
-                        />
-                         <button type="submit" className="mt-2 py-2 px-5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors">
-                            Submit Answer
-                        </button>
-                    </div>
-                </form>
+                )}
+
+                <div ref={bottomRef} />
             </div>
+
+            {!jobOffer && (
+                <form onSubmit={handleSubmit} className="flex gap-2">
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        disabled={isLoading}
+                        className="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50"
+                        placeholder={isLoading ? "Chairman is thinking..." : "Type your response..."}
+                    />
+                    <button
+                        type="submit"
+                        disabled={isLoading || !input.trim()}
+                        className="py-2 px-5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Send
+                    </button>
+                </form>
+            )}
         </div>
     );
 };

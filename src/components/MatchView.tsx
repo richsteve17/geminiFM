@@ -9,7 +9,8 @@ import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 import { ShareIcon } from './icons/ShareIcon';
 import { MusicalNoteIcon } from './icons/MusicalNoteIcon';
 import { TOUCHLINE_SHOUTS } from '../constants';
-import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getContextAwareShouts, processTouchlineInteraction, generateSocialPost, type SocialPostData } from '../services/geminiService';
+import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getContextAwareShouts, processTouchlineInteraction, generateSocialPost, type SocialPostData, type AssistantContext } from '../services/geminiService';
+import { analyzeTactics, FORMATION_SLOTS } from '../utils';
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 import AtmosphereWidget from './AtmosphereWidget';
@@ -122,7 +123,34 @@ export default function MatchView({
         setIsAskingAssistant(true);
         const homeTeam = teams[fixture.homeTeam] || { name: fixture.homeTeam } as Team;
         const awayTeam = teams[fixture.awayTeam] || { name: fixture.awayTeam } as Team;
-        const advice = await getAssistantAnalysis(homeTeam, awayTeam, matchState, userTeamName);
+        const isHome = fixture.homeTeam === userTeamName;
+        const userTeam = teams[userTeamName];
+        const opponentTeam = isHome ? awayTeam : homeTeam;
+
+        let assistantCtx: AssistantContext | undefined;
+        if (userTeam) {
+            const starters = userTeam.players.filter(p => p.isStarter);
+            const formation = userTeam.tactic?.formation || '4-4-2';
+            const formationSlots = FORMATION_SLOTS[formation] || [];
+            const analysis = analyzeTactics(starters, formation);
+            assistantCtx = {
+                userTeamName,
+                opponentTeamName: opponentTeam.name,
+                opponentPrestige: opponentTeam.prestige || 50,
+                formation,
+                opponentFormation: opponentTeam.tactic?.formation || '4-4-2',
+                momentum: matchState.momentum || 0,
+                starters: starters.map((p, i) => ({
+                    name: p.name,
+                    position: p.position,
+                    condition: p.condition ?? 100,
+                    isOutOfPosition: analysis.assignments[i]?.isOutOfPosition || false,
+                    slotRole: formationSlots[i] || p.position,
+                })),
+            };
+        }
+
+        const advice = await getAssistantAnalysis(homeTeam, awayTeam, matchState, userTeamName, assistantCtx);
         setAssistantAdvice(advice);
         setIsAskingAssistant(false);
     }

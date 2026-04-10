@@ -412,46 +412,182 @@ export const generateReplayVideo = async (description: string, eventId: number, 
 
 // --- INTERACTIVE FEATURES ---
 
-export const generatePressConference = async (context: string): Promise<string[]> => {
-    const prompt = `Press conference. Context: ${context}. Ask 3 questions. JSON: { "questions": [] }`;
-    try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
-             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
-        });
-        return JSON.parse(cleanJson(response.text)).questions;
-    } catch (e) { return ["How do you feel?", "What's next?"]; }
-};
 
-export const getInterviewQuestions = async (teamName: string, personality: string, league: string) => {
+export interface ChatMessage {
+    role: 'chairman' | 'journalist' | 'manager';
+    text: string;
+}
+
+export interface InterviewContext {
+    teamName: string;
+    league: string;
+    chairmanPersonality: string;
+    boardObjectives: string[];
+    managerReputation: number;
+}
+
+export const getInterviewOpeningMessage = async (ctx: InterviewContext): Promise<string> => {
     const prompt = `
-    You are the ${personality} Chairman of ${teamName} (${league}). 
-    You are interviewing a new manager.
-    Generate 3 TOUGH, SPECIFIC questions based on the club's status and your personality.
-    RULES:
-    1. Do NOT ask generic "What are your tactics?" questions.
-    2. If personality is 'Moneyball', ask about youth stats or resale value.
-    3. If 'Ambitious', ask about big signings.
-    
-    Return JSON: { "questions": ["string", "string", "string"] }
-    `;
-    
+You are the ${ctx.chairmanPersonality} Chairman of ${ctx.teamName} (${ctx.league}).
+Manager reputation score: ${ctx.managerReputation}/100.
+Board objectives: ${ctx.boardObjectives.join(', ') || 'none stated'}.
+
+Open the job interview with a brief, in-character greeting and your FIRST tough question. 
+- Traditionalist: formal, values history and culture.
+- Ambitious Tycoon: impatient, wants big names and trophies fast.
+- Moneyball Advocate: data-driven, asks about stats and resale value.
+- Fan-Focused Owner: community and fan engagement matters most.
+Keep it under 3 sentences. Do not mention your own name.
+Respond with only the spoken dialogue.`;
     try {
-        const response = await ai.models.generateContent({ 
-            model: MODEL_TEXT, 
-            contents: prompt, 
-            config: { responseMimeType: "application/json" } 
-        });
-        return JSON.parse(cleanJson(response.text)).questions;
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
+        return response.text?.trim() || "Thank you for coming in. Let's get straight to it — why should I hire you over the other candidates?";
     } catch (e) {
-        return ["What is your philosophy?", "How will you handle the pressure?", "What are your wage demands?"];
+        return "Thank you for coming in. Let's get straight to it — why should I hire you over the other candidates?";
     }
 };
 
-export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], p: string) => {
-    const prompt = `Evaluate interview for ${teamName}. JSON: { "offer": boolean, "reasoning": "string" }`;
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text));
+export const continueInterviewChat = async (
+    ctx: InterviewContext,
+    history: ChatMessage[]
+): Promise<{ message: string; isDecision: boolean; offer?: boolean }> => {
+    const transcript = history.map(m => `${m.role === 'manager' ? 'Manager' : 'Chairman'}: ${m.text}`).join('\n');
+    const prompt = `
+You are the ${ctx.chairmanPersonality} Chairman of ${ctx.teamName} (${ctx.league}).
+Board objectives: ${ctx.boardObjectives.join(', ') || 'none stated'}.
+Manager reputation: ${ctx.managerReputation}/100.
+
+Interview transcript so far:
+${transcript}
+
+Based on the conversation, do ONE of these:
+A) Ask a natural follow-up or new tough question (continue interview, 1–2 sentences).
+B) If you have enough info (at least 3 manager responses), make a decision.
+
+RULES:
+- A ridiculous, offensive, or totally irrelevant answer (e.g. answering a tactics question by listing song lyrics) MUST end in rejection.
+- An evasive, vague answer should get a sharp follow-up.
+- A strong, personality-matched answer can lead to an offer.
+- Be realistic: rejection is a common outcome.
+
+Return JSON: {
+  "message": "string (chairman's spoken words)",
+  "isDecision": boolean,
+  "offer": boolean (only if isDecision is true; true = job offer, false = rejection)
+}`;
+    try {
+        const response = await ai.models.generateContent({
+            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { message: "Let me think about that. Do you have any questions for me?", isDecision: false };
+    }
 };
+
+export const evaluateInterview = async (
+    teamName: string,
+    transcript: ChatMessage[],
+    personality: string,
+    boardObjectives: string[]
+) => {
+    const transcriptText = transcript.map(m => `${m.role === 'manager' ? 'Manager' : 'Chairman'}: ${m.text}`).join('\n');
+    const prompt = `
+You are evaluating a job interview for the manager role at ${teamName}.
+Chairman personality: ${personality}.
+Board objectives: ${boardObjectives.join(', ') || 'none'}.
+
+Full transcript:
+${transcriptText}
+
+Make a final hiring decision based on the ACTUAL content of the conversation.
+Be critical. Reject if answers were vague, irrelevant, or showed poor understanding.
+JSON: { "offer": boolean, "reasoning": "string (1–2 sentences in the chairman's voice)" }`;
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { offer: false, reasoning: "We've decided to go in a different direction." };
+    }
+};
+
+export interface PressConferenceContext {
+    teamName: string;
+    opponentName: string;
+    homeScore: number;
+    awayScore: number;
+    isHome: boolean;
+    keyEvents: string[];
+    leaguePosition: number;
+    opponentPrestige: number;
+    activePromises: string[];
+    activeRifts: string[];
+    currentWeek: number;
+}
+
+export const generatePressConferenceOpener = async (ctx: PressConferenceContext): Promise<string> => {
+    const userGoals = ctx.isHome ? ctx.homeScore : ctx.awayScore;
+    const oppGoals = ctx.isHome ? ctx.awayScore : ctx.homeScore;
+    const result = userGoals > oppGoals ? 'win' : userGoals === oppGoals ? 'draw' : 'defeat';
+    const keyEventsStr = ctx.keyEvents.slice(0, 3).join('; ') || 'none notable';
+
+    const prompt = `
+You are a football journalist at a post-match press conference.
+Match: ${ctx.teamName} ${result} vs ${ctx.opponentName} (${ctx.homeScore}-${ctx.awayScore}).
+League position: ${ctx.leaguePosition}. Week: ${ctx.currentWeek}.
+Key events: ${keyEventsStr}.
+Active promises: ${ctx.activePromises.join(', ') || 'none'}.
+Active rifts/controversies: ${ctx.activeRifts.join(', ') || 'none'}.
+
+Ask ONE sharp, context-aware opening question. Reference the actual result or a specific event if relevant. Keep it under 2 sentences.
+Respond with only the journalist's spoken question.`;
+    try {
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
+        return response.text?.trim() || "How do you assess today's performance?";
+    } catch (e) {
+        return "How do you assess today's performance?";
+    }
+};
+
+export const continuePressConferenceChat = async (
+    ctx: PressConferenceContext,
+    history: ChatMessage[]
+): Promise<{ message: string; isDone: boolean; reputationDelta: number }> => {
+    const userGoals = ctx.isHome ? ctx.homeScore : ctx.awayScore;
+    const oppGoals = ctx.isHome ? ctx.awayScore : ctx.homeScore;
+    const result = userGoals > oppGoals ? 'win' : userGoals === oppGoals ? 'draw' : 'defeat';
+    const transcript = history.map(m => `${m.role === 'manager' ? 'Manager' : 'Journalist'}: ${m.text}`).join('\n');
+
+    const prompt = `
+You are a football journalist at a post-match press conference.
+Match: ${ctx.teamName} ${result} vs ${ctx.opponentName} (${ctx.homeScore}-${ctx.awayScore}).
+League position: ${ctx.leaguePosition}. Key events: ${ctx.keyEvents.slice(0, 3).join('; ') || 'none'}.
+Active promises: ${ctx.activePromises.join(', ') || 'none'}.
+
+Transcript:
+${transcript}
+
+Now, do ONE of:
+A) Follow up or ask a new probing question (if manager was evasive or after fewer than 3 manager responses).
+B) Wrap up the press conference (after 3+ manager responses).
+
+Assess the manager's tone: professional, honest, and direct responses improve reputation. Evasive or dismissive responses hurt it.
+
+Return JSON: {
+  "message": "string (journalist's next spoken question, or a brief closing remark if isDone)",
+  "isDone": boolean,
+  "reputationDelta": number (-3 to +3, based on how the manager handled this session overall)
+}`;
+    try {
+        const response = await ai.models.generateContent({
+            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { message: "Thank you, that's all for today.", isDone: true, reputationDelta: 0 };
+    }
+};
+
 
 export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
     const prompt = `Negotiation with ${p.name}. JSON: { "questions": [] }`;
@@ -505,8 +641,33 @@ export const checkPromises = async (promises: PromiseData[], currentWeek: number
     } catch (e) { return promises; }
 };
 
-export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: string): Promise<string> => {
-    const prompt = `Tactical advice for ${u}. Score ${s.homeScore}-${s.awayScore}.`;
+export interface AssistantContext {
+    userTeamName: string;
+    opponentTeamName: string;
+    opponentPrestige: number;
+    formation: string;
+    opponentFormation: string;
+    momentum: number;
+    starters: Array<{ name: string; position: string; condition: number; isOutOfPosition: boolean; slotRole: string }>;
+}
+
+export const getAssistantAnalysis = async (h: Team, a: Team, s: MatchState, u: string, ctx?: AssistantContext): Promise<string> => {
+    let prompt: string;
+    if (ctx) {
+        const starterLines = ctx.starters.map(p => `- ${p.name} (${p.position}, condition ${p.condition}%${p.isOutOfPosition ? `, OUT OF POSITION as ${p.slotRole}` : ''})`).join('\n');
+        prompt = `
+You are an assistant manager giving tactical advice mid-match.
+Our team: ${ctx.userTeamName} | Formation: ${ctx.formation} | Momentum: ${ctx.momentum > 0 ? '+' : ''}${ctx.momentum}
+Opponent: ${ctx.opponentTeamName} (prestige ${ctx.opponentPrestige}) | Formation: ${ctx.opponentFormation}
+Score: ${s.homeScore}-${s.awayScore}
+
+Starting XI:
+${starterLines}
+
+Give concise, specific advice (2–3 sentences). Reference specific players by name. Address out-of-position issues or momentum problems if relevant.`;
+    } else {
+        prompt = `Tactical advice for ${u}. Score ${s.homeScore}-${s.awayScore}.`;
+    }
     const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
     return response.text || "No advice.";
 };
