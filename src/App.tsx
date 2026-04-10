@@ -1279,15 +1279,21 @@ export default function App() {
                     updatedMessages, playerTalk.bondContext
                 );
                 const agentMsg: NegotiationMessage = { role: 'agent', text: reply };
-                const newPhase: 'talking' | 'offer' = nextPhase === 'walkout'
-                    ? 'talking' // walkout shows as a final message then result
-                    : nextPhase === 'offer' ? 'offer' : 'talking';
+
+                // Hard minimum: agent cannot move to offer stage until manager has
+                // replied at least twice. Prevents AI jumping straight to money talk.
+                const managerTurnCount = updatedMessages.filter(m => m.role === 'manager').length;
+                const allowOfferPhase = managerTurnCount >= 2;
+
+                const resolvedPhase = nextPhase === 'walkout'
+                    ? 'talking'
+                    : (nextPhase === 'offer' && allowOfferPhase) ? 'offer' : 'talking';
 
                 if (nextPhase === 'walkout') {
                     setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentMsg] } : prev);
                     setTalkResult({ decision: 'rejected', reasoning: reply, extractedPromises: [] });
                 } else {
-                    setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentMsg], phase: newPhase } : prev);
+                    setPlayerTalk(prev => prev ? { ...prev, messages: [...updatedMessages, agentMsg], phase: resolvedPhase } : prev);
                 }
             }
         } catch (e) {

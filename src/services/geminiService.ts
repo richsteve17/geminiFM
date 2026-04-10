@@ -844,43 +844,59 @@ export const evaluateNegotiationOffer = async (
     const isPremium = offer.wage > fairWageMax;
     const transcript = history.map(m => `${m.role === 'agent' ? 'Agent' : 'Manager'}: ${m.text}`).join('\n');
 
-    const managerAnswers = history.filter(m => m.role === 'manager').map(m => m.text);
-    const weakAnswers = managerAnswers.filter(t => t.trim().endsWith('?') || t.trim().split(' ').length < 5).length;
-    const conversationQuality = weakAnswers >= Math.ceil(managerAnswers.length / 2) ? 'POOR (manager was mostly evasive or gave non-answers)' : 'SOLID (manager engaged genuinely)';
-
     const bondNote = bondContext
-        ? `BOND FACTOR: ${p.name} has a personal connection with ${bondContext.squadMate} at ${t.name}. Tip scales toward acceptance IF the offer is fair.`
+        ? `BOND FACTOR: ${p.name} has a personal connection with ${bondContext.squadMate} at ${t.name}. Counts as a positive factor ONLY if the offer is fair AND the manager gave genuine answers.`
         : '';
 
     const prompt = `
-You are the agent for ${p.name} (${p.personality}, age ${p.age}, rating ${p.rating}/100).
-Evaluating final offer from ${t.name} (Prestige: ${t.prestige}/100) for a ${context === 'renewal' ? 'contract renewal' : 'transfer'}.
+You are the hard-nosed agent for ${p.name} (${p.personality}, age ${p.age}, rating ${p.rating}/100).
+Evaluating a final offer from ${t.name} (Prestige: ${t.prestige}/100) for a ${context === 'renewal' ? 'contract renewal' : 'transfer'}.
 
-FULL NEGOTIATION CONVERSATION:
-${transcript || '(No conversation — manager jumped straight to an offer)'}
+FULL NEGOTIATION TRANSCRIPT — READ EVERY LINE CAREFULLY:
+${transcript || '(Manager gave no conversation — jumped straight to numbers)'}
 
-OFFER: $${offer.wage.toLocaleString()}/week for ${offer.length} years.
-Current wage: $${p.wage.toLocaleString()}/week | Fair range: $${fairWageMin.toLocaleString()}–$${fairWageMax.toLocaleString()}/week
-Wage assessment: ${isLowball ? 'LOWBALL — below fair value' : isPremium ? 'PREMIUM — above market' : 'FAIR — within expected range'}
-Conversation quality: ${conversationQuality}
+OFFER SUBMITTED: $${offer.wage.toLocaleString()}/week for ${offer.length} years.
+Player's current wage: $${p.wage.toLocaleString()}/week
+Fair wage range: $${fairWageMin.toLocaleString()}–$${fairWageMax.toLocaleString()}/week
+Wage verdict: ${isLowball ? 'LOWBALL — below fair value' : isPremium ? 'PREMIUM — above market rate' : 'FAIR — within acceptable range'}
 ${bondNote}
 
-DECISION MATRIX:
-- Lowball + poor conversation → REJECTED (sharp, walk out)
-- Lowball + solid conversation → COUNTER at $${fairWageMin.toLocaleString()}
-- Fair + poor conversation → COUNTER with small increase (agent wasn't convinced)
-- Fair + solid conversation → ACCEPTED
-- Premium + any conversation → ACCEPTED (unless manager was openly hostile)
-- Personality modifier: ${p.personality === 'Volatile' ? 'One tier harder — Volatile agents reject even fair deals after bad conversations.' : p.personality === 'Professional' ? 'Numbers-only evaluation. Great conversation does not compensate for low wages.' : p.personality === 'Ambitious' ? 'If manager made genuine commitments about trophies/competition, weigh that positively.' : 'Standard.'}
+STEP 1 — EVALUATE EACH MANAGER MESSAGE (do this before deciding):
+Read every manager line above. For each one, ask: "Is this a real, specific, credible answer to what the agent was asking?"
 
-Speak as the agent in the room — sharp, direct, referencing both the specific number and what was said.
+AUTOMATIC FAIL conditions — any of these in a manager message = that answer FAILED:
+- Joke answers or absurd statements (e.g. "he can be the kit man", "Allison's ball boy", "captain for life" as a throwaway)
+- Vague platitudes with no specifics ("trust me", "you'll love it here", "we're a big club")
+- Responding to a question with another question
+- Answers clearly unrelated to what the agent asked
+- Empty or single-word replies
+
+A PASSING answer must: directly address the agent's concern with a specific, credible commitment or argument.
+
+STEP 2 — TALLY: How many of the manager's responses PASSED vs FAILED?
+
+STEP 3 — DECISION MATRIX (apply strictly):
+- Majority FAILED + LOWBALL → REJECTED outright, agent is insulted
+- Majority FAILED + FAIR → REJECTED ("nice number but you didn't convince me")
+- Majority FAILED + PREMIUM → COUNTER (money is interesting, but agent needs more)
+- Majority PASSED + LOWBALL → COUNTER at $${fairWageMin.toLocaleString()} ("good pitch, but the money doesn't match")
+- Majority PASSED + FAIR → ACCEPTED
+- Majority PASSED + PREMIUM → ACCEPTED enthusiastically
+- Personality modifier: ${
+    p.personality === 'Volatile' ? 'VOLATILE — one tier harder across the board. Will reject even fair deals if any answer was dismissive.' :
+    p.personality === 'Professional' ? 'PROFESSIONAL — conversation quality matters less than the number. But failed answers still count.' :
+    p.personality === 'Ambitious' ? 'AMBITIOUS — any vague answer about trophies or project counts as FAILED. Needs specifics.' :
+    'Standard evaluation.'
+}
+
+STEP 4 — Write the agent's spoken response referencing what the manager actually said and the specific offer.
 
 Return JSON:
 {
   "decision": "accepted" | "rejected" | "counter",
-  "reasoning": "2-3 sentences spoken by the agent in the room",
+  "reasoning": "2-3 sharp sentences spoken by the agent in the room, referencing the actual conversation and the number",
   "counterOffer": { "wage": number, "length": number },
-  "extractedPromises": ["verbal commitments manager made that should be tracked as promises"]
+  "extractedPromises": ["only real, specific verbal commitments the manager made — not vague statements"]
 }`;
 
     try {
