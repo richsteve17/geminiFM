@@ -170,6 +170,14 @@ export enum GameState {
 
 export type TouchlineShout = string;
 
+export interface ShoutEffect {
+    momentumDelta: number;
+    defensiveModifier: number; // negative = harder to concede
+    attackModifier: number; // positive = more shots/chances
+    commentary: string;
+    effectDescription: string;
+}
+
 export interface TacticalShout {
     id: string;
     label: string;

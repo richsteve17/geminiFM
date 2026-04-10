@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect } from './types';
 import { AppScreen, GameState } from './types';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
@@ -84,6 +84,7 @@ export default function App() {
     const [transferMarket, setTransferMarket] = useState<Player[]>(TRANSFER_TARGETS);
 
     const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
+    const [activeShoutEffect, setActiveShoutEffect] = useState<ShoutEffect | undefined>(undefined);
     const [pressQuestions, setPressQuestions] = useState<string[]>([]);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     const [managerReputation, setManagerReputation] = useState<number>(0);
@@ -117,6 +118,9 @@ export default function App() {
         }
     }, [activeTheme]);
     
+    // Segment breakpoints where the game pauses for manager decisions
+    const SEGMENT_BREAKPOINTS = [45, 60, 75, 90];
+
     // --- LIVE SIMULATION LOOP ---
     useEffect(() => {
         let timeoutId: ReturnType<typeof setTimeout>;
@@ -129,37 +133,65 @@ export default function App() {
                         finishMatch();
                         return;
                     }
-                    if (currentPlaybackMinute === 45) {
+                    // Pause at every segment breakpoint for manager decisions
+                    if (SEGMENT_BREAKPOINTS.includes(currentPlaybackMinute) && currentPlaybackMinute > 0) {
                         setGameState(GameState.PAUSED);
                         return;
                     }
 
                     setIsLoading(true);
-                    const nextTarget = Math.min(simulationTargetMinute + SIMULATION_CHUNK_MINUTES, simulationTargetMinute < 45 ? 45 : 90);
+
+                    // Determine next target: advance to next breakpoint
+                    const nextBreakpoint = SEGMENT_BREAKPOINTS.find(bp => bp > currentPlaybackMinute) || 90;
+                    const nextTarget = Math.min(simulationTargetMinute + SIMULATION_CHUNK_MINUTES, nextBreakpoint);
                     
-                    // --- CONSTRUCT TACTICAL CONTEXT ---
+                    // --- CONSTRUCT TACTICAL CONTEXT with fatigue & position-fit ---
                     const starters = userTeam.players.filter(p => p.isStarter);
                     const analysis = analyzeTactics(starters, userTeam.tactic.formation);
                     const formationSlots = FORMATION_SLOTS[userTeam.tactic.formation];
                     
-                    let tacticalContext = `User Team Efficiency: ${analysis.score}%.\nFormation: ${userTeam.tactic.formation}\n`;
-                    tacticalContext += `Lineup:\n`;
+                    let tacticalContext = `User Team Efficiency: ${analysis.score}%.\nFormation: ${userTeam.tactic.formation}, Mentality: ${userTeam.tactic.mentality}\n`;
+                    tacticalContext += `Lineup (with condition & position-fit flags):\n`;
                     starters.forEach((p, i) => {
                         const slotRole = formationSlots[i] || "Sub";
-                        const oopWarning = analysis.assignments[i]?.isOutOfPosition ? `[OOP! playing as ${slotRole}]` : `(${slotRole})`;
-                        tacticalContext += `- ${p.name} (${p.position}): ${oopWarning}\n`;
+                        const isOOP = analysis.assignments[i]?.isOutOfPosition;
+                        const isFatigued = p.condition < 70;
+                        const flags = [];
+                        if (isOOP) flags.push(`[MISPLACED — playing as ${slotRole}, 50% effectiveness]`);
+                        if (isFatigued) flags.push(`[FATIGUED — ${p.condition}% condition, error-prone]`);
+                        const flagStr = flags.length > 0 ? ` ${flags.join(' ')}` : ` (${slotRole}, ${p.condition}% fit)`;
+                        tacticalContext += `- ${p.name} (${p.position}):${flagStr}\n`;
                     });
                     
                     if (analysis.score < 50) {
-                        tacticalContext += `\nCRITICAL: The team is confused. Players are out of position. Expect errors.`;
+                        tacticalContext += `\nCRITICAL: The team is confused and disorganized. Players are misplaced. Expect frequent mistakes.`;
                     }
+
+                    // Get opponent team data
+                    const opponentName = currentFixture.homeTeam === userTeamName ? currentFixture.awayTeam : currentFixture.homeTeam;
+                    const opponentTeam = teams[opponentName];
+                    const opponentFormation = opponentTeam?.tactic?.formation;
+                    const opponentMentality = opponentTeam?.tactic?.mentality;
 
                     const result = await simulateMatchSegment(
                         teams[currentFixture.homeTeam], 
                         teams[currentFixture.awayTeam], 
                         matchState, 
                         nextTarget, 
-                        { shout: activeShout, userTeamName, tacticalContext }
+                        { 
+                            shout: activeShout, 
+                            userTeamName, 
+                            tacticalContext,
+                            userFormation: userTeam.tactic.formation,
+                            userMentality: userTeam.tactic.mentality,
+                            opponentFormation,
+                            opponentMentality,
+                            shoutEffect: activeShoutEffect ? {
+                                momentumDelta: activeShoutEffect.momentumDelta,
+                                defensiveModifier: activeShoutEffect.defensiveModifier,
+                                attackModifier: activeShoutEffect.attackModifier
+                            } : undefined
+                        }
                     );
 
                     setPendingEvents(prev => [...prev, ...result.events]);
@@ -175,6 +207,7 @@ export default function App() {
                     setSimulationTargetMinute(nextTarget);
                     
                     if (activeShout) setActiveShout(undefined);
+                    if (activeShoutEffect) setActiveShoutEffect(undefined);
                     setIsLoading(false);
                     return; 
                 }
@@ -469,6 +502,9 @@ export default function App() {
 
     const handleResumeMatch = (shout?: TouchlineShout) => {
         if (shout) setActiveShout(shout);
+        // Advance target by 1 past the current breakpoint minute so the simulation
+        // loop does not immediately re-pause at the same minute we just resumed from
+        setSimulationTargetMinute(prev => prev + 1);
         setGameState(GameState.PLAYING);
     }
 
@@ -476,6 +512,10 @@ export default function App() {
         if (!currentFixture || !matchState || !userTeam) return;
         setSimulationTargetMinute(targetMinute);
         setGameState(GameState.PLAYING);
+    };
+
+    const handleShoutEffect = (effect: ShoutEffect) => {
+        setActiveShoutEffect(effect);
     };
 
     const finishMatch = () => {
@@ -635,9 +675,11 @@ export default function App() {
                                 onPlayFirstHalf={handleStartMatch} 
                                 onPlaySecondHalf={handleResumeMatch} 
                                 onSimulateSegment={(target) => { 
-                                    if(gameState === GameState.PAUSED) handleResumeMatch();
+                                    handleSimulateSegment(target);
                                 }} 
                                 onNextMatch={handleAdvanceWeek} 
+                                onSubstitute={handleSubstitute}
+                                onShoutEffect={handleShoutEffect}
                                 error={null} 
                                 isSeasonOver={false} 
                                 userTeamName={userTeamName} 

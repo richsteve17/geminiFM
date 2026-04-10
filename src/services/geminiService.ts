@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
-import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData } from '../types';
+import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData, ShoutEffect } from '../types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
@@ -58,32 +58,80 @@ async function decodeAudioData(
 
 // --- CORE SIMULATION ---
 
+export interface SegmentContext {
+    shout?: string;
+    userTeamName: string | null;
+    tacticalContext?: string;
+    userFormation?: string;
+    userMentality?: string;
+    opponentFormation?: string;
+    opponentMentality?: string;
+    shoutEffect?: {
+        momentumDelta: number;
+        defensiveModifier: number;
+        attackModifier: number;
+    };
+}
+
 export const simulateMatchSegment = async (
     homeTeam: Team, 
     awayTeam: Team, 
     currentMatchState: MatchState, 
     targetMinute: number, 
-    context: { 
-        shout?: string, 
-        userTeamName: string | null,
-        tacticalContext?: string 
-    }
+    context: SegmentContext
 ) => {
-    // Determine context for short bursts
-    const userInstruction = context.shout ? `User Shout: "${context.shout}" (Factor this into momentum).` : "";
+    const userInstruction = context.shout ? `Manager's touchline instruction: "${context.shout}". Apply this to momentum and events.` : "";
     const tacticalInfo = context.tacticalContext ? `TACTICAL REALITY CHECK:\n${context.tacticalContext}` : "";
+
+    const userTeamLabel = context.userTeamName || homeTeam.name;
+    const isUserHome = userTeamLabel === homeTeam.name;
+    const userSide = isUserHome ? 'HOME' : 'AWAY';
+
+    let formationMentalityBlock = "";
+    if (context.userFormation || context.userMentality) {
+        const oppFormation = context.opponentFormation || "4-4-2";
+        const oppMentality = context.opponentMentality || "Balanced";
+        formationMentalityBlock = `
+FORMATION & MENTALITY (must directly influence events):
+- ${userTeamLabel} [${userSide}]: Formation ${context.userFormation || "4-4-2"}, Mentality "${context.userMentality || "Balanced"}"
+- Opponent: Formation ${oppFormation}, Mentality "${oppMentality}"
+
+MENTALITY RULES — apply strictly:
+- "All-Out Attack": Generate 3-5 attacking events/chances, high shot frequency, but BACKLINE IS EXPOSED — opponent gets at least 1 clear counter-attack chance.
+- "Attacking": Generate 2-3 chances, some defensive gaps.
+- "Balanced": Realistic mix of attack and defense.
+- "Defensive": Max 1-2 shots for ${userTeamLabel}, tight backline, opponent struggles to create clear chances.
+- "Park the Bus": ${userTeamLabel} generates almost no shots but conceding chances are very rare. Low-event, disciplined segment.
+`;
+    }
+
+    let shoutEffectBlock = "";
+    if (context.shoutEffect) {
+        const { momentumDelta, defensiveModifier, attackModifier } = context.shoutEffect;
+        shoutEffectBlock = `
+ACTIVE SHOUT EFFECT (apply to this segment):
+- Momentum shift: ${momentumDelta > 0 ? `+${momentumDelta}` : momentumDelta} (add to current momentum).
+- Defensive modifier: ${defensiveModifier < 0 ? `${defensiveModifier} (harder to concede — reduce opponent chances)` : defensiveModifier > 0 ? `+${defensiveModifier} (defensive line pushed up — opponent may exploit space)` : "no change"}.
+- Attack modifier: ${attackModifier > 0 ? `+${attackModifier} (more shots/pressure from ${userTeamLabel})` : attackModifier < 0 ? `${attackModifier} (reduce attacking output)` : "no change"}.
+`;
+    }
     
     const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
     Current State: Minute ${currentMatchState.currentMinute}, Score ${currentMatchState.homeScore}-${currentMatchState.awayScore}, Momentum ${currentMatchState.momentum}.
     Task: Simulate ONLY from minute ${currentMatchState.currentMinute + 1} to ${targetMinute}.
     
     ${userInstruction}
+    ${formationMentalityBlock}
+    ${shoutEffectBlock}
     ${tacticalInfo}
     
     CRITICAL INSTRUCTIONS:
     1. If a team has low Tactical Efficiency (<50%), they MUST make mistakes.
-    2. If a player is Out of Position (e.g. ST in Goal), specific events MUST mention them failing at their role (e.g. "Salah drops a simple catch").
-    3. Events must be realistic to the clock. Don't score 5 goals in 10 minutes unless efficiency is 0%.
+    2. If a player has [FATIGUED] flag, they MUST make an error or be substituted — mention them specifically.
+    3. If a player has [MISPLACED] flag, they are 50% less effective — generate events showing their struggles.
+    4. If a player is Out of Position (e.g. ST in Goal), specific events MUST mention them failing at their role.
+    5. Events must be realistic to the clock. Don't score 5 goals in 10 minutes unless efficiency is 0%.
+    6. Mentality and formation MUST visibly shape what events are generated (not just vibe words).
     
     Respond ONLY in JSON format: { 
         "homeScoreAdded": number, 
@@ -469,12 +517,54 @@ export const getInternationalBreakSummary = async (week: number) => {
     return JSON.parse(cleanJson(response.text));
 };
 
-export const processTouchlineInteraction = async (userShout: string, team: Team, matchState: MatchState, isHome: boolean) => {
-    const prompt = `Touchline shout: "${userShout}". Score: ${matchState.homeScore}-${matchState.awayScore}. Momentum: ${matchState.momentum}. Return JSON: { "momentumChange": number, "commentary": "string", "effectDescription": "string" }`;
+export const processTouchlineInteraction = async (userShout: string, team: Team, matchState: MatchState, isHome: boolean): Promise<ShoutEffect> => {
+    const shoutLower = userShout.toLowerCase();
+
+    let baseEffect: Partial<ShoutEffect> = {};
+    if (shoutLower.includes('demand more') || shoutLower.includes('push') || shoutLower.includes('press') || shoutLower.includes('attack')) {
+        baseEffect = { momentumDelta: 2, defensiveModifier: 1, attackModifier: 2 };
+    } else if (shoutLower.includes('tighten') || shoutLower.includes('defend') || shoutLower.includes('hold') || shoutLower.includes('park')) {
+        baseEffect = { momentumDelta: 0, defensiveModifier: -3, attackModifier: -1 };
+    } else if (shoutLower.includes('forward') || shoutLower.includes('all out') || shoutLower.includes('go for it')) {
+        baseEffect = { momentumDelta: 3, defensiveModifier: 2, attackModifier: 3 };
+    }
+
+    const prompt = `You are a football match analyst. The manager shouted: "${userShout}". 
+Score: ${matchState.homeScore}-${matchState.awayScore}, Momentum: ${matchState.momentum}.
+Determine the tactical effect of this shout on the next 15-minute segment.
+Return ONLY JSON: { 
+  "momentumDelta": number (-3 to +3, how much this shifts momentum), 
+  "defensiveModifier": number (-3 to +3, negative = harder to concede, positive = backline exposed), 
+  "attackModifier": number (-3 to +3, positive = more shots, negative = less attacking), 
+  "commentary": "string (brief manager's response, 1 sentence)", 
+  "effectDescription": "string (tactical effect label, e.g. 'HIGH PRESS ACTIVATED', max 4 words)" 
+}
+
+Rules:
+- "Demand More" / pressing shouts: momentumDelta +2, attackModifier +2, defensiveModifier +1
+- "Tighten Up" / defensive shouts: momentumDelta 0, defensiveModifier -3, attackModifier -1
+- "Push Forward" / all-out attack: momentumDelta +3, attackModifier +3, defensiveModifier +2 (backline exposed)
+- Calm/reassuring shouts: momentumDelta +1, defensiveModifier -1, attackModifier 0`;
+
     try {
         const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-        return JSON.parse(cleanJson(response.text));
-    } catch (e) { return { momentumChange: 0, commentary: "Ignored.", effectDescription: "Ignored" }; }
+        const parsed = JSON.parse(cleanJson(response.text));
+        return {
+            momentumDelta: parsed.momentumDelta ?? baseEffect.momentumDelta ?? 0,
+            defensiveModifier: parsed.defensiveModifier ?? baseEffect.defensiveModifier ?? 0,
+            attackModifier: parsed.attackModifier ?? baseEffect.attackModifier ?? 0,
+            commentary: parsed.commentary ?? "The players respond.",
+            effectDescription: parsed.effectDescription ?? "TACTICAL SHIFT"
+        };
+    } catch (e) {
+        return {
+            momentumDelta: baseEffect.momentumDelta ?? 0,
+            defensiveModifier: baseEffect.defensiveModifier ?? 0,
+            attackModifier: baseEffect.attackModifier ?? 0,
+            commentary: "The players respond to the instruction.",
+            effectDescription: "TACTICAL SHIFT"
+        };
+    }
 };
 
 export const getContextAwareShouts = async (team: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {

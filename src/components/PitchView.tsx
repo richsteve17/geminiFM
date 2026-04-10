@@ -1,16 +1,31 @@
 
 import React, { useEffect, useState } from 'react';
 import { FootballIcon } from './icons/FootballIcon';
-import type { MatchEvent } from '../types';
+import type { MatchEvent, Mentality } from '../types';
 
 interface PitchViewProps {
-    momentum: number; // -10 to +10
+    momentum: number;
     homeTeamName: string;
     awayTeamName: string;
     lastEvent: MatchEvent | null;
+    userMentality?: Mentality;
+    userIsHome?: boolean;
 }
 
-const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamName, lastEvent }) => {
+const getMentalityOffset = (mentality?: Mentality, isHome?: boolean): number => {
+    let offset = 0;
+    switch (mentality) {
+        case 'All-Out Attack': offset = 18; break;
+        case 'Attacking': offset = 10; break;
+        case 'Balanced': offset = 0; break;
+        case 'Defensive': offset = -10; break;
+        case 'Park the Bus': offset = -18; break;
+        default: offset = 0;
+    }
+    return isHome ? offset : -offset;
+};
+
+const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamName, lastEvent, userMentality, userIsHome }) => {
     const normalizedMomentum = Math.min(Math.max(((momentum + 10) / 20) * 100, 10), 90);
     
     const [fieldPos, setFieldPos] = useState(50);
@@ -32,6 +47,16 @@ const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamN
             return () => clearTimeout(timer);
         }
     }, [lastEvent, homeTeamName]);
+
+    const mentalityOffset = getMentalityOffset(userMentality, userIsHome);
+
+    const homeMentalityShift = userIsHome ? mentalityOffset : 0;
+    const awayMentalityShift = !userIsHome ? mentalityOffset : 0;
+
+    const getMentalityLabel = (mentality?: Mentality) => {
+        if (!mentality || mentality === 'Balanced') return null;
+        return mentality;
+    };
 
     return (
         <div className="relative w-full aspect-[16/9] max-h-[300px] bg-green-700 rounded-lg overflow-hidden shadow-inner border-2 border-green-800 mb-0 select-none mx-auto">
@@ -59,7 +84,10 @@ const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamN
                 className="absolute top-0 bottom-0 left-0 right-0 transition-all duration-1000 ease-in-out"
                 style={{ transform: `translateX(${(fieldPos - 50) / 2}%)` }} 
             >
-                <div className="absolute top-1/2 left-[45%] w-full h-full -translate-y-1/2 transition-all duration-1000">
+                <div 
+                    className="absolute top-1/2 left-[45%] w-full h-full -translate-y-1/2 transition-all duration-1000"
+                    style={{ transform: `translateX(${homeMentalityShift}%) translateY(-50%)` }}
+                >
                      <div className="absolute top-[40%] left-[10%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
                      <div className="absolute top-[60%] left-[10%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
                      <div className="absolute top-[30%] left-[20%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
@@ -67,7 +95,10 @@ const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamN
                      <div className="absolute top-[70%] left-[20%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
                 </div>
 
-                 <div className="absolute top-1/2 left-[55%] w-full h-full -translate-y-1/2 transition-all duration-1000">
+                 <div 
+                    className="absolute top-1/2 left-[55%] w-full h-full -translate-y-1/2 transition-all duration-1000"
+                    style={{ transform: `translateX(${awayMentalityShift}%) translateY(-50%)` }}
+                >
                      <div className="absolute top-[40%] right-[10%] w-3 h-3 bg-blue-500 rounded-full shadow border border-white"></div>
                      <div className="absolute top-[60%] right-[10%] w-3 h-3 bg-blue-500 rounded-full shadow border border-white"></div>
                      <div className="absolute top-[30%] right-[20%] w-3 h-3 bg-blue-500 rounded-full shadow border border-white"></div>
@@ -80,6 +111,9 @@ const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamN
 
             <div className="absolute bottom-2 left-2 right-2 flex justify-between text-[10px] font-bold text-white/70 uppercase">
                 <span>{awayTeamName} Pressure</span>
+                {getMentalityLabel(userMentality) && (
+                    <span className="text-yellow-300/80 text-[9px] font-bold tracking-wide">{userMentality}</span>
+                )}
                 <span>{homeTeamName} Pressure</span>
             </div>
         </div>
