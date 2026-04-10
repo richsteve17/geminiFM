@@ -2,10 +2,18 @@
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
 import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData, ShoutEffect, RiftSeverity, RiftScope } from '../types';
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) throw new Error("API_KEY not set");
+const API_KEY = process.env.API_KEY || '';
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+let _ai: GoogleGenAI | null = null;
+function getAI(): GoogleGenAI {
+    if (!_ai) {
+        if (!API_KEY) {
+            console.warn('Gemini API key not configured. AI features will not work.');
+        }
+        _ai = new GoogleGenAI({ apiKey: API_KEY || 'placeholder' });
+    }
+    return _ai;
+}
 
 // Models configuration
 const MODEL_TEXT = 'gemini-2.0-flash-exp'; 
@@ -161,7 +169,7 @@ ACTIVE SHOUT EFFECT (apply to this segment):
     }`;
 
     try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
+        const response: GenerateContentResponse = await getAI().models.generateContent({
             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
         });
         return JSON.parse(cleanJson(response.text));
@@ -255,7 +263,7 @@ export const scoutPlayers = async (
     }
 
     try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
+        const response: GenerateContentResponse = await getAI().models.generateContent({
             model: selectedModel, contents: prompt, config
         });
         
@@ -329,7 +337,7 @@ Respond in character as this scout. Either provide more specific detail about th
     }
 
     try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
+        const response: GenerateContentResponse = await getAI().models.generateContent({
             model: selectedModel, contents: prompt, config
         });
         return response.text || "I don't have more information on that right now.";
@@ -354,7 +362,7 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
     }
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAI().models.generateContent({
             model: MODEL_TTS,
             contents: [{ parts: [{ text: `Passionate Football Commentator: ${text}` }] }],
             config: {
@@ -401,7 +409,7 @@ export const generateReplayVideo = async (description: string, eventId: number, 
 
         const prompt = `${stylePrompt}. Football match goal. ${description}. Realistic lighting, green grass, stadium crowd.`;
         
-        let operation = await ai.models.generateVideos({
+        let operation = await getAI().models.generateVideos({
             model: MODEL_VIDEO,
             prompt: prompt,
             config: {
@@ -413,7 +421,7 @@ export const generateReplayVideo = async (description: string, eventId: number, 
 
         while (!operation.done) {
             await new Promise(resolve => setTimeout(resolve, 5000));
-            operation = await ai.operations.getVideosOperation({operation: operation});
+            operation = await getAI().operations.getVideosOperation({operation: operation});
         }
 
         const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
@@ -459,7 +467,7 @@ Open the job interview with a brief, in-character greeting and your FIRST tough 
 Keep it under 3 sentences. Do not mention your own name.
 Respond with only the spoken dialogue.`;
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         return response.text?.trim() || "Thank you for coming in. Let's get straight to it — why should I hire you over the other candidates?";
     } catch (e) {
         return "Thank you for coming in. Let's get straight to it — why should I hire you over the other candidates?";
@@ -495,7 +503,7 @@ Return JSON: {
   "offer": boolean (only if isDecision is true; true = job offer, false = rejection)
 }`;
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAI().models.generateContent({
             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
         });
         return JSON.parse(cleanJson(response.text));
@@ -523,7 +531,7 @@ Make a final hiring decision based on the ACTUAL content of the conversation.
 Be critical. Reject if answers were vague, irrelevant, or showed poor understanding.
 JSON: { "offer": boolean, "reasoning": "string (1–2 sentences in the chairman's voice)" }`;
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
         return { offer: false, reasoning: "We've decided to go in a different direction." };
@@ -561,7 +569,7 @@ Active rifts/controversies: ${ctx.activeRifts.join(', ') || 'none'}.
 Ask ONE sharp, context-aware opening question. Reference the actual result or a specific event if relevant. Keep it under 2 sentences.
 Respond with only the journalist's spoken question.`;
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         return response.text?.trim() || "How do you assess today's performance?";
     } catch (e) {
         return "How do you assess today's performance?";
@@ -598,7 +606,7 @@ Return JSON: {
   "reputationDelta": number (-3 to +3, based on how the manager handled this session overall)
 }`;
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAI().models.generateContent({
             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
         });
         return JSON.parse(cleanJson(response.text));
@@ -614,7 +622,7 @@ export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string, bond
         bondNote = `IMPORTANT: ${p.name} has a strong international bond with ${bondContext.squadMate} already at ${t.name} from the ${bondContext.competition}. Reference this connection in a question to make the negotiation feel personal.`;
     }
     const prompt = `Negotiation with ${p.name} (${p.personality}) for ${t.name}. ${bondNote} Generate 3 relevant negotiation questions. JSON: { "questions": [] }`;
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+    const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(cleanJson(response.text)).questions;
 };
 
@@ -640,7 +648,7 @@ export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[],
     }
     `;
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
         return { decision: "accepted", reasoning: "Okay, we have a deal.", extractedPromises: [] };
@@ -659,7 +667,7 @@ export const checkPromises = async (promises: PromiseData[], currentWeek: number
     `;
 
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         const result = JSON.parse(cleanJson(response.text));
         return promises.map(p => {
             const update = result.updates.find((u: any) => u.id === p.id);
@@ -696,7 +704,7 @@ Give concise, specific advice (2–3 sentences). Reference specific players by n
     } else {
         prompt = `Tactical advice for ${u}. Score ${s.homeScore}-${s.awayScore}.`;
     }
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt });
+    const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
     return response.text || "No advice.";
 };
 
@@ -747,7 +755,7 @@ Return JSON:
 If result is 'draw' or involvement is 'minimal' and competition is low-stakes, riftSeverity should be "none" or "minor".
 `;
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
         return { riftSeverity: 'none', duration: 0, reason: 'No significant rift.', affectedScope: 'direct' };
@@ -789,7 +797,7 @@ Return JSON:
 }
 `;
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
         return { morale: 'Disappointed', message: `${player.name} returns from international duty.`, durationWeeks: 2 };
@@ -798,7 +806,7 @@ Return JSON:
 
 export const getInternationalBreakSummary = async (week: number) => {
     const prompt = `Simulate international break Week ${week}. JSON: { "newsTitle": "string", "newsBody": "string" }`;
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+    const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(cleanJson(response.text));
 };
 
@@ -832,7 +840,7 @@ Rules:
 - Calm/reassuring shouts: momentumDelta +1, defensiveModifier -1, attackModifier 0`;
 
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         const parsed = JSON.parse(cleanJson(response.text));
         return {
             momentumDelta: parsed.momentumDelta ?? baseEffect.momentumDelta ?? 0,
@@ -855,7 +863,7 @@ Rules:
 export const getContextAwareShouts = async (team: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
     const prompt = `Halftime shouts for ${team.name}. Score: ${matchState.homeScore}-${matchState.awayScore}. JSON: { "shouts": [{ "id": "string", "label": "string", "description": "string", "effect": "string" }] }`;
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text)).shouts;
     } catch (e) { return [{ id: 'demand', label: 'Demand More', description: 'Show passion!', effect: 'Work rate up' }]; }
 };
@@ -904,7 +912,7 @@ export const generateSocialPost = async (description: string, teamName: string, 
     `;
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAI().models.generateContent({
             model: MODEL_TEXT,
             contents: prompt,
             config: { responseMimeType: "application/json" }

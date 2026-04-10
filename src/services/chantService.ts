@@ -1,10 +1,15 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) throw new Error("API_KEY not set");
+const API_KEY = process.env.API_KEY || '';
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+let _ai: GoogleGenAI | null = null;
+function getAI(): GoogleGenAI {
+    if (!_ai) {
+        _ai = new GoogleGenAI({ apiKey: API_KEY || 'placeholder' });
+    }
+    return _ai;
+}
 const model = 'gemini-2.0-flash-exp';
 
 export interface SongbookEntry {
@@ -288,7 +293,7 @@ async function generateElevenLabsAudio(lyrics: string, melody: SongbookEntry): P
 
 async function fallbackTtsChant(lyrics: string): Promise<void> {
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAI().models.generateContent({
             model: 'gemini-2.5-flash-preview-tts',
             contents: [{ parts: [{ text: `Passionate crowd singing a football chant: ${lyrics}` }] }],
             config: {
@@ -413,7 +418,7 @@ Return JSON ONLY:
 `;
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAI().models.generateContent({
             model: model,
             contents: prompt,
             config: { responseMimeType: "application/json" }
