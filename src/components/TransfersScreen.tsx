@@ -24,9 +24,15 @@ const TransfersScreen: React.FC<TransfersScreenProps> = ({ targets, onApproachPl
 
     return (
         <div className="mt-8 max-w-5xl mx-auto">
-            <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Transfer Market</h2>
-                <p className="text-lg text-gray-400">Scout for talent to improve your squad.</p>
+            <div className="flex items-center justify-between mb-8">
+                <button onClick={onBack} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors bg-gray-800 hover:bg-gray-700 border border-gray-700 px-3 py-2 rounded-lg">
+                    ← Back
+                </button>
+                <div className="text-center flex-1">
+                    <h2 className="text-3xl font-bold text-white mb-1">Transfer Market</h2>
+                    <p className="text-sm text-gray-400">Scout for talent to improve your squad.</p>
+                </div>
+                <div className="w-20" />
             </div>
             <div className="space-y-3">
                 {sortedTargets.map(player => (

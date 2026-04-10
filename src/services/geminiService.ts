@@ -35,13 +35,26 @@ const mediaCache = new Map<string, string | AudioBuffer>();
 
 const cleanJson = (text?: string): string => {
     const s = (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
-    // Extract the first complete JSON object or array from the response,
-    // even if the model added preamble text around it
-    const objMatch = s.match(/\{[\s\S]*\}/);
-    if (objMatch) return objMatch[0];
-    const arrMatch = s.match(/\[[\s\S]*\]/);
-    if (arrMatch) return arrMatch[0];
-    return s;
+    // Find the first { or [ and walk balanced braces to extract the complete object
+    const firstBrace = s.indexOf('{');
+    const firstBracket = s.indexOf('[');
+    const start = firstBrace === -1 ? firstBracket : firstBracket === -1 ? firstBrace : Math.min(firstBrace, firstBracket);
+    if (start === -1) return s;
+    const opener = s[start] as '{' | '[';
+    const closer = opener === '{' ? '}' : ']';
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = start; i < s.length; i++) {
+        const c = s[i];
+        if (escape) { escape = false; continue; }
+        if (c === '\\' && inString) { escape = true; continue; }
+        if (c === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (c === opener) depth++;
+        else if (c === closer) { depth--; if (depth === 0) return s.slice(start, i + 1); }
+    }
+    return s.slice(start);
 };
 
 function decodeBase64(base64: string) {
@@ -269,7 +282,7 @@ export const scoutPlayers = async (
     const selectedModel = useRealWorld ? MODEL_SEARCH : MODEL_TEXT;
     const prompt = buildScoutPrompt(request, selectedArchetype, useRealWorld, isFictional || false);
     
-    const config: any = { responseMimeType: "application/json" };
+    const config: any = {};
     if (useRealWorld) {
         config.tools = [{ googleSearch: {} }];
     }
@@ -516,7 +529,7 @@ Return JSON: {
 }`;
     try {
         const response = await getAI().models.generateContent({
-            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+            model: MODEL_TEXT, contents: prompt
         });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
@@ -543,7 +556,7 @@ Make a final hiring decision based on the ACTUAL content of the conversation.
 Be critical. Reject if answers were vague, irrelevant, or showed poor understanding.
 JSON: { "offer": boolean, "reasoning": "string (1–2 sentences in the chairman's voice)" }`;
     try {
-        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
         return { offer: false, reasoning: "We've decided to go in a different direction." };
@@ -619,7 +632,7 @@ Return JSON: {
 }`;
     try {
         const response = await getAI().models.generateContent({
-            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+            model: MODEL_TEXT, contents: prompt
         });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
@@ -683,7 +696,7 @@ STRICT RULES:
 
 Return JSON: { "questions": ["question1", "question2"] }`;
 
-        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         const parsed = JSON.parse(cleanJson(response.text));
         if (Array.isArray(parsed.questions) && parsed.questions.length > 0) return parsed.questions;
     } catch (e) {
@@ -749,7 +762,7 @@ Return JSON:
     "extractedPromises": ["specific verbal commitments the manager made that should be tracked"]
 }`;
     try {
-        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
         const fallbackWage = isFair || isPremium ? offer.wage : fairWageMin;
@@ -945,7 +958,7 @@ export const checkPromises = async (promises: PromiseData[], currentWeek: number
     `;
 
     try {
-        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         const result = JSON.parse(cleanJson(response.text));
         return promises.map(p => {
             const update = result.updates.find((u: any) => u.id === p.id);
@@ -1033,7 +1046,7 @@ Return JSON:
 If result is 'draw' or involvement is 'minimal' and competition is low-stakes, riftSeverity should be "none" or "minor".
 `;
     try {
-        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
         return { riftSeverity: 'none', duration: 0, reason: 'No significant rift.', affectedScope: 'direct' };
@@ -1075,7 +1088,7 @@ Return JSON:
 }
 `;
     try {
-        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
         return { morale: 'Disappointed', message: `${player.name} returns from international duty.`, durationWeeks: 2 };
@@ -1084,9 +1097,65 @@ Return JSON:
 
 export const getInternationalBreakSummary = async (week: number) => {
     const prompt = `Simulate international break Week ${week}. JSON: { "newsTitle": "string", "newsBody": "string" }`;
-    const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+    const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
     return JSON.parse(cleanJson(response.text));
 };
+
+// Build rich local commentary from shout keywords — used as fallback and for speed
+function buildLocalShoutResponse(
+    userShout: string,
+    teamName: string,
+    starters?: Array<{ name: string; position: string; condition: number }>
+): ShoutEffect {
+    const lower = userShout.toLowerCase();
+
+    // Extract capitalised words as potential player names
+    const namedPlayer = starters?.find(s => lower.includes(s.name.toLowerCase()))
+        ?? (userShout.match(/\b([A-Z][a-záéíóúñ]+)\b/)?.[1]
+            ? { name: userShout.match(/\b([A-Z][a-záéíóúñ]+)\b/)![1], position: '', condition: 100 }
+            : null);
+
+    let momentumDelta = 1, defensiveModifier = 0, attackModifier = 1;
+    let label = 'TACTICAL SHIFT';
+    let commentary = '';
+
+    if (lower.includes('all out') || lower.includes('go for it') || lower.includes('everything')) {
+        momentumDelta = 3; attackModifier = 3; defensiveModifier = 2; label = 'ALL-OUT ATTACK';
+        commentary = namedPlayer
+            ? `${namedPlayer.name} is thrown forward with total freedom — ${teamName} abandon the backline, desperate for a goal.`
+            : `${teamName} pour every player forward. Backs to the wall, it is do or die.`;
+    } else if (lower.includes('press') || lower.includes('push') || lower.includes('demand') || lower.includes('attack')) {
+        momentumDelta = 2; attackModifier = 2; defensiveModifier = 1; label = 'HIGH PRESS';
+        if (namedPlayer) {
+            const stamWarn = namedPlayer.condition < 70 ? ` — at ${namedPlayer.condition}% stamina, he may not last long.` : ', driving into their half with purpose.';
+            commentary = `${namedPlayer.name} surges up the pitch, pressing their backline hard${stamWarn} The rest of the team lifts its intensity in response.`;
+        } else {
+            commentary = `${teamName} flood forward, pressing high and snapping into every challenge. The tempo lifts noticeably.`;
+        }
+    } else if (lower.includes('tighten') || lower.includes('defend') || lower.includes('hold') || lower.includes('park')) {
+        momentumDelta = 0; defensiveModifier = -3; attackModifier = -1; label = 'DEFENSIVE LOCK';
+        commentary = namedPlayer
+            ? `${namedPlayer.name} drops deeper to shore up the backline. ${teamName} compact into two tight banks of four.`
+            : `${teamName} drop into a low block. The defensive shape is tight and hard to break down.`;
+    } else if (lower.includes('calm') || lower.includes('keep') || lower.includes('patient') || lower.includes('recycle')) {
+        momentumDelta = 1; defensiveModifier = -1; attackModifier = 0; label = 'COMPOSURE';
+        commentary = `${teamName} take a breath — slowing the tempo and recycling possession patiently. The nervousness fades.`;
+    } else {
+        // Generic but still mentions player if named
+        commentary = namedPlayer
+            ? `${namedPlayer.name} responds to the instruction, adjusting his position as ${teamName} shift shape.`
+            : `${teamName} acknowledge the instruction, making the tactical adjustment on the fly.`;
+    }
+
+    return {
+        momentumDelta,
+        defensiveModifier,
+        attackModifier,
+        commentary,
+        effectDescription: label,
+        targetPlayers: namedPlayer ? [namedPlayer.name] : []
+    };
+}
 
 export const processTouchlineInteraction = async (
     userShout: string,
@@ -1095,56 +1164,37 @@ export const processTouchlineInteraction = async (
     isHome: boolean,
     starters?: Array<{ name: string; position: string; condition: number }>
 ): Promise<ShoutEffect> => {
-    const shoutLower = userShout.toLowerCase();
-
-    let baseEffect: Partial<ShoutEffect> = {};
-    if (shoutLower.includes('demand more') || shoutLower.includes('push') || shoutLower.includes('press') || shoutLower.includes('attack')) {
-        baseEffect = { momentumDelta: 2, defensiveModifier: 1, attackModifier: 2 };
-    } else if (shoutLower.includes('tighten') || shoutLower.includes('defend') || shoutLower.includes('hold') || shoutLower.includes('park')) {
-        baseEffect = { momentumDelta: 0, defensiveModifier: -3, attackModifier: -1 };
-    } else if (shoutLower.includes('forward') || shoutLower.includes('all out') || shoutLower.includes('go for it')) {
-        baseEffect = { momentumDelta: 3, defensiveModifier: 2, attackModifier: 3 };
-    }
+    // Always compute the local fallback first — used if Gemini fails
+    const local = buildLocalShoutResponse(userShout, team?.name ?? 'The team', starters);
 
     const lineupBlock = starters && starters.length > 0
-        ? `\nPlayers on the pitch:\n${starters.map(s => `- ${s.name} (${s.position}, ${s.condition}% stamina)`).join('\n')}\n`
+        ? `\nPlayers: ${starters.map(s => `${s.name}(${s.position},${s.condition}%)`).join(', ')}\n`
         : '';
 
-    const prompt = `Touchline shout analyzer. Output JSON only — no explanation, no markdown, just the raw JSON object.
+    const prompt = `Football touchline shout. Respond with JSON only, nothing else.
 
-Manager of ${team.name} shouts: "${userShout}"
-Score: ${matchState.homeScore}-${matchState.awayScore} | Minute: ${matchState.currentMinute || 0} | Momentum: ${matchState.momentum}${lineupBlock}
-Write vivid, specific commentary (2 sentences). If a player is named, describe exactly what they do and any risk.
-Pick numbers:
-- Pressing/attacking → momentumDelta:2, attackModifier:2, defensiveModifier:1
-- Defensive/hold → momentumDelta:0, defensiveModifier:-3, attackModifier:-1
-- All-out attack → momentumDelta:3, attackModifier:3, defensiveModifier:2
-- Calm/reassure → momentumDelta:1, defensiveModifier:-1, attackModifier:0
-If a player name is mentioned, add it to targetPlayers.
+${team?.name ?? 'Team'} manager shouts: "${userShout}"
+${matchState.homeScore}-${matchState.awayScore}, min ${matchState.currentMinute || 0}${lineupBlock}
+2 vivid sentences. Name any player mentioned. Pick numbers: press/attack→delta:2,atk:2,def:1 | defend→delta:0,def:-3,atk:-1 | all-out→delta:3,atk:3,def:2 | calm→delta:1,def:-1,atk:0
 
-{"momentumDelta":0,"defensiveModifier":0,"attackModifier":0,"commentary":"...","effectDescription":"...","targetPlayers":[]}`;
+{"momentumDelta":2,"defensiveModifier":1,"attackModifier":2,"commentary":"REPLACE WITH VIVID TEXT","effectDescription":"LABEL","targetPlayers":[]}`;
 
     try {
         const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
-        const parsed = JSON.parse(cleanJson(response.text));
+        const raw = response.text || "";
+        const cleaned = cleanJson(raw);
+        const parsed = JSON.parse(cleaned);
+        if (!parsed.commentary || parsed.commentary === 'REPLACE WITH VIVID TEXT') throw new Error('empty');
         return {
-            momentumDelta: parsed.momentumDelta ?? baseEffect.momentumDelta ?? 0,
-            defensiveModifier: parsed.defensiveModifier ?? baseEffect.defensiveModifier ?? 0,
-            attackModifier: parsed.attackModifier ?? baseEffect.attackModifier ?? 0,
-            commentary: parsed.commentary ?? "The players respond.",
-            effectDescription: parsed.effectDescription ?? "TACTICAL SHIFT",
-            targetPlayers: Array.isArray(parsed.targetPlayers) ? parsed.targetPlayers : []
+            momentumDelta: Number(parsed.momentumDelta) || local.momentumDelta,
+            defensiveModifier: Number(parsed.defensiveModifier) ?? local.defensiveModifier,
+            attackModifier: Number(parsed.attackModifier) || local.attackModifier,
+            commentary: parsed.commentary,
+            effectDescription: parsed.effectDescription || local.effectDescription,
+            targetPlayers: Array.isArray(parsed.targetPlayers) ? parsed.targetPlayers : local.targetPlayers
         };
-    } catch (e) {
-        console.error("Shout processing error:", e);
-        return {
-            momentumDelta: baseEffect.momentumDelta ?? 0,
-            defensiveModifier: baseEffect.defensiveModifier ?? 0,
-            attackModifier: baseEffect.attackModifier ?? 0,
-            commentary: "The players acknowledge the instruction.",
-            effectDescription: "TACTICAL SHIFT",
-            targetPlayers: []
-        };
+    } catch {
+        return local;
     }
 };
 
@@ -1203,7 +1253,7 @@ export const generateSocialPost = async (description: string, teamName: string, 
         const response = await getAI().models.generateContent({
             model: MODEL_TEXT,
             contents: prompt,
-            config: { responseMimeType: "application/json" }
+            
         });
         const parsed = JSON.parse(cleanJson(response.text));
         

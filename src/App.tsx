@@ -1196,6 +1196,13 @@ export default function App() {
 
     const handleShoutEffect = (effect: ShoutEffect) => {
         setActiveShoutEffect(effect);
+        // Immediately reflect the momentum delta on the pitch so dots move right away
+        if (effect.momentumDelta && matchState) {
+            setMatchState(prev => prev ? {
+                ...prev,
+                momentum: Math.min(10, Math.max(-10, prev.momentum + effect.momentumDelta))
+            } : prev);
+        }
     };
 
     const finishMatch = () => {
