@@ -642,28 +642,32 @@ export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string, bond
             ? `BONUS CONTEXT: ${p.name} has a strong personal bond with ${bondContext.squadMate} who is already at ${t.name} from the ${bondContext.competition}. The agent is aware of this and may use it as part of the negotiation — either as a softener or to raise the stakes ("he\'d love to reunite, but not at any price").`
             : '';
 
+        const prestigeTier = t.prestige >= 80
+            ? `ELITE CLUB (prestige ${t.prestige}/100). ${t.name} already wins trophies and competes at the highest level. DO NOT ask if the club is ambitious or "going to the next level" — they already are. Instead, ask about: guaranteed starting position in a star-studded squad, wage parity with the club's other elite earners, specific role in big European nights, whether the manager will build around this player or use him as rotation.`
+            : t.prestige >= 55
+            ? `MID-TIER CLUB (prestige ${t.prestige}/100). ${t.name} is respectable but not elite. The agent will probe: realistic trophy timeline, summer transfer budget, who else is being signed to support this player, whether the ambition matches the wage on offer.`
+            : `LOWER-PRESTIGE CLUB (prestige ${t.prestige}/100). ${t.name} is below this player's current level. The agent is skeptical. Focus questions on: promotion/survival realism, long-term wage security, whether the manager is serious or just testing the market.`;
+
         const prompt = `
-You are the agent for ${p.name}. Generate 2 hard-hitting negotiation questions to ask the manager of ${t.name}.
+You are the hard-nosed agent for ${p.name}. Generate exactly 2 negotiation questions to ask the manager of ${t.name}.
 
 PLAYER PROFILE:
 - Name: ${p.name}
 - Age: ${p.age} | Rating: ${p.rating}/100 | Position: ${p.position}
-- Personality: ${p.personality} → ${personalityTone[p.personality] || 'Pragmatic agent, focused on best deal'}
+- Personality: ${p.personality} → ${personalityTone[p.personality] || 'Pragmatic, focused on best deal'}
 - Current weekly wage: $${p.wage.toLocaleString()}
 - ${contractStatus}
 
-CLUB CONTEXT:
-- Club: ${t.name} (Prestige: ${t.prestige}/100, League: ${t.league})
-- Negotiation type: ${c === 'renewal' ? 'CONTRACT RENEWAL — existing player asking for improved terms' : 'TRANSFER — new signing from outside the club'}
+CLUB CONTEXT: ${prestigeTier}
+- Negotiation type: ${c === 'renewal' ? 'CONTRACT RENEWAL — existing player wanting improved terms' : 'TRANSFER — player moving from another club'}
 ${bondNote}
 
-RULES FOR QUESTIONS:
-1. The agent speaks IN FIRST PERSON on behalf of the player ("My client...", "He needs to know...", "What ${p.name} wants to understand is...")
-2. Each question must reference specific real context (contract length, wage, prestige, age, etc.)
-3. Questions must be GENUINELY HARD to answer convincingly — about playing time guarantees, wage parity with teammates, trophy ambitions, the club's transfer budget, etc.
-4. Do NOT ask generic questions like "what are your plans?" — be sharp and specific
-5. Questions should reflect the personality tone above
-6. Both questions must be different — one about the PROJECT/AMBITION, one about the MONEY/TERMS
+STRICT RULES:
+1. Speak as the agent in first person: "My client needs to know...", "What ${p.name} is asking is...", "He won't sign unless..."
+2. QUESTION 1 must be about ROLE/AMBITION — specific to this club's actual prestige level (see club context above — no generic "are you ambitious?" questions for elite clubs)
+3. QUESTION 2 must be about MONEY/TERMS — specific numbers, parity with teammates, contract length justification
+4. Both questions must be things a manager cannot answer with one word — they require a real, specific commitment
+5. Make the questions feel like traps — easy to answer badly, hard to answer convincingly
 
 Return JSON: { "questions": ["question1", "question2"] }`;
 
@@ -698,29 +702,39 @@ OFFER ON THE TABLE: $${offer.wage.toLocaleString()}/week for ${offer.length} yea
 PLAYER'S CURRENT WAGE: $${p.wage.toLocaleString()}/week
 FAIR WAGE RANGE: $${fairWageMin.toLocaleString()} – $${fairWageMax.toLocaleString()}/week
 CONTRACT STATUS: ${contractStatus}
-WAGE ASSESSMENT: ${isLowball ? `LOWBALL — this offer is BELOW fair value. The agent should be offended or push back hard.` : isFair ? 'Fair — within acceptable range.' : `Premium — generous offer, agent is impressed.`}
+WAGE ASSESSMENT: ${isLowball ? 'LOWBALL — this offer is below fair value. The agent is unimpressed.' : isFair ? 'Fair — within acceptable range.' : 'Premium — generous offer, the agent takes note.'}
 ${bondNote}
 
-MANAGER'S RESPONSES TO AGENT'S QUESTIONS: ${JSON.stringify(ans)}
+MANAGER'S RESPONSES:
+${ans.map((a, i) => `Q${i + 1} answer: "${a}"`).join('\n')}
 
-DECISION LOGIC (follow strictly):
-- LOWBALL offer + bad manager answers → REJECTED outright with sharp commentary
-- LOWBALL offer + decent manager answers → COUNTER at fair wage minimum
-- FAIR offer + bad answers → COUNTER asking for 5-10% more
-- FAIR offer + good compelling answers → ACCEPTED (agent acknowledges the pitch)
-- PREMIUM offer → ACCEPTED unless manager answers were completely unconvincing
-- If player personality is Volatile: be harder to please, more easily offended
-- If Ambitious: reference trophies/league position in reasoning even if accepting
-- If Professional: focus purely on the numbers, no emotional language
+STEP 1 — CLASSIFY EACH MANAGER ANSWER (do this internally before deciding):
+For each answer, classify it as one of:
+- STRONG: Specific, committed, addresses the actual question with real detail
+- WEAK: Vague, deflecting, under 8 words, OR responds to the agent's question with another question, OR says something non-committal like "we'll see", "I think so", "yes", "trust me"
+- EMPTY: No answer given, blank, or filler
 
-Respond as the agent speaking directly to the manager (first person, sharp, professional). The "reasoning" field IS what the agent says out loud in the meeting room.
+STEP 2 — DECISION LOGIC (apply strictly, no exceptions):
+- Any EMPTY answer → REJECTED immediately, the agent walks out
+- Majority WEAK answers + LOWBALL offer → REJECTED with pointed comment about the manager's evasiveness
+- Majority WEAK answers + FAIR offer → COUNTER (agent saw through the non-answers, pushes for more)
+- Majority WEAK answers + PREMIUM offer → COUNTER (agent wants more specificity even if the money is good)
+- Majority STRONG answers + LOWBALL → COUNTER at fair wage minimum (acknowledges the pitch but not the money)
+- Majority STRONG answers + FAIR → ACCEPTED (agent acknowledges the manager made a real case)
+- Majority STRONG answers + PREMIUM → ACCEPTED enthusiastically
+- Volatile personality: one step harder to please across the board
+- Ambitious personality: always reference trophies/competition even when accepting
+
+IMPORTANT: If the manager responded to your question WITH ANOTHER QUESTION (e.g. "what do you mean?", "can you clarify?"), that is a WEAK answer. A manager who cannot answer directly is not ready to sign players at this level.
+
+Respond as the agent speaking directly to the manager. Be sharp, specific, and reference both the offer and their answers.
 
 Return JSON:
 {
     "decision": "accepted" | "rejected" | "counter",
-    "reasoning": "Agent's spoken response (2-3 sentences, in character, references the specific offer)",
+    "reasoning": "Agent's spoken words in the room (2-3 sentences, in character, reference the specific offer AND how the manager answered)",
     "counterOffer": { "wage": number, "length": number },
-    "extractedPromises": ["any verbal promises the manager made that should be tracked"]
+    "extractedPromises": ["specific verbal commitments the manager made that should be tracked"]
 }`;
     try {
         const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
