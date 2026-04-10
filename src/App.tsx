@@ -27,6 +27,9 @@ import MechanicsGuide from './components/MechanicsGuide';
 import { generateWorldCupStructure, NATIONAL_TEAMS, calculateWorldCupQualifiers, generateKnockoutFixtures } from './international';
 import { getChampionsLeagueParticipants } from './europe';
 import WorldCupResultScreen from './components/WorldCupResultScreen';
+import ModeSelectScreen from './components/ModeSelectScreen';
+import PlayableMatch from './components/PlayableMatch';
+import type { PlayMatchResult } from './phaser/PlayableMatchScene';
 
 const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
 const SIMULATION_CHUNK_MINUTES = 10; 
@@ -109,6 +112,11 @@ export default function App() {
     // --- WORLD CUP STATE ---
     const [wcKnockoutResults, setWcKnockoutResults] = useState<Fixture[]>([]);
     const [wcResult, setWcResult] = useState<WorldCupResult | null>(null);
+
+    // --- PLAY MODE STATE ---
+    const [showModeSelect, setShowModeSelect] = useState(false);
+    const [playModeActive, setPlayModeActive] = useState(false);
+    const [controlledPlayerName, setControlledPlayerName] = useState<string | null>(null);
 
     // --- THEMING STATE ---
     const [activeTheme, setActiveTheme] = useState<{ primary: string, secondary: string, text: string } | null>(null);
@@ -1200,11 +1208,99 @@ export default function App() {
 
     const handleStartMatch = () => {
         if (!currentFixture || !userTeam) return;
+        setShowModeSelect(true);
+    };
+
+    const handleModeSelectManage = () => {
+        setShowModeSelect(false);
+        if (!currentFixture || !userTeam) return;
         setMatchState({ currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off." });
-        setGameState(GameState.PLAYING); 
+        setGameState(GameState.PLAYING);
         setCurrentPlaybackMinute(0);
         setSimulationTargetMinute(0);
         setPendingEvents([]);
+    };
+
+    const handleModeSelectPlay = (playerName: string) => {
+        setShowModeSelect(false);
+        setControlledPlayerName(playerName);
+        setPlayModeActive(true);
+    };
+
+    const handlePlayModeEnd = (result: PlayMatchResult, newMatchState: MatchState) => {
+        setPlayModeActive(false);
+        setControlledPlayerName(null);
+        setMatchState(newMatchState);
+
+        if (result.injuries.length > 0 && currentFixture) {
+            // Scope injury write-back to match participants only, to avoid name collisions
+            const participantTeams = [currentFixture.homeTeam, currentFixture.awayTeam];
+            setTeams(prev => {
+                const updated = { ...prev };
+                participantTeams.forEach(teamName => {
+                    const t = updated[teamName];
+                    if (!t) return;
+                    const updatedPlayers = t.players.map(p => {
+                        if (result.injuries.includes(p.name)) {
+                            const weeks = Math.floor(Math.random() * 3) + 1;
+                            return { ...p, status: { type: 'Injured' as const, weeks } };
+                        }
+                        return p;
+                    });
+                    updated[teamName] = { ...t, players: updatedPlayers };
+                });
+                return updated;
+            });
+        }
+
+        if (currentFixture && Object.keys(result.playerConditions).length > 0) {
+            // Write back stamina/condition for all match participants (both teams)
+            const participantTeams = [currentFixture.homeTeam, currentFixture.awayTeam];
+            setTeams(prev => {
+                const updated = { ...prev };
+                participantTeams.forEach(teamName => {
+                    const t = updated[teamName];
+                    if (!t) return;
+                    const updatedPlayers = t.players.map(p => {
+                        const condition = result.playerConditions[p.name];
+                        if (condition !== undefined) {
+                            return { ...p, condition: Math.round(condition) };
+                        }
+                        return p;
+                    });
+                    updated[teamName] = { ...t, players: updatedPlayers };
+                });
+                return updated;
+            });
+        }
+
+        setLeagueTable(prev => {
+            if (!currentFixture) return prev;
+            const newTable = [...prev];
+            const updateTeam = (name: string, goalsFor: number, goalsAgainst: number) => {
+                const idx = newTable.findIndex(t => t.teamName === name);
+                if (idx !== -1) {
+                    const t = newTable[idx];
+                    t.played++; t.goalsFor += goalsFor; t.goalsAgainst += goalsAgainst;
+                    t.goalDifference = t.goalsFor - t.goalsAgainst;
+                    if (goalsFor > goalsAgainst) { t.won++; t.points += 3; }
+                    else if (goalsFor === goalsAgainst) { t.drawn++; t.points += 1; }
+                    else { t.lost++; }
+                }
+            };
+            updateTeam(currentFixture.homeTeam, result.homeScore, result.awayScore);
+            updateTeam(currentFixture.awayTeam, result.awayScore, result.homeScore);
+            return newTable;
+        });
+
+        const isHome = currentFixture?.homeTeam === userTeamName;
+        const userGoals = isHome ? result.homeScore : result.awayScore;
+        const oppGoals = isHome ? result.awayScore : result.homeScore;
+        if (userGoals > oppGoals) setManagerReputation(r => Math.min(100, r + 2));
+        else if (userGoals === oppGoals) setManagerReputation(r => Math.min(100, r + 1));
+        else setManagerReputation(r => Math.max(0, r - 1));
+
+        setGameState(GameState.POST_MATCH);
     };
 
     const handleResumeMatch = (shout?: TouchlineShout) => {
@@ -1461,6 +1557,24 @@ export default function App() {
                 if (!userTeam) return <div>Loading...</div>;
                 return (
                     <div className="relative">
+                        {showModeSelect && currentFixture && (
+                            <ModeSelectScreen
+                                fixture={currentFixture}
+                                userTeam={userTeam}
+                                onManage={handleModeSelectManage}
+                                onPlay={handleModeSelectPlay}
+                            />
+                        )}
+                        {playModeActive && currentFixture && controlledPlayerName && (
+                            <PlayableMatch
+                                homeTeam={teams[currentFixture.homeTeam]}
+                                awayTeam={teams[currentFixture.awayTeam]}
+                                fixture={currentFixture}
+                                userTeamName={userTeamName!}
+                                controlledPlayerName={controlledPlayerName}
+                                onMatchEnd={handlePlayModeEnd}
+                            />
+                        )}
                         <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
                         {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
