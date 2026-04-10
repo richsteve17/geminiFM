@@ -417,6 +417,21 @@ export default function MatchView({
                 {mediaError && <div className="text-center text-red-400 text-xs mt-2 animate-pulse font-bold">{mediaError}</div>}
             </div>
 
+            {/* Latest event ticker — always visible, no scroll required */}
+            {gameState !== GameState.PRE_MATCH && matchState?.events && matchState.events.length > 0 && (() => {
+                const latest = matchState.events[matchState.events.length - 1];
+                const icon = latest.type === 'goal' ? '⚽' : latest.type === 'card' ? '🟨' : latest.type === 'injury' ? '🚑' : latest.type === 'sub' ? '🔄' : '📋';
+                const bg = latest.type === 'goal' ? 'bg-green-900/80 border-green-600' : latest.type === 'card' ? 'bg-yellow-900/80 border-yellow-600' : 'bg-gray-800/80 border-gray-600';
+                return (
+                    <div className={`flex items-center gap-2 px-3 py-1.5 border-b text-xs ${bg} flex-shrink-0`}>
+                        <span className="font-mono text-gray-400 w-7 flex-shrink-0">{latest.minute}'</span>
+                        <span>{icon}</span>
+                        <span className="text-gray-100 truncate flex-1">{latest.description}</span>
+                        {latest.scoreAfter && <span className="text-white font-bold bg-gray-700 px-1.5 py-0.5 rounded flex-shrink-0">{latest.scoreAfter}</span>}
+                    </div>
+                );
+            })()}
+
             <div className="flex-1 bg-gray-900/50 p-4 flex flex-col overflow-hidden">
                 {gameState !== GameState.PRE_MATCH && (
                     <div className="flex-shrink-0 mb-4">

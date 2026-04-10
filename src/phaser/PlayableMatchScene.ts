@@ -136,6 +136,7 @@ export class PlayableMatchScene extends Phaser.Scene {
     private ball!: Phaser.Physics.Arcade.Image;
     private ballOwner: AIPlayer | null = null;
     private players: AIPlayer[] = [];
+    private allowedPressers: Set<AIPlayer> = new Set();
     private userPlayer!: AIPlayer;
     private joystick!: { base: Phaser.GameObjects.Arc; thumb: Phaser.GameObjects.Arc; active: boolean; pointerId: number; startX: number; startY: number; dx: number; dy: number };
     private passBtn!: Phaser.GameObjects.Arc;
@@ -736,8 +737,8 @@ export class PlayableMatchScene extends Phaser.Scene {
             targetY = ai.baseY;
             ai.state = 'support';
         } else {
-            // Not ally's possession — press (mentality-driven) or retreat to shape
-            if (dToBall < pressDistance) {
+            // Not ally's possession — only designated pressers chase; others hold formation
+            if (dToBall < pressDistance && this.allowedPressers.has(ai)) {
                 targetX = ballX; targetY = ballY;
                 ai.state = 'chase';
             } else {
@@ -792,6 +793,30 @@ export class PlayableMatchScene extends Phaser.Scene {
             if (this.userPlayer.hasBall) {
                 this.ball.setPosition(this.userPlayer.sprite.x + (this.isHome ? 12 : -12), this.userPlayer.sprite.y);
                 this.ball.setVelocity(0, 0);
+            }
+        }
+
+        // Recompute which players are allowed to press each frame.
+        // Only the N closest non-possession players per team may press — the rest hold shape.
+        {
+            const bx = this.ball.x, by = this.ball.y;
+            this.allowedPressers = new Set<AIPlayer>();
+            for (const isHomeTeam of [true, false]) {
+                const candidates = this.players.filter(p =>
+                    p.isHome === isHomeTeam && !p.isUserControlled && p !== this.ballOwner
+                );
+                const teamMentality = isHomeTeam === this.isHome ? this.userMentality : this.oppMentality;
+                const maxPress = teamMentality === 'All-Out Attack' ? 4
+                    : teamMentality === 'Attacking' ? 3
+                    : teamMentality === 'Balanced' ? 2
+                    : 1; // Defensive / Park the Bus = 1 presser
+                candidates
+                    .sort((a, b) =>
+                        Phaser.Math.Distance.Between(a.sprite.x, a.sprite.y, bx, by) -
+                        Phaser.Math.Distance.Between(b.sprite.x, b.sprite.y, bx, by)
+                    )
+                    .slice(0, maxPress)
+                    .forEach(p => this.allowedPressers.add(p));
             }
         }
 

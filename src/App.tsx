@@ -746,7 +746,23 @@ export default function App() {
                 }
             }
         } catch (e) {
-            setPressConferenceDone(true);
+            // On error: never silently end — add a fallback question so the conference continues
+            const managerCount = updated.filter(m => m.role === 'manager').length;
+            if (managerCount >= 4) {
+                // Enough answers given — gracefully wrap up
+                setPressChatHistory([...updated, { role: 'journalist', text: "Thank you for your time. That's all from us today." }]);
+                setPressConferenceDone(true);
+            } else {
+                // Not enough exchanges yet — keep going with a fallback question
+                const fallbacks = [
+                    "Let's move on — what are your thoughts on the squad's fitness levels right now?",
+                    "What tactical adjustments do you think need to be made before the next match?",
+                    "How do you assess the individual performances today?",
+                    "There have been some transfer rumours swirling — can you address those?",
+                ];
+                const fallback = fallbacks[managerCount % fallbacks.length];
+                setPressChatHistory([...updated, { role: 'journalist', text: fallback }]);
+            }
         } finally {
             setIsLoading(false);
         }
