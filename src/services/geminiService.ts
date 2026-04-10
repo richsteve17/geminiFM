@@ -645,39 +645,62 @@ Respond with only the journalist's spoken question.`;
 export const continuePressConferenceChat = async (
     ctx: PressConferenceContext,
     history: ChatMessage[]
-): Promise<{ message: string; isDone: boolean; reputationDelta: number }> => {
+): Promise<{ message: string; isDone: boolean; reputationDelta: number; moraleDelta: number }> => {
     const userGoals = ctx.isHome ? ctx.homeScore : ctx.awayScore;
     const oppGoals = ctx.isHome ? ctx.awayScore : ctx.homeScore;
     const result = userGoals > oppGoals ? 'win' : userGoals === oppGoals ? 'draw' : 'defeat';
+    const managerResponses = history.filter(m => m.role === 'manager').length;
     const transcript = history.map(m => `${m.role === 'manager' ? 'Manager' : 'Journalist'}: ${m.text}`).join('\n');
 
     const prompt = `
-You are a football journalist at a post-match press conference.
+You are a sharp, probing football journalist at a post-match press conference.
 Match: ${ctx.teamName} ${result} vs ${ctx.opponentName} (${ctx.homeScore}-${ctx.awayScore}).
 League position: ${ctx.leaguePosition}. Key events: ${ctx.keyEvents.slice(0, 3).join('; ') || 'none'}.
 Active promises: ${ctx.activePromises.join(', ') || 'none'}.
+${ctx.activeRifts?.length ? `Squad tensions: ${ctx.activeRifts.slice(0,2).join('; ')}` : ''}
 
-Transcript:
+Transcript so far:
 ${transcript}
 
-Now, do ONE of:
-A) Follow up or ask a new probing question (if manager was evasive or after fewer than 3 manager responses).
-B) Wrap up the press conference (after 3+ manager responses).
+Manager has responded ${managerResponses} time(s).
 
-Assess the manager's tone: professional, honest, and direct responses improve reputation. Evasive or dismissive responses hurt it.
+RULES:
+- You MUST ask at least 4 distinct probing questions before wrapping up (isDone: true).
+- If managerResponses < 4, ALWAYS set isDone: false and ask another question.
+- Each question must dig deeper: tactics, transfer rumours, player form, squad harmony, promise accountability, future fixtures.
+- If the manager is evasive, call them out directly ("You didn't answer my question about...").
+- Only set isDone: true when managerResponses >= 4.
 
-Return JSON: {
-  "message": "string (journalist's next spoken question, or a brief closing remark if isDone)",
-  "isDone": boolean,
-  "reputationDelta": number (-3 to +3, based on how the manager handled this session overall)
+Scoring (apply ONLY when isDone: true):
+- reputationDelta: -3 to +3 based on overall honesty and professionalism.
+- moraleDelta: -3 to +3 — squad morale impact. Positive if manager was inspiring and united the room. Negative if they threw players under the bus or were dismissive.
+
+Return JSON ONLY:
+{
+  "message": "journalist's next question or closing remark",
+  "isDone": ${managerResponses >= 4 ? 'true or false' : 'false'},
+  "reputationDelta": ${managerResponses >= 4 ? 'number -3 to 3' : '0'},
+  "moraleDelta": ${managerResponses >= 4 ? 'number -3 to 3' : '0'}
 }`;
     try {
         const response = await getAI().models.generateContent({
             model: MODEL_TEXT, contents: prompt
         });
-        return JSON.parse(cleanJson(response.text));
+        const parsed = JSON.parse(cleanJson(response.text));
+        // Hard-enforce minimum exchanges regardless of what Gemini returns
+        if (managerResponses < 4) {
+            parsed.isDone = false;
+            parsed.reputationDelta = 0;
+            parsed.moraleDelta = 0;
+        }
+        return {
+            message: parsed.message ?? "Tell me more.",
+            isDone: !!parsed.isDone,
+            reputationDelta: Number(parsed.reputationDelta) || 0,
+            moraleDelta: Number(parsed.moraleDelta) || 0,
+        };
     } catch (e) {
-        return { message: "Thank you, that's all for today.", isDone: true, reputationDelta: 0 };
+        return { message: "Thank you, that's all for today.", isDone: true, reputationDelta: 0, moraleDelta: 0 };
     }
 };
 

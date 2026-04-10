@@ -195,6 +195,36 @@ export interface Chant {
     vocalUrl?: string;   // ElevenLabs TTS vocal layer
 }
 
+// ── SHARED AUDIO CONTEXT (bypasses autoplay restrictions) ──────────────────
+type WebkitWindow = typeof window & { webkitAudioContext?: typeof AudioContext };
+let _sharedCtx: AudioContext | null = null;
+function getSharedCtx(): AudioContext {
+    if (!_sharedCtx || _sharedCtx.state === 'closed') {
+        _sharedCtx = new ((window as WebkitWindow).webkitAudioContext ?? AudioContext)();
+    }
+    if (_sharedCtx.state === 'suspended') { _sharedCtx.resume().catch(() => {}); }
+    return _sharedCtx;
+}
+
+/** Play an audio blob URL via AudioContext — works even after async delay (no autoplay block) */
+export async function playBlobUrl(url: string, volume = 1.0): Promise<void> {
+    try {
+        const ctx = getSharedCtx();
+        const res = await fetch(url);
+        const buf = await res.arrayBuffer();
+        const audio = await ctx.decodeAudioData(buf);
+        const src = ctx.createBufferSource();
+        const gain = ctx.createGain();
+        gain.gain.value = volume;
+        src.buffer = audio;
+        src.connect(gain);
+        gain.connect(ctx.destination);
+        src.start(0);
+    } catch (err) {
+        console.error('[playBlobUrl] Failed:', err);
+    }
+}
+
 // ── WEB AUDIO MELODY PLAYER ────────────────────────────────────────────────
 // Each entry: [frequency_hz, beat_count]. Beat duration set by tempo.
 const MELODY_NOTES: Record<string, [number, number][]> = {

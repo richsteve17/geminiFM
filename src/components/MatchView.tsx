@@ -14,7 +14,7 @@ import { analyzeTactics, FORMATION_SLOTS } from '../utils';
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 import AtmosphereWidget from './AtmosphereWidget';
-import { generatePunkChant, type Chant } from '../services/chantService';
+import { generatePunkChant, playBlobUrl, type Chant } from '../services/chantService';
 
 interface MatchViewProps {
     fixture: Fixture | undefined;
@@ -154,24 +154,16 @@ export default function MatchView({
                     generatePunkChant(
                         userTeamName || "Team",
                         trigger,
-                        player,
+                        // Only pass scorer name when it was actually our player scoring
+                        isUserGoal ? player : undefined,
                         usedMelodies,
                         { minute, scoreDiff: adjustedDiff, isHome, isUserGoal, playerNationality, playerPersonality }
                     ).then(chant => {
                         onMelodyUsed(chant.melodyId);
 
-                        // Play backing music track at lower volume
-                        if (chant.audioUrl) {
-                            const music = new Audio(chant.audioUrl);
-                            music.volume = 0.45;
-                            music.play().catch(() => {});
-                        }
-                        // Play vocal layer on top at full volume
-                        if (chant.vocalUrl) {
-                            const vocal = new Audio(chant.vocalUrl);
-                            vocal.volume = 0.9;
-                            vocal.play().catch(() => {});
-                        }
+                        // Use AudioContext playback — bypasses browser autoplay restrictions
+                        if (chant.audioUrl) playBlobUrl(chant.audioUrl, 0.45);
+                        if (chant.vocalUrl) playBlobUrl(chant.vocalUrl, 0.9);
 
                         setCurrentChant(chant);
                         setTimeout(() => setCurrentChant(null), displayDuration);

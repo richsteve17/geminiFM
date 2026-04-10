@@ -694,6 +694,31 @@ export default function App() {
             if (result.isDone) {
                 setPressConferenceDone(true);
                 setManagerReputation(r => Math.max(0, Math.min(100, r + result.reputationDelta)));
+
+                // Apply squad morale effect from how the manager handled the press
+                if (result.moraleDelta !== 0 && userTeamName) {
+                    const moraleType = result.moraleDelta > 0 ? 'FiredUp' : 'Disappointed';
+                    const moraleMsg = result.moraleDelta > 0
+                        ? 'Manager inspired the squad in the press conference'
+                        : 'Manager\'s comments in the press left the squad deflated';
+                    setTeams(prev => {
+                        const team = prev[userTeamName];
+                        if (!team) return prev;
+                        return {
+                            ...prev,
+                            [userTeamName]: {
+                                ...team,
+                                players: team.players.map(p => ({
+                                    ...p,
+                                    effects: [
+                                        ...p.effects.filter(e => e.type !== 'PostTournamentMorale'),
+                                        { type: 'PostTournamentMorale' as const, morale: moraleType as 'FiredUp' | 'Disappointed', message: moraleMsg, until: 2 }
+                                    ]
+                                }))
+                            }
+                        };
+                    });
+                }
             }
         } catch (e) {
             setPressConferenceDone(true);
