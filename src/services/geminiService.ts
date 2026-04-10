@@ -544,37 +544,55 @@ export const continueInterviewChat = async (
     ctx: InterviewContext,
     history: ChatMessage[]
 ): Promise<{ message: string; isDecision: boolean; offer?: boolean }> => {
+    const managerResponses = history.filter(m => m.role === 'manager').length;
     const transcript = history.map(m => `${m.role === 'manager' ? 'Manager' : 'Chairman'}: ${m.text}`).join('\n');
+    const canDecide = managerResponses >= 3;
+    const mustDecide = managerResponses >= 6;
     const prompt = `
 You are the ${ctx.chairmanPersonality} Chairman of ${ctx.teamName} (${ctx.league}).
 Board objectives: ${ctx.boardObjectives.join(', ') || 'none stated'}.
 Manager reputation: ${ctx.managerReputation}/100.
+Manager has answered ${managerResponses} question(s) so far.
 
 Interview transcript so far:
 ${transcript}
 
-Based on the conversation, do ONE of these:
-A) Ask a natural follow-up or new tough question (continue interview, 1–2 sentences).
-B) If you have enough info (at least 3 manager responses), make a decision.
+${mustDecide
+    ? 'You MUST make a final decision now — this interview has run long enough.'
+    : canDecide
+        ? 'You may make a decision now or ask one more follow-up question if you need more information.'
+        : 'You MUST ask another question — you do not have enough information to decide yet.'}
 
 RULES:
-- A ridiculous, offensive, or totally irrelevant answer (e.g. answering a tactics question by listing song lyrics) MUST end in rejection.
-- An evasive, vague answer should get a sharp follow-up.
+- A ridiculous, offensive, or totally irrelevant answer MUST end in rejection (isDecision: true, offer: false).
+- An evasive, vague answer gets a sharp follow-up (isDecision: false).
 - A strong, personality-matched answer can lead to an offer.
-- Be realistic: rejection is a common outcome.
+- Rejection is a common outcome — be realistic.
+- ${canDecide ? '' : 'isDecision MUST be false.'}
 
-Return JSON: {
-  "message": "string (chairman's spoken words)",
-  "isDecision": boolean,
-  "offer": boolean (only if isDecision is true; true = job offer, false = rejection)
+Return JSON ONLY:
+{
+  "message": "string (chairman's spoken words — a question if continuing, a closing statement if deciding)",
+  "isDecision": ${mustDecide ? 'true' : canDecide ? 'true or false' : 'false'},
+  "offer": ${canDecide ? 'boolean (only include when isDecision is true)' : 'false'}
 }`;
     try {
         const response = await getAI().models.generateContent({
             model: MODEL_TEXT, contents: prompt
         });
-        return JSON.parse(cleanJson(response.text));
+        const parsed = JSON.parse(cleanJson(response.text));
+        // Hard-enforce code-side guards — Gemini cannot end the interview too early or loop forever
+        if (!canDecide) { parsed.isDecision = false; delete parsed.offer; }
+        if (mustDecide) { parsed.isDecision = true; if (parsed.offer === undefined) parsed.offer = false; }
+        return {
+            message: parsed.message ?? "Tell me more about your management philosophy.",
+            isDecision: !!parsed.isDecision,
+            offer: parsed.offer,
+        };
     } catch (e) {
-        return { message: "Let me think about that. Do you have any questions for me?", isDecision: false };
+        // On error: if we must decide, force a rejection. Otherwise ask a neutral question.
+        if (mustDecide) return { message: "I've heard enough. We'll be in touch.", isDecision: true, offer: false };
+        return { message: "Interesting. Tell me — how would you handle a dressing room crisis?", isDecision: false };
     }
 };
 

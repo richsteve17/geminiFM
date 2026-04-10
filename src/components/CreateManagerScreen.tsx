@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { EXPERIENCE_LEVELS } from '../constants';
-import type { ExperienceLevel } from '../types';
+import type { ExperienceLevel, WorldCupResult } from '../types';
 import { UserIcon } from './icons/UserIcon';
 
 interface CreateManagerScreenProps {
@@ -13,10 +13,23 @@ const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onB
     const [name, setName] = useState('');
     const [selectedExpId, setSelectedExpId] = useState(EXPERIENCE_LEVELS[0].id);
 
+    // Read WC result cap from localStorage — determines which levels are unlocked
+    const wcResult = useMemo<WorldCupResult | null>(() => {
+        try {
+            const saved = localStorage.getItem('worldCupResult');
+            return saved ? JSON.parse(saved) : null;
+        } catch { return null; }
+    }, []);
+
+    const isLocked = (level: ExperienceLevel): boolean => {
+        if (!wcResult) return false; // No WC result = no cap, all levels open
+        return level.prestigeMin > wcResult.reputationCeiling;
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const exp = EXPERIENCE_LEVELS.find(e => e.id === selectedExpId);
-        if (exp && name.trim()) {
+        if (exp && name.trim() && !isLocked(exp)) {
             onCreate(name, exp);
         }
     };
@@ -27,6 +40,13 @@ const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onB
                 <h2 className="text-3xl font-bold text-white mb-2">Create Your Profile</h2>
                 <p className="text-lg text-gray-400">Define your managerial background to see who will hire you.</p>
             </div>
+
+            {wcResult && (
+                <div className="mb-4 bg-amber-900/30 border border-amber-700 rounded-lg p-3 text-center text-sm">
+                    <span className="text-amber-400 font-bold">World Cup Result: {wcResult.tier}</span>
+                    <span className="text-amber-300/70 ml-2">— Unlocks rep up to {wcResult.reputationCeiling}. Higher tiers locked until you earn them.</span>
+                </div>
+            )}
 
             <form onSubmit={handleSubmit} className="bg-gray-800/50 rounded-xl shadow-lg border border-gray-700 p-6 md:p-8">
                 <div className="mb-6">
@@ -54,29 +74,39 @@ const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onB
                         Past Playing Experience
                     </label>
                     <div className="space-y-3">
-                        {EXPERIENCE_LEVELS.map(level => (
-                            <label 
-                                key={level.id} 
-                                className={`flex items-start p-4 rounded-lg border cursor-pointer transition-all duration-200 ${selectedExpId === level.id ? 'bg-blue-900/40 border-blue-500 ring-1 ring-blue-500' : 'bg-gray-700/30 border-gray-600 hover:bg-gray-700/50'}`}
-                            >
-                                <input 
-                                    type="radio" 
-                                    name="experience" 
-                                    value={level.id} 
-                                    checked={selectedExpId === level.id}
-                                    onChange={() => setSelectedExpId(level.id)}
-                                    className="mt-1 w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 focus:ring-blue-500"
-                                />
-                                <div className="ml-4">
-                                    <span className={`block text-base font-semibold ${selectedExpId === level.id ? 'text-blue-400' : 'text-gray-200'}`}>
-                                        {level.label}
-                                    </span>
-                                    <span className="block text-sm text-gray-400 mt-1">
-                                        {level.description}
-                                    </span>
-                                </div>
-                            </label>
-                        ))}
+                        {EXPERIENCE_LEVELS.map(level => {
+                            const locked = isLocked(level);
+                            return (
+                                <label
+                                    key={level.id}
+                                    className={`flex items-start p-4 rounded-lg border transition-all duration-200 ${
+                                        locked
+                                            ? 'opacity-40 cursor-not-allowed bg-gray-800/20 border-gray-700'
+                                            : selectedExpId === level.id
+                                                ? 'cursor-pointer bg-blue-900/40 border-blue-500 ring-1 ring-blue-500'
+                                                : 'cursor-pointer bg-gray-700/30 border-gray-600 hover:bg-gray-700/50'
+                                    }`}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="experience"
+                                        value={level.id}
+                                        checked={selectedExpId === level.id}
+                                        disabled={locked}
+                                        onChange={() => !locked && setSelectedExpId(level.id)}
+                                        className="mt-1 w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 focus:ring-blue-500"
+                                    />
+                                    <div className="ml-4 flex-1">
+                                        <span className={`block text-base font-semibold ${locked ? 'text-gray-500' : selectedExpId === level.id ? 'text-blue-400' : 'text-gray-200'}`}>
+                                            {locked ? '🔒 ' : ''}{level.label}
+                                        </span>
+                                        <span className="block text-sm text-gray-400 mt-1">
+                                            {locked ? `Earn this by reaching a higher WC stage` : level.description}
+                                        </span>
+                                    </div>
+                                </label>
+                            );
+                        })}
                     </div>
                 </div>
 

@@ -529,19 +529,36 @@ export default function App() {
         return 0;
     };
 
+    const getWorldCupRepCeiling = (): number => {
+        try {
+            const saved = localStorage.getItem('worldCupResult');
+            if (saved) {
+                const result: WorldCupResult = JSON.parse(saved);
+                return result.reputationCeiling;
+            }
+        } catch {}
+        return 0; // 0 means no WC result saved — no cap applied
+    };
+
     const handleCreateManager = (name: string, exp: ExperienceLevel) => {
         let initialRep = 15;
         if (exp.id === 'semi-pro') initialRep = 40; if (exp.id === 'pro') initialRep = 60;
         if (exp.id === 'international') initialRep = 80; if (exp.id === 'legend') initialRep = 95;
         const wcFloor = getWorldCupRepFloor();
+        const wcCeiling = getWorldCupRepCeiling();
+        // WC floor can boost a low rep; WC ceiling hard-caps it so you can't bypass the progression gate
         if (wcFloor > initialRep) initialRep = wcFloor;
+        if (wcCeiling > 0 && initialRep > wcCeiling) initialRep = wcCeiling;
         setManagerReputation(initialRep); generateJobs(initialRep);
     };
 
     const generateJobs = (currentRep: number | ExperienceLevel) => {
         const rep = typeof currentRep === 'number' ? currentRep : managerReputation;
         const wcFloor = getWorldCupRepFloor();
-        const effectiveRep = Math.max(rep, wcFloor);
+        const wcCeiling = getWorldCupRepCeiling();
+        // Floor lifts the effective rep (WC boost); ceiling prevents bypassing the progression gate
+        let effectiveRep = Math.max(rep, wcFloor);
+        if (wcCeiling > 0 && effectiveRep > wcCeiling) effectiveRep = wcCeiling;
         const allTeamList: Team[] = Object.values(allTeams);
         const shuffle = (array: Team[]) => array.sort(() => 0.5 - Math.random());
         let vacancies: Team[] = [];
@@ -837,32 +854,47 @@ export default function App() {
 
                 thisRoundFixtures.forEach(f => {
                     if (f.homeTeam === userTeamName || f.awayTeam === userTeamName) {
-                        if (matchState) {
-                            const isHome = f.homeTeam === userTeamName;
-                            const userGoals = isHome ? matchState.homeScore : matchState.awayScore;
-                            const oppGoals = isHome ? matchState.awayScore : matchState.homeScore;
-                            let wcWinner: string;
-                            if (userGoals > oppGoals) {
-                                wcWinner = userTeamName!;
-                            } else if (userGoals === oppGoals) {
-                                wcWinner = Math.random() > 0.5 ? userTeamName! : (isHome ? f.awayTeam : f.homeTeam);
-                            } else {
-                                wcWinner = isHome ? f.awayTeam : f.homeTeam;
-                            }
-                            winners.push(wcWinner);
-                            playedThisRound.push({ ...f, played: true, score: `${matchState.homeScore}-${matchState.awayScore}` });
+                        // Defensive guard — matchState should always exist at this point
+                        const ms = matchState ?? { homeScore: 0, awayScore: 1 };
+                        const isHome = f.homeTeam === userTeamName;
+                        const userGoals = isHome ? ms.homeScore : ms.awayScore;
+                        const oppGoals = isHome ? ms.awayScore : ms.homeScore;
+                        let wcWinner: string;
+                        let displayScore = `${ms.homeScore}-${ms.awayScore}`;
+                        if (userGoals > oppGoals) {
+                            wcWinner = userTeamName!;
+                        } else if (userGoals === oppGoals) {
+                            // Penalty shootout coin toss
+                            const userWinsPens = Math.random() > 0.5;
+                            wcWinner = userWinsPens ? userTeamName! : (isHome ? f.awayTeam : f.homeTeam);
+                            displayScore += ` (${userWinsPens ? userTeamName! : (isHome ? f.awayTeam : f.homeTeam)} win on pens)`;
+                        } else {
+                            wcWinner = isHome ? f.awayTeam : f.homeTeam;
                         }
+                        winners.push(wcWinner);
+                        playedThisRound.push({ ...f, played: true, score: displayScore });
                     } else {
                         const homeT = teams[f.homeTeam];
                         const awayT = teams[f.awayTeam];
                         if (homeT && awayT) {
                             let res = simulateQuickMatch(homeT, awayT);
-                            while (res.homeGoals === res.awayGoals) {
+                            let retries = 0;
+                            // Max 20 retries to prevent infinite loop (shouldn't happen but defensive)
+                            while (res.homeGoals === res.awayGoals && retries < 20) {
                                 res = simulateQuickMatch(homeT, awayT);
+                                retries++;
                             }
-                            const winner = res.homeGoals > res.awayGoals ? f.homeTeam : f.awayTeam;
+                            // If somehow still a draw, break tie by random
+                            const winner = res.homeGoals !== res.awayGoals
+                                ? (res.homeGoals > res.awayGoals ? f.homeTeam : f.awayTeam)
+                                : (Math.random() > 0.5 ? f.homeTeam : f.awayTeam);
                             winners.push(winner);
                             playedThisRound.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
+                        } else {
+                            // Team not found in state — use a random winner to keep bracket intact
+                            const winner = Math.random() > 0.5 ? f.homeTeam : f.awayTeam;
+                            winners.push(winner);
+                            playedThisRound.push({ ...f, played: true, score: '1-0' });
                         }
                     }
                 });

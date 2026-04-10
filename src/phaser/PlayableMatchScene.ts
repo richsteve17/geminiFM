@@ -443,6 +443,26 @@ export class PlayableMatchScene extends Phaser.Scene {
                 }
             });
         });
+
+        // User player can claim a loose ball by running into it
+        if (this.userPlayer) {
+            this.physics.add.overlap(this.ball, this.userPlayer.sprite, () => {
+                // Only claim if no one has possession OR if the user runs into an opponent carrier
+                if (!this.ballOwner) {
+                    this.claimBall(this.userPlayer);
+                } else if (this.ballOwner !== this.userPlayer && this.ballOwner.isHome !== this.userPlayer.isHome) {
+                    // Running directly into an opponent with the ball — contest it (50% base + rating bonus)
+                    const userBody = this.userPlayer.sprite.body as Phaser.Physics.Arcade.Body;
+                    const speed = Math.sqrt(userBody.velocity.x ** 2 + userBody.velocity.y ** 2);
+                    if (speed > 80) { // only when actively running into them, not just standing close
+                        const contestChance = 0.35 + this.userRating * 0.003;
+                        if (Math.random() < contestChance) {
+                            this.claimBall(this.userPlayer);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     private claimBall(ai: AIPlayer) {
@@ -691,9 +711,10 @@ export class PlayableMatchScene extends Phaser.Scene {
             this.ball.setVelocity(0, 0);
             const goalX = ai.isHome ? PITCH_W - GOAL_DEPTH : GOAL_DEPTH;
             const distToGoal = Phaser.Math.Distance.Between(aiX, aiY, goalX, PITCH_H / 2);
-            // Shooting threshold scales with mentality: attacking mentalities shoot earlier
-            const shootThreshold = 120 + (fwdBias * 60);
-            if (distToGoal < shootThreshold && Math.random() < 0.012) {
+            // Shoot threshold scales with mentality; shoot probability increases the closer to goal
+            const shootThreshold = 140 + (fwdBias * 60);
+            const shootProb = distToGoal < 60 ? 0.12 : distToGoal < shootThreshold ? 0.045 : 0;
+            if (shootProb > 0 && Math.random() < shootProb) {
                 const dx = goalX - aiX;
                 const dy = PITCH_H / 2 - aiY + (Math.random() - 0.5) * GOAL_W * 0.6;
                 const d = Math.max(1, Math.sqrt(dx * dx + dy * dy));
@@ -702,8 +723,9 @@ export class PlayableMatchScene extends Phaser.Scene {
                 ai.hasBall = false;
                 this.ballOwner = null;
             } else {
+                // Dribble toward goal; stop 50px out so the shot always fires
                 const dribbleStep = 80 * fwdBias;
-                targetX = ai.isHome ? Math.min(PITCH_W - 100, aiX + dribbleStep) : Math.max(100, aiX - dribbleStep);
+                targetX = ai.isHome ? Math.min(PITCH_W - 50, aiX + dribbleStep) : Math.max(50, aiX - dribbleStep);
                 targetY = aiY + (PITCH_H / 2 - aiY) * 0.08;
             }
         } else if (allyHasBall) {
