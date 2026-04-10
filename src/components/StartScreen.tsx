@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FootballIcon } from './icons/FootballIcon';
 import { BriefcaseIcon } from './icons/BriefcaseIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
 import { TEAMS } from '../constants';
+import type { WorldCupResult } from '../types';
 
 interface StartScreenProps {
     onSelectTeam: () => void;
@@ -14,6 +15,14 @@ interface StartScreenProps {
 
 const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect }) => {
     const [showDevlog, setShowDevlog] = useState(false);
+    const [worldCupResult, setWorldCupResult] = useState<WorldCupResult | null>(null);
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('worldCupResult');
+            if (saved) setWorldCupResult(JSON.parse(saved));
+        } catch {}
+    }, []);
     const [selectedTeam, setSelectedTeam] = useState<string>('Manchester City'); // Default to a team so selector isn't empty
 
     const handleTeamChange = (teamName: string) => {
@@ -109,6 +118,20 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 </p>
             </div>
             
+            {worldCupResult && (
+                <div className="z-10 w-full max-w-2xl mb-6 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-xl p-4 text-center">
+                        <p className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mb-1">World Cup Legacy Active</p>
+                        <p className="text-white font-bold text-lg">
+                            {worldCupResult.outcome === 'winner' ? '🏆' : worldCupResult.outcome === 'runner_up' ? '🥈' : '⚽'} {worldCupResult.teamName} — {worldCupResult.tier}
+                        </p>
+                        <p className="text-yellow-300/80 text-xs mt-1">
+                            Your World Cup run has unlocked <span className="font-bold text-yellow-400">{worldCupResult.tier}</span> clubs for your Career start. (Rep floor: {worldCupResult.reputationFloor})
+                        </p>
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mb-12 z-10 px-4">
                 <button onClick={onStartWorldCup} className="group relative overflow-hidden bg-gray-800/60 backdrop-blur-sm border border-gray-600 rounded-xl p-6 text-left transition-all hover:bg-gray-700/80 hover:border-yellow-500 hover:shadow-[0_0_20px_rgba(234,179,8,0.2)] hover:-translate-y-1">
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">

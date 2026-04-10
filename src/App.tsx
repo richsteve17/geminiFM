@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect, WorldCupResult, WorldCupOutcome } from './types';
 import { AppScreen, GameState } from './types';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
@@ -24,8 +24,9 @@ import TutorialOverlay from './components/TutorialOverlay';
 import ScoutingScreen from './components/ScoutingScreen';
 import PressConferenceScreen from './components/PressConferenceScreen';
 import MechanicsGuide from './components/MechanicsGuide';
-import { generateWorldCupStructure, NATIONAL_TEAMS } from './international';
+import { generateWorldCupStructure, NATIONAL_TEAMS, calculateWorldCupQualifiers, generateKnockoutFixtures } from './international';
 import { getChampionsLeagueParticipants } from './europe';
+import WorldCupResultScreen from './components/WorldCupResultScreen';
 
 const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
 const SIMULATION_CHUNK_MINUTES = 10; 
@@ -101,6 +102,10 @@ export default function App() {
     
     // --- CHANT STATE ---
     const [currentChant, setCurrentChant] = useState<Chant | null>(null);
+
+    // --- WORLD CUP STATE ---
+    const [wcKnockoutResults, setWcKnockoutResults] = useState<Fixture[]>([]);
+    const [wcResult, setWcResult] = useState<WorldCupResult | null>(null);
 
     // --- THEMING STATE ---
     const [activeTheme, setActiveTheme] = useState<{ primary: string, secondary: string, text: string } | null>(null);
@@ -322,6 +327,44 @@ export default function App() {
 
     const startTutorial = () => { setTutorialStep(0); setShowTutorial(true); };
 
+    const getWcResultForOutcome = (outcome: WorldCupOutcome, teamName: string): WorldCupResult => {
+        const MAP: Record<WorldCupOutcome, { floor: number; ceiling: number; tier: string; description: string }> = {
+            none: { floor: 0, ceiling: 20, tier: 'Grassroots', description: 'No World Cup experience on your record. Start at the very bottom.' },
+            group_stage: { floor: 20, ceiling: 35, tier: 'Championship / Lower', description: 'You competed but fell at the group stage. MLS and the Championship await.' },
+            round_of_16: { floor: 35, ceiling: 50, tier: 'Mid-Table European', description: 'A solid run. Serie A, Ligue 1, and Championship clubs will take your calls.' },
+            quarter_final: { floor: 50, ceiling: 65, tier: 'Top Flight', description: 'Quarter-final quality. Bundesliga, La Liga mid-table, and lower PL clubs are open.' },
+            semi_final: { floor: 65, ceiling: 80, tier: 'Elite', description: 'Semi-finalist. Most top-flight clubs will interview you. Some elite sides too.' },
+            runner_up: { floor: 80, ceiling: 90, tier: 'Elite', description: 'Runner-up. You knocked on the door of history. Elite and top-tier clubs want you.' },
+            winner: { floor: 90, ceiling: 100, tier: 'Legend', description: 'World Cup Winner. Legend status. Every club on the planet would take your call.' },
+        };
+        const data = MAP[outcome];
+        return { outcome, teamName, reputationFloor: data.floor, reputationCeiling: data.ceiling, tier: data.tier, description: data.description };
+    };
+
+    const triggerWorldCupResult = (outcome: WorldCupOutcome) => {
+        if (!userTeamName) return;
+        const result = getWcResultForOutcome(outcome, userTeamName);
+        localStorage.setItem('worldCupResult', JSON.stringify(result));
+        setWcResult(result);
+
+        const repFloor = result.reputationFloor;
+        const repCeiling = result.reputationCeiling;
+        const newRep = outcome === 'winner' ? 95 : Math.floor((repFloor + repCeiling) / 2);
+        setManagerReputation(newRep);
+
+        if (outcome === 'winner') {
+            setNews(prev => [{
+                id: Date.now(),
+                week: currentWeek,
+                title: '🏆 WORLD CUP WINNERS — LEGEND STATUS ACHIEVED',
+                body: `${userTeamName} are WORLD CHAMPIONS! The manager has achieved Legend status and can now take charge of any club on the planet.`,
+                type: 'tournament-result'
+            }, ...prev]);
+        }
+
+        setAppScreen(AppScreen.WORLD_CUP_RESULT);
+    };
+
     const initializeWorldCup = (selectedNationalTeamName: string) => {
         setGameMode('WorldCup');
         setIsPrologue(true);
@@ -369,7 +412,14 @@ export default function App() {
 
     const initializeGame = useCallback((selectedTeamName: string) => {
         setGameMode('Club'); setIsPrologue(false);
-        setManagerReputation(70); 
+        const wcFloor = (() => {
+            try {
+                const saved = localStorage.getItem('worldCupResult');
+                if (saved) { const r: WorldCupResult = JSON.parse(saved); return r.reputationFloor; }
+            } catch {}
+            return 0;
+        })();
+        setManagerReputation(Math.max(70, wcFloor)); 
         let finalTeamsState = { ...allTeams };
         const domesticFixtures = generateFixtures(Object.values(allTeams));
         const { participants, newTeams } = getChampionsLeagueParticipants(allTeams);
@@ -422,23 +472,38 @@ export default function App() {
         startTutorial();
     }, []);
 
+    const getWorldCupRepFloor = (): number => {
+        try {
+            const saved = localStorage.getItem('worldCupResult');
+            if (saved) {
+                const result: WorldCupResult = JSON.parse(saved);
+                return result.reputationFloor;
+            }
+        } catch {}
+        return 0;
+    };
+
     const handleCreateManager = (name: string, exp: ExperienceLevel) => {
         let initialRep = 15;
         if (exp.id === 'semi-pro') initialRep = 40; if (exp.id === 'pro') initialRep = 60;
         if (exp.id === 'international') initialRep = 80; if (exp.id === 'legend') initialRep = 95;
+        const wcFloor = getWorldCupRepFloor();
+        if (wcFloor > initialRep) initialRep = wcFloor;
         setManagerReputation(initialRep); generateJobs(initialRep);
     };
 
     const generateJobs = (currentRep: number | ExperienceLevel) => {
         const rep = typeof currentRep === 'number' ? currentRep : managerReputation;
+        const wcFloor = getWorldCupRepFloor();
+        const effectiveRep = Math.max(rep, wcFloor);
         const allTeamList: Team[] = Object.values(allTeams);
         const shuffle = (array: Team[]) => array.sort(() => 0.5 - Math.random());
         let vacancies: Team[] = [];
-        const feasible = allTeamList.filter(t => t.prestige <= rep && t.prestige >= rep - 20);
-        const reach = allTeamList.filter(t => t.prestige > rep && t.prestige <= rep + 10);
-        const safety = allTeamList.filter(t => t.prestige < rep - 20);
+        const feasible = allTeamList.filter(t => t.prestige >= effectiveRep - 20 && t.prestige <= effectiveRep + 10);
+        const reach = allTeamList.filter(t => t.prestige > effectiveRep + 10 && t.prestige <= effectiveRep + 20);
+        const safety = allTeamList.filter(t => t.prestige < effectiveRep - 20);
         vacancies = [...shuffle(feasible).slice(0, 4), ...shuffle(reach).slice(0, 2), ...shuffle(safety).slice(0, 1)];
-        if (vacancies.length === 0) vacancies = shuffle(allTeamList.filter(t => t.prestige < 60)).slice(0, 3);
+        if (vacancies.length === 0) vacancies = shuffle(allTeamList.filter(t => t.prestige >= effectiveRep - 30)).slice(0, 3);
         const jobs: Job[] = vacancies.map(t => ({ teamName: t.name, prestige: t.prestige, chairmanPersonality: t.chairmanPersonality }));
         setAvailableJobs(jobs); setAppScreen(AppScreen.JOB_CENTRE);
     }
@@ -609,14 +674,187 @@ export default function App() {
     const proceedToNextWeek = async () => {
         const nextW = currentWeek + 1;
         const results: Fixture[] = [];
-        fixtures.filter(f => f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName).forEach(f => {
-            const res = simulateQuickMatch(teams[f.homeTeam], teams[f.awayTeam]);
-            results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
+        fixtures.filter(f => f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName && !f.isKnockout).forEach(f => {
+            const homeTeam = teams[f.homeTeam];
+            const awayTeam = teams[f.awayTeam];
+            if (homeTeam && awayTeam) {
+                const res = simulateQuickMatch(homeTeam, awayTeam);
+                results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
+            }
         });
+
+        const applyResultsToTable = (table: LeagueTableEntry[], simulatedFixtures: Fixture[]): LeagueTableEntry[] => {
+            const updated = table.map(entry => ({ ...entry }));
+            const updateEntry = (name: string, gf: number, ga: number) => {
+                const idx = updated.findIndex(t => t.teamName === name);
+                if (idx !== -1) {
+                    const t = updated[idx];
+                    t.played++; t.goalsFor += gf; t.goalsAgainst += ga;
+                    t.goalDifference = t.goalsFor - t.goalsAgainst;
+                    if (gf > ga) { t.won++; t.points += 3; }
+                    else if (gf === ga) { t.drawn++; t.points += 1; }
+                    else { t.lost++; }
+                }
+            };
+            simulatedFixtures.forEach(f => {
+                if (f.score) {
+                    const [hg, ag] = f.score.split('-').map(Number);
+                    if (!isNaN(hg) && !isNaN(ag)) {
+                        updateEntry(f.homeTeam, hg, ag);
+                        updateEntry(f.awayTeam, ag, hg);
+                    }
+                }
+            });
+            return updated;
+        };
+
         if (gameMode === 'Club' && INTERNATIONAL_BREAK_WEEKS.includes(nextW)) {
             const summary = await getInternationalBreakSummary(nextW);
             setNews(prev => [{ id: Date.now(), week: nextW, title: summary.newsTitle, body: summary.newsBody, type: 'call-up' }, ...prev]);
         }
+
+        if (gameMode === 'WorldCup') {
+            const updatedTable = applyResultsToTable(leagueTable, results);
+
+            if (currentWeek < 3) {
+                setLeagueTable(updatedTable);
+            }
+
+            if (currentWeek === 3) {
+                setLeagueTable(updatedTable);
+
+                const { qualifiers } = calculateWorldCupQualifiers(updatedTable);
+                const userQualified = userTeamName ? qualifiers.includes(userTeamName) : false;
+
+                if (!userQualified && userTeamName) {
+                    setWeeklyResults(results);
+                    setCurrentWeek(nextW);
+                    setMatchState(null);
+                    setGameState(GameState.PRE_MATCH);
+                    setIsLoading(false);
+                    triggerWorldCupResult('group_stage');
+                    return;
+                }
+
+                const r32Fixtures = generateKnockoutFixtures(qualifiers, 'Round of 32', 4);
+                setFixtures(prev => [...prev, ...r32Fixtures]);
+                setWcKnockoutResults([]);
+                setNews(prev => [{ id: Date.now(), week: nextW, title: 'Round of 32 Draw', body: `${qualifiers.length} teams advance from the group stage. The knockout rounds begin!`, type: 'tournament-result' }, ...prev]);
+
+                setWeeklyResults(results);
+                setCurrentWeek(nextW);
+                setCurrentFixture(r32Fixtures.find(f => f.homeTeam === userTeamName || f.awayTeam === userTeamName));
+                setMatchState(null);
+                setGameState(GameState.PRE_MATCH);
+                setIsLoading(false);
+                return;
+            }
+
+            const knockoutStageMap: Record<number, { currentStage: import('./types').TournamentStage; nextStage: import('./types').TournamentStage; outcome: WorldCupOutcome }> = {
+                4: { currentStage: 'Round of 32', nextStage: 'Round of 16', outcome: 'group_stage' },
+                5: { currentStage: 'Round of 16', nextStage: 'Quarter Final', outcome: 'round_of_16' },
+                6: { currentStage: 'Quarter Final', nextStage: 'Semi Final', outcome: 'quarter_final' },
+                7: { currentStage: 'Semi Final', nextStage: 'Final', outcome: 'semi_final' },
+            };
+
+            const stageInfo = knockoutStageMap[currentWeek];
+            if (stageInfo) {
+                const thisRoundFixtures = fixtures.filter(f => f.week === currentWeek && f.isKnockout && f.stage === stageInfo.currentStage);
+                const winners: string[] = [];
+                const playedThisRound: Fixture[] = [...results];
+
+                thisRoundFixtures.forEach(f => {
+                    if (f.homeTeam === userTeamName || f.awayTeam === userTeamName) {
+                        if (matchState) {
+                            const isHome = f.homeTeam === userTeamName;
+                            const userGoals = isHome ? matchState.homeScore : matchState.awayScore;
+                            const oppGoals = isHome ? matchState.awayScore : matchState.homeScore;
+                            let wcWinner: string;
+                            if (userGoals > oppGoals) {
+                                wcWinner = userTeamName!;
+                            } else if (userGoals === oppGoals) {
+                                wcWinner = Math.random() > 0.5 ? userTeamName! : (isHome ? f.awayTeam : f.homeTeam);
+                            } else {
+                                wcWinner = isHome ? f.awayTeam : f.homeTeam;
+                            }
+                            winners.push(wcWinner);
+                            playedThisRound.push({ ...f, played: true, score: `${matchState.homeScore}-${matchState.awayScore}` });
+                        }
+                    } else {
+                        const homeT = teams[f.homeTeam];
+                        const awayT = teams[f.awayTeam];
+                        if (homeT && awayT) {
+                            let res = simulateQuickMatch(homeT, awayT);
+                            while (res.homeGoals === res.awayGoals) {
+                                res = simulateQuickMatch(homeT, awayT);
+                            }
+                            const winner = res.homeGoals > res.awayGoals ? f.homeTeam : f.awayTeam;
+                            winners.push(winner);
+                            playedThisRound.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
+                        }
+                    }
+                });
+
+                setWcKnockoutResults(prev => [...prev, ...playedThisRound]);
+
+                const userEliminated = userTeamName && !winners.includes(userTeamName);
+                if (userEliminated) {
+                    setWeeklyResults(playedThisRound);
+                    setCurrentWeek(nextW);
+                    setMatchState(null);
+                    setGameState(GameState.PRE_MATCH);
+                    setIsLoading(false);
+                    triggerWorldCupResult(stageInfo.outcome);
+                    return;
+                }
+
+                if (stageInfo.currentStage === 'Semi Final') {
+                    const finalFixtures = generateKnockoutFixtures(winners, 'Final', nextW);
+                    setFixtures(prev => [...prev, ...finalFixtures]);
+                    setWeeklyResults(playedThisRound);
+                    setCurrentWeek(nextW);
+                    setCurrentFixture(finalFixtures.find(f => f.homeTeam === userTeamName || f.awayTeam === userTeamName));
+                    setMatchState(null);
+                    setGameState(GameState.PRE_MATCH);
+                    setIsLoading(false);
+                    return;
+                }
+
+                const nextFixtures = generateKnockoutFixtures(winners, stageInfo.nextStage, nextW);
+                setFixtures(prev => [...prev, ...nextFixtures]);
+                setWeeklyResults(playedThisRound);
+                setCurrentWeek(nextW);
+                setCurrentFixture(nextFixtures.find(f => f.homeTeam === userTeamName || f.awayTeam === userTeamName));
+                setMatchState(null);
+                setGameState(GameState.PRE_MATCH);
+                setIsLoading(false);
+                return;
+            }
+
+            if (currentWeek === 8) {
+                const finalFixtures = fixtures.filter(f => f.week === 8 && f.stage === 'Final');
+                if (finalFixtures.length > 0 && matchState && userTeamName) {
+                    const f = finalFixtures[0];
+                    if (f.homeTeam === userTeamName || f.awayTeam === userTeamName) {
+                        const isHome = f.homeTeam === userTeamName;
+                        const userGoals = isHome ? matchState.homeScore : matchState.awayScore;
+                        const oppGoals = isHome ? matchState.awayScore : matchState.homeScore;
+                        let userWon = userGoals > oppGoals;
+                        if (userGoals === oppGoals) userWon = Math.random() > 0.5;
+                        const finalResult = { ...f, played: true, score: `${matchState.homeScore}-${matchState.awayScore}` };
+                        setWcKnockoutResults(prev => [...prev, finalResult]);
+                        setWeeklyResults([...results, finalResult]);
+                        setCurrentWeek(nextW);
+                        setMatchState(null);
+                        setGameState(GameState.PRE_MATCH);
+                        setIsLoading(false);
+                        triggerWorldCupResult(userWon ? 'winner' : 'runner_up');
+                        return;
+                    }
+                }
+            }
+        }
+
         setWeeklyResults(results); setCurrentWeek(nextW);
         setCurrentFixture(fixtures.find(f => (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && f.week === nextW));
         setMatchState(null); setGameState(GameState.PRE_MATCH); setIsLoading(false);
@@ -821,7 +1059,7 @@ export default function App() {
                                 teams={teams} 
                             />
                         </div>
-                        <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} /></div>
+                        <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} knockoutResults={gameMode === 'WorldCup' ? [...wcKnockoutResults, ...fixtures.filter(f => f.isKnockout && !wcKnockoutResults.find(r => r.id === f.id))] : []} /></div>
                         </main>
                     </div>
                 );
@@ -846,6 +1084,17 @@ export default function App() {
                 onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)}
             />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} />;
+            case AppScreen.WORLD_CUP_RESULT: return wcResult ? (
+                <WorldCupResultScreen
+                    result={wcResult}
+                    onContinue={() => {
+                        setAppScreen(AppScreen.START_SCREEN);
+                        setUserTeamName(null);
+                        setTeams(allTeams);
+                        setGameMode('Club');
+                    }}
+                />
+            ) : null;
             default: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
         }
     };

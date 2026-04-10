@@ -179,6 +179,74 @@ export const NATIONAL_TEAMS: NationalTeam[] = [
     { name: 'Colombia', countryCode: 'COL', prestige: 82, tactic: { formation: '4-3-3', mentality: 'Attacking' }, players: generateGenericSquad('🇨🇴', 81, 'ES') },
 ];
 
+export interface GroupStanding {
+    teamName: string;
+    group: string;
+    points: number;
+    goalDifference: number;
+    goalsFor: number;
+}
+
+export const calculateWorldCupQualifiers = (leagueTable: import('./types').LeagueTableEntry[]): { qualifiers: string[], thirdPlaceTeams: string[] } => {
+    const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+    const qualifiers: string[] = [];
+    const thirdPlacers: GroupStanding[] = [];
+
+    groupLetters.forEach(g => {
+        const groupTeams = leagueTable
+            .filter(t => t.group === g)
+            .sort((a, b) => {
+                if (b.points !== a.points) return b.points - a.points;
+                if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+                return b.goalsFor - a.goalsFor;
+            });
+
+        if (groupTeams.length >= 2) {
+            qualifiers.push(groupTeams[0].teamName);
+            qualifiers.push(groupTeams[1].teamName);
+        }
+        if (groupTeams.length >= 3) {
+            thirdPlacers.push({
+                teamName: groupTeams[2].teamName,
+                group: g,
+                points: groupTeams[2].points,
+                goalDifference: groupTeams[2].goalDifference,
+                goalsFor: groupTeams[2].goalsFor,
+            });
+        }
+    });
+
+    thirdPlacers.sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+        return b.goalsFor - a.goalsFor;
+    });
+
+    const best8ThirdPlacers = thirdPlacers.slice(0, 8).map(t => t.teamName);
+
+    return { qualifiers: [...qualifiers, ...best8ThirdPlacers], thirdPlaceTeams: best8ThirdPlacers };
+};
+
+export const generateKnockoutFixtures = (teams: string[], stage: import('./types').TournamentStage, startWeek: number): import('./types').Fixture[] => {
+    const fixtures: import('./types').Fixture[] = [];
+    const shuffled = [...teams].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < shuffled.length; i += 2) {
+        if (shuffled[i + 1]) {
+            fixtures.push({
+                id: `wc-${stage}-${shuffled[i]}-${shuffled[i + 1]}-${startWeek}`,
+                week: startWeek,
+                league: 'International',
+                homeTeam: shuffled[i],
+                awayTeam: shuffled[i + 1],
+                played: false,
+                stage,
+                isKnockout: true,
+            });
+        }
+    }
+    return fixtures;
+};
+
 export const generateWorldCupStructure = (): Record<string, Team> => {
     const teams: Record<string, Team> = {};
     const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];

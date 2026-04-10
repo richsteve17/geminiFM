@@ -13,6 +13,18 @@ export enum AppScreen {
     PLAYER_TALK,
     PLAYER_NEGOTIATION,
     NEWS_FEED,
+    WORLD_CUP_RESULT,
+}
+
+export type WorldCupOutcome = 'none' | 'group_stage' | 'round_of_16' | 'quarter_final' | 'semi_final' | 'runner_up' | 'winner';
+
+export interface WorldCupResult {
+    outcome: WorldCupOutcome;
+    teamName: string;
+    reputationFloor: number;
+    reputationCeiling: number;
+    tier: string;
+    description: string;
 }
 
 export type GameMode = 'Club' | 'WorldCup' | 'ChampionsLeague';

@@ -46,6 +46,14 @@ npm run build
 
 Output goes to `dist/`.
 
+## Key Features
+
+- **World Cup Mode:** 48-team tournament with 12 groups (Group Stage → Round of 32 → R16 → QF → SF → Final)
+- **Reputation Gate System:** World Cup performance determines starting reputation and club tier availability in Club Career/Road to Glory modes
+- **Knockout Bracket View:** Visible in the League Table panel during World Cup knockout rounds
+- **World Cup Result Screen:** Summary screen after elimination/win showing reputation tier earned and available clubs
+- The `worldCupResult` is persisted to `localStorage` and read when starting Club Career or Road to Glory
+
 ## Deployment
 
 Deployed as a static site. Build command: `npm run build`. Public directory: `dist`.
