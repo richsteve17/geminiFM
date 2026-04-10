@@ -106,50 +106,169 @@ export const simulateMatchSegment = async (
 
 // --- MEDIA FEATURES ---
 
-export const scoutPlayers = async (request: string, useRealWorld: boolean = false): Promise<Player[]> => {
-    let prompt = "";
-    let config: any = { responseMimeType: "application/json" };
-    let selectedModel = MODEL_TEXT;
+export type ScoutArchetype = 'Pessimist' | 'Romantic' | 'Mercenary' | 'Pragmatist';
 
-    if (useRealWorld) {
-        selectedModel = MODEL_SEARCH;
-        prompt = `
-        You are a football scout using Google Search to find REAL players.
-        User Request: "${request}"
-        
-        Using Google Search, identify 3 REAL WORLD football players that fit this description.
-        If the request is vague (e.g. "young striker"), find current trending wonderkids.
-        
-        Return valid JSON in this exact format (do not wrap in markdown):
-        { "players": [{ "name": "string", "position": "LB"|"CB"|"ST" etc, "rating": number (estimate 60-95 based on real ability), "age": number, "nationality": "Emoji", "scoutingReport": "string (mention real stats/facts)", "wage": number, "marketValue": number, "currentClub": "string" }] }
-        `;
-        config.tools = [{googleSearch: {}}];
-    } else {
-        prompt = `Scout report for: "${request}". Generate 3 fictional players who fit this description. 
-        JSON format: { "players": [{ "name": "string", "position": "LB"|"CB"|"ST"|..., "rating": number, "age": number, "nationality": "Emoji", "scoutingReport": "string", "wage": number, "marketValue": number, "currentClub": "string" }] }
-        Invent a realistic 'currentClub' for each player.`;
+export interface ScoutedPlayer {
+    player: Player;
+    reportParagraph: string;
+    personalityFlag: string;
+    agentNote: string;
+    confidenceLevel: 'High Confidence' | 'Heard Good Things' | 'Unconfirmed Tip';
+}
+
+export interface ScoutReport {
+    scoutNarrative: string;
+    players: ScoutedPlayer[];
+}
+
+const SCOUT_ARCHETYPE_PROMPTS: Record<ScoutArchetype, string> = {
+    Pessimist: `You are a deeply cynical scout who has seen too many promising careers end in mediocrity. You undersell everyone. You always find a flaw, a doubt, a warning sign. Even genuine talent gets a caveat — the injury record, the bad attitude, the agent demanding absurd wages. Your prose is dry, skeptical, and laced with quiet despair.`,
+    Romantic: `You are an idealist scout who falls in love with flair. You oversell technique and creativity, get carried away about potential, compare players to legends at the slightest excuse. You are enthusiastic, almost poetic, and occasionally lose sight of defensive liability. Your prose is warm, effusive, and slightly breathless.`,
+    Mercenary: `You are a transactional scout who only cares about value. Everything is about contracts, sell-on clauses, agent fees, and market windows. You know every agent's reputation. You assess players primarily as financial assets. Your prose is cold, efficient, and commercially sharp.`,
+    Pragmatist: `You are a grounded, experienced scout who gives balanced, honest assessments. You note strengths and weaknesses equally, flag uncertainty without drama, and always tie your report back to what the manager actually needs. Your prose is measured, direct, and trustworthy.`,
+};
+
+const buildScoutPrompt = (request: string, archetype: ScoutArchetype, useRealWorld: boolean, isFictional: boolean): string => {
+    const archetypeInstructions = SCOUT_ARCHETYPE_PROMPTS[archetype];
+    const mode = useRealWorld
+        ? `Using Google Search, identify 3 REAL CURRENT football players that match this description. Ground your report in actual facts — real club, real age, real nationality, real recent form. Do not invent players.`
+        : isFictional
+        ? `Generate 3 entirely fictional players with invented names, clubs, and backgrounds. These are players from a long-term football simulation — they should feel real but must not be real people.`
+        : `Generate 3 fictional players who fit this description. Invent realistic names, clubs (from real football leagues), and backgrounds.`;
+
+    return `${archetypeInstructions}
+
+Scout Assignment: "${request}"
+
+${mode}
+
+For each player, write a genuine scouting assessment in your voice as this scout archetype. The report must include:
+- A prose paragraph (3-5 sentences) assessing this player — written in your archetype's voice
+- A personality/attitude flag (one sentence about their character, mentality, or dressing room reputation)
+- An agent/availability note (one sentence about their contract situation, agent reputation, or how hard they'd be to sign)
+- A confidence level: "High Confidence" (you've watched them multiple times), "Heard Good Things" (reliable second-hand info), or "Unconfirmed Tip" (whispers only)
+
+Also write a brief opening narrative paragraph (1-2 sentences) from you as the scout, addressing the manager directly — your gut reaction to this assignment.
+
+Respond ONLY with valid JSON in this exact structure (no markdown):
+{
+  "scoutNarrative": "string",
+  "players": [
+    {
+      "name": "string",
+      "position": "GK"|"LB"|"CB"|"RB"|"LWB"|"RWB"|"DM"|"CM"|"AM"|"LM"|"RM"|"LW"|"RW"|"ST"|"CF",
+      "rating": number (60-95),
+      "age": number,
+      "nationality": "emoji flag",
+      "currentClub": "string",
+      "wage": number (weekly in USD, realistic for their level),
+      "marketValue": number (in USD),
+      "reportParagraph": "string",
+      "personalityFlag": "string",
+      "agentNote": "string",
+      "confidenceLevel": "High Confidence"|"Heard Good Things"|"Unconfirmed Tip"
     }
+  ]
+}`;
+};
+
+export const scoutPlayers = async (
+    request: string, 
+    useRealWorld: boolean = false, 
+    archetype?: ScoutArchetype,
+    isFictional?: boolean
+): Promise<ScoutReport> => {
+    const selectedArchetype = archetype || (['Pessimist', 'Romantic', 'Mercenary', 'Pragmatist'] as ScoutArchetype[])[Math.floor(Math.random() * 4)];
+    const selectedModel = useRealWorld ? MODEL_SEARCH : MODEL_TEXT;
+    const prompt = buildScoutPrompt(request, selectedArchetype, useRealWorld, isFictional || false);
     
+    const config: any = { responseMimeType: "application/json" };
+    if (useRealWorld) {
+        config.tools = [{ googleSearch: {} }];
+    }
+
     try {
         const response: GenerateContentResponse = await ai.models.generateContent({
-            model: selectedModel, contents: prompt, config: config
+            model: selectedModel, contents: prompt, config
         });
         
         const jsonStr = cleanJson(response.text);
         const res = JSON.parse(jsonStr);
         
-        return (res.players || []).map((p: any) => ({ 
-            ...p, 
-            status: { type: 'Available' }, 
-            effects: [], 
-            contractExpires: 3, 
-            isStarter: false, 
-            condition: 100,
-            currentClub: p.currentClub || "Free Agent"
+        const VALID_CONFIDENCE = ['High Confidence', 'Heard Good Things', 'Unconfirmed Tip'];
+        const players: ScoutedPlayer[] = (res.players || []).map((p: any) => ({
+            player: {
+                name: p.name || 'Unknown Player',
+                position: p.position || 'CM',
+                rating: typeof p.rating === 'number' ? Math.min(99, Math.max(40, p.rating)) : 70,
+                age: typeof p.age === 'number' ? p.age : 24,
+                nationality: p.nationality || '🌍',
+                personality: 'Professional' as const,
+                wage: typeof p.wage === 'number' ? p.wage : 5000,
+                marketValue: typeof p.marketValue === 'number' ? p.marketValue : 500000,
+                currentClub: p.currentClub || 'Free Agent',
+                scoutingReport: p.reportParagraph || '',
+                status: { type: 'Available' as const },
+                effects: [],
+                contractExpires: 3,
+                isStarter: false,
+                condition: 100,
+            },
+            reportParagraph: p.reportParagraph || 'No report available.',
+            personalityFlag: p.personalityFlag || 'Character unknown.',
+            agentNote: p.agentNote || 'Availability unconfirmed.',
+            confidenceLevel: VALID_CONFIDENCE.includes(p.confidenceLevel) ? p.confidenceLevel : 'Heard Good Things',
         }));
+
+        return {
+            scoutNarrative: res.scoutNarrative || '',
+            players,
+        };
     } catch (e) { 
         console.error("Scouting Error", e);
-        return []; 
+        return { scoutNarrative: '', players: [] };
+    }
+};
+
+export const scoutFollowUp = async (
+    originalRequest: string,
+    previousResponse: string,
+    followUpQuestion: string,
+    archetype: ScoutArchetype,
+    useRealWorld: boolean
+): Promise<string> => {
+    const archetypeInstructions = SCOUT_ARCHETYPE_PROMPTS[archetype];
+    const searchNote = useRealWorld
+        ? "You have access to real-world football information via Google Search. Ground any additional details in real facts."
+        : "You are working from your own scouting notes on fictional players.";
+
+    const prompt = `${archetypeInstructions}
+
+${searchNote}
+
+You previously received this scouting assignment from the manager: "${originalRequest}"
+
+Your previous scouting report was:
+${previousResponse}
+
+The manager is now asking a follow-up question: "${followUpQuestion}"
+
+Respond in character as this scout. Either provide more specific detail about the players you mentioned, or honestly admit the limits of your knowledge. Stay in your archetype's voice. Keep the response to 2-4 sentences — conversational, not another full report. Do not use JSON. Just reply as the scout.`;
+
+    const selectedModel = useRealWorld ? MODEL_SEARCH : MODEL_TEXT;
+    const config: any = {};
+    if (useRealWorld) {
+        config.tools = [{ googleSearch: {} }];
+    }
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: selectedModel, contents: prompt, config
+        });
+        return response.text || "I don't have more information on that right now.";
+    } catch (e) {
+        console.error("Scout follow-up error", e);
+        return "I don't have more information on that right now.";
     }
 };
 

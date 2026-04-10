@@ -8,7 +8,8 @@ import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
 import AtmosphereWidget from './components/AtmosphereWidget';
-import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
+import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, scoutFollowUp, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
+import type { ScoutArchetype, ScoutReport } from './services/geminiService';
 import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS } from './utils';
 import StartScreen from './components/StartScreen';
@@ -83,7 +84,6 @@ export default function App() {
     const [transferMarket, setTransferMarket] = useState<Player[]>(TRANSFER_TARGETS);
 
     const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
-    const [scoutResults, setScoutResults] = useState<Player[]>([]);
     const [pressQuestions, setPressQuestions] = useState<string[]>([]);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     const [managerReputation, setManagerReputation] = useState<number>(0);
@@ -651,7 +651,26 @@ export default function App() {
                         </main>
                     </div>
                 );
-            case AppScreen.SCOUTING: return <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async (r, useReal) => { setIsLoading(true); const res = await scoutPlayers(r, useReal); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)} />;
+            case AppScreen.SCOUTING: return <ScoutingScreen
+                isNationalTeam={gameMode === 'WorldCup'}
+                isFictionalMode={false}
+                onScout={async (r: string, useReal: boolean, archetype?: ScoutArchetype, isFictional?: boolean): Promise<ScoutReport> => {
+                    setIsLoading(true);
+                    try {
+                        const res = await scoutPlayers(r, useReal, archetype, isFictional);
+                        return res;
+                    } finally {
+                        setIsLoading(false);
+                    }
+                }}
+                onFollowUp={async (originalRequest: string, previousResponse: string, followUp: string, archetype: ScoutArchetype, useRealWorld: boolean): Promise<string> => {
+                    return await scoutFollowUp(originalRequest, previousResponse, followUp, archetype, useRealWorld);
+                }}
+                isLoading={isLoading}
+                onApproachPlayer={(p: Player) => handleStartPlayerTalk(p, 'transfer')}
+                onBack={() => setAppScreen(AppScreen.GAMEPLAY)}
+                onGoToTransfers={() => setAppScreen(AppScreen.TRANSFERS)}
+            />;
             case AppScreen.NEWS_FEED: return <NewsScreen news={news} onBack={()=>setAppScreen(AppScreen.GAMEPLAY)} />;
             default: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
         }
