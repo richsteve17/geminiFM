@@ -136,6 +136,16 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({
     return (
         <div className="max-w-3xl mx-auto px-4 pt-4 pb-4 flex flex-col" style={{ height: 'calc(100vh - 120px)' }}>
 
+            {/* Back button row */}
+            <div className="flex items-center mb-2">
+                <button
+                    onClick={onFinish}
+                    className="text-xs font-bold text-gray-500 hover:text-gray-300 flex items-center gap-1 transition-colors"
+                >
+                    ← Leave Room
+                </button>
+            </div>
+
             {/* Header dossier bar */}
             <div className="flex items-center gap-3 bg-gray-800/70 border border-gray-600 rounded-xl px-4 py-3 mb-3 flex-shrink-0">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-gray-500 flex items-center justify-center font-black text-white text-base flex-shrink-0">

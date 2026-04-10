@@ -1,10 +1,10 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { FootballIcon } from './icons/FootballIcon';
 import { ArrowLeftStartOnRectangleIcon } from './icons/ArrowLeftStartOnRectangleIcon';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
-import { StarIcon } from './icons/StarIcon'; 
+import { StarIcon } from './icons/StarIcon';
 
 const StarIconSVG = (props: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -21,6 +21,14 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onQuit, onSave, onToggleGuide, showQuit, managerReputation }) => {
+    const [savedToast, setSavedToast] = useState(false);
+
+    const handleSave = () => {
+        onSave?.();
+        setSavedToast(true);
+        setTimeout(() => setSavedToast(false), 2500);
+    };
+
     return (
         <header 
             className="flex items-center justify-between p-4 bg-gray-800/90 backdrop-blur rounded-lg shadow-lg border border-gray-700 sticky top-0 z-40 transition-colors duration-500"
@@ -61,12 +69,12 @@ const Header: React.FC<HeaderProps> = ({ onQuit, onSave, onToggleGuide, showQuit
                         </button>
 
                         <button 
-                            onClick={onSave}
-                            className="flex items-center gap-2 text-xs font-bold text-blue-300 hover:text-blue-100 bg-blue-900/30 px-3 py-2 rounded border border-blue-800 hover:border-blue-600 transition-colors"
+                            onClick={handleSave}
+                            className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded border transition-colors ${savedToast ? 'text-green-300 bg-green-900/40 border-green-700' : 'text-blue-300 hover:text-blue-100 bg-blue-900/30 border-blue-800 hover:border-blue-600'}`}
                             title="Save Game"
                         >
                             <ArrowDownTrayIcon className="w-4 h-4" />
-                            <span className="hidden md:inline">SAVE</span>
+                            <span className="hidden md:inline">{savedToast ? 'SAVED ✓' : 'SAVE'}</span>
                         </button>
 
                         <button 

@@ -10,6 +10,7 @@ interface PressConferenceScreenProps {
     isDone: boolean;
     onSendMessage: (message: string) => void;
     onFinish: () => void;
+    onSkip: () => void;
 }
 
 const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({
@@ -17,7 +18,8 @@ const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({
     isLoading,
     isDone,
     onSendMessage,
-    onFinish
+    onFinish,
+    onSkip
 }) => {
     const [input, setInput] = useState('');
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -45,17 +47,26 @@ const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({
 
     return (
         <div className="mt-8 max-w-2xl mx-auto flex flex-col" style={{ minHeight: '70vh' }}>
-            <div className="text-center mb-6">
-                <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
-                    <NewspaperIcon className="w-7 h-7 text-gray-200" />
+            <div className="flex items-start justify-between mb-6">
+                <div className="text-center flex-1">
+                    <div className="inline-block p-3 bg-gray-800 rounded-full mb-3">
+                        <NewspaperIcon className="w-7 h-7 text-gray-200" />
+                    </div>
+                    <h2 className="text-3xl font-bold text-white mb-1">Post-Match Press Conference</h2>
+                    <p className="text-gray-400 text-sm">
+                        <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                            Live
+                        </span>
+                    </p>
                 </div>
-                <h2 className="text-3xl font-bold text-white mb-1">Post-Match Press Conference</h2>
-                <p className="text-gray-400 text-sm">
-                    <span className="inline-flex items-center gap-1">
-                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                        Live
-                    </span>
-                </p>
+                <button
+                    onClick={onSkip}
+                    className="flex-shrink-0 mt-1 text-xs font-bold text-gray-500 hover:text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-500 px-3 py-2 rounded transition-colors"
+                    title="Leave press conference and continue to next week"
+                >
+                    Leave ✕
+                </button>
             </div>
 
             <div className="flex-grow bg-gray-800/50 border border-gray-700 rounded-xl p-4 overflow-y-auto space-y-4 mb-4" style={{ maxHeight: '55vh' }}>

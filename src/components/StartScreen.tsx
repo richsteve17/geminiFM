@@ -11,9 +11,11 @@ interface StartScreenProps {
     onStartUnemployed: () => void;
     onStartWorldCup: () => void;
     onThemeSelect?: (colors: { primary: string, secondary: string, text: string }) => void;
+    onContinue?: () => void;
+    hasSave?: boolean;
 }
 
-const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect }) => {
+const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect, onContinue, hasSave }) => {
     const [showDevlog, setShowDevlog] = useState(false);
     const [worldCupResult, setWorldCupResult] = useState<WorldCupResult | null>(null);
 
@@ -129,6 +131,18 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                             Your World Cup run has unlocked <span className="font-bold text-yellow-400">{worldCupResult.tier}</span> clubs for your Career start. (Rep floor: {worldCupResult.reputationFloor})
                         </p>
                     </div>
+                </div>
+            )}
+
+            {hasSave && onContinue && (
+                <div className="z-10 w-full max-w-5xl mb-4 px-4 animate-in fade-in slide-in-from-bottom-4">
+                    <button
+                        onClick={onContinue}
+                        className="w-full flex items-center justify-center gap-3 bg-blue-900/50 border border-blue-600 hover:bg-blue-800/70 hover:border-blue-400 rounded-xl p-4 text-center transition-all hover:-translate-y-0.5 shadow-lg shadow-blue-900/20"
+                    >
+                        <span className="text-2xl">▶</span>
+                        <span className="text-blue-200 font-black text-lg tracking-wide uppercase">Continue Saved Career</span>
+                    </button>
                 </div>
             )}
 

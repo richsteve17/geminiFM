@@ -300,7 +300,6 @@ export default function App() {
                 managerReputation, transferMarket
             };
             localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
-            alert("Game Saved Successfully!");
         }
     };
 
@@ -1406,26 +1405,21 @@ export default function App() {
     const renderScreen = () => {
         switch (appScreen) {
             case AppScreen.START_SCREEN: return (
-                <div>
-                    <StartScreen 
-                        onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} 
-                        onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} 
-                        onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} 
-                        onThemeSelect={(colors) => setActiveTheme(colors)}
-                    />
-                    {localStorage.getItem('gfm_save_v1') && (
-                        <div className="text-center pb-8 -mt-8">
-                            <button onClick={handleContinue} className="text-sm font-bold text-blue-400 hover:text-blue-300 underline">Continue Saved Career</button>
-                        </div>
-                    )}
-                </div>
+                <StartScreen 
+                    onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} 
+                    onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} 
+                    onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} 
+                    onThemeSelect={(colors) => setActiveTheme(colors)}
+                    onContinue={handleContinue}
+                    hasSave={!!localStorage.getItem('gfm_save_v1')}
+                />
             );
             case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={clubTeams} onTeamSelect={initializeGame} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={worldCupTeams} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.CREATE_MANAGER: return <CreateManagerScreen onCreate={handleCreateManager} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_CENTRE: return <JobCentreScreen jobs={availableJobs} onApply={handleApplyForJob} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen teamName={interviewTeamName} chairmanPersonality={interviewPersonality} isLoading={isLoading} error={error} jobOffer={jobOffer} chatHistory={interviewChatHistory} onSendMessage={handleJobInterviewAnswer} onFinish={(acc) => { if (acc && interviewTeamName) initializeGame(interviewTeamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
-            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen chatHistory={pressChatHistory} isLoading={isLoading} isDone={pressConferenceDone} onSendMessage={handlePressSendMessage} onFinish={handlePressConferenceFinish} />;
+            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen chatHistory={pressChatHistory} isLoading={isLoading} isDone={pressConferenceDone} onSendMessage={handlePressSendMessage} onFinish={handlePressConferenceFinish} onSkip={handlePressConferenceFinish} />;
             case AppScreen.TRANSFERS: return <TransfersScreen targets={transferMarket} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onSendMessage={handlePlayerTalkMessage} onFinish={handlePlayerTalkFinish} />;
             case AppScreen.GAMEPLAY:
