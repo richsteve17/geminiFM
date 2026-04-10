@@ -217,7 +217,10 @@ export default function MatchView({
         setIsShouting(true);
         const userTeam = teams[userTeamName];
         const isHome = fixture?.homeTeam === userTeamName;
-        const result = await processTouchlineInteraction(customShout, userTeam, matchState, isHome);
+        const starters = userTeam?.players
+            .filter(p => p.isStarter)
+            .map(p => ({ name: p.name, position: p.position, condition: p.condition ?? 100 }));
+        const result = await processTouchlineInteraction(customShout, userTeam, matchState, isHome, starters);
         setShoutFeedback({ msg: result.commentary, effect: result.effectDescription });
         setCustomShout('');
         setIsShouting(false);

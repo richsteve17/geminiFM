@@ -193,6 +193,7 @@ export interface ShoutEffect {
     attackModifier: number; // positive = more shots/chances
     commentary: string;
     effectDescription: string;
+    targetPlayers?: string[]; // named players who drain extra stamina
 }
 
 export interface TacticalShout {

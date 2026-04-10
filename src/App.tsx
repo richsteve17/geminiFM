@@ -241,7 +241,24 @@ export default function App() {
                     }) : null);
 
                     setSimulationTargetMinute(nextTarget);
-                    
+
+                    // Drain stamina from each starter per 15-minute segment
+                    if (userTeamName) {
+                        setTeams(prev => {
+                            const t = prev[userTeamName!];
+                            if (!t) return prev;
+                            const updatedPlayers = t.players.map(p => {
+                                if (!p.isStarter) return p;
+                                const baseDrain = p.condition < 70 ? 7 : 5;
+                                const isPressingRole = ['ST', 'CF', 'LW', 'RW', 'AM', 'CM', 'LM', 'RM'].includes(p.position);
+                                const pressBonus = (activeShoutEffect && activeShoutEffect.attackModifier >= 2 && isPressingRole) ? 3 : 0;
+                                const namedBonus = (activeShoutEffect?.targetPlayers?.includes(p.name)) ? 4 : 0;
+                                return { ...p, condition: Math.max(20, p.condition - baseDrain - pressBonus - namedBonus) };
+                            });
+                            return { ...prev, [userTeamName!]: { ...t, players: updatedPlayers } };
+                        });
+                    }
+
                     if (activeShout) setActiveShout(undefined);
                     if (activeShoutEffect) setActiveShoutEffect(undefined);
                     setIsLoading(false);

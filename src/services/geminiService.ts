@@ -170,7 +170,7 @@ ACTIVE SHOUT EFFECT (apply to this segment):
 
     try {
         const response: GenerateContentResponse = await getAI().models.generateContent({
-            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+            model: MODEL_TEXT, contents: prompt
         });
         return JSON.parse(cleanJson(response.text));
     } catch (error) {
@@ -1076,7 +1076,13 @@ export const getInternationalBreakSummary = async (week: number) => {
     return JSON.parse(cleanJson(response.text));
 };
 
-export const processTouchlineInteraction = async (userShout: string, team: Team, matchState: MatchState, isHome: boolean): Promise<ShoutEffect> => {
+export const processTouchlineInteraction = async (
+    userShout: string,
+    team: Team,
+    matchState: MatchState,
+    isHome: boolean,
+    starters?: Array<{ name: string; position: string; condition: number }>
+): Promise<ShoutEffect> => {
     const shoutLower = userShout.toLowerCase();
 
     let baseEffect: Partial<ShoutEffect> = {};
@@ -1088,48 +1094,57 @@ export const processTouchlineInteraction = async (userShout: string, team: Team,
         baseEffect = { momentumDelta: 3, defensiveModifier: 2, attackModifier: 3 };
     }
 
-    const prompt = `You are a football match analyst. The manager shouted: "${userShout}". 
-Score: ${matchState.homeScore}-${matchState.awayScore}, Momentum: ${matchState.momentum}.
-Determine the tactical effect of this shout on the next 15-minute segment.
-Return ONLY JSON: { 
-  "momentumDelta": number (-3 to +3, how much this shifts momentum), 
-  "defensiveModifier": number (-3 to +3, negative = harder to concede, positive = backline exposed), 
-  "attackModifier": number (-3 to +3, positive = more shots, negative = less attacking), 
-  "commentary": "string (brief manager's response, 1 sentence)", 
-  "effectDescription": "string (tactical effect label, e.g. 'HIGH PRESS ACTIVATED', max 4 words)" 
-}
+    const lineupBlock = starters && starters.length > 0
+        ? `\nPlayers on the pitch:\n${starters.map(s => `- ${s.name} (${s.position}, ${s.condition}% stamina)`).join('\n')}\n`
+        : '';
 
-Rules:
-- "Demand More" / pressing shouts: momentumDelta +2, attackModifier +2, defensiveModifier +1
-- "Tighten Up" / defensive shouts: momentumDelta 0, defensiveModifier -3, attackModifier -1
-- "Push Forward" / all-out attack: momentumDelta +3, attackModifier +3, defensiveModifier +2 (backline exposed)
-- Calm/reassuring shouts: momentumDelta +1, defensiveModifier -1, attackModifier 0`;
+    const prompt = `You are a passionate football touchline analyst. The manager of ${team.name} just shouted: "${userShout}"
+Match: ${matchState.homeScore}-${matchState.awayScore}, Minute ${matchState.currentMinute || 0}, Momentum ${matchState.momentum}.${lineupBlock}
+Your job: Analyse the instruction and produce a vivid, specific response.
+
+CRITICAL — if the manager mentioned a player by name (e.g. "push Wertz", "get Henderson pressing"):
+- Your commentary MUST acknowledge that specific player and what they will do
+- Describe the consequence: e.g. "Wertz surges into their half, pressing their right back — but he's burning stamina fast and leaving a gap behind him."
+- If that player has low stamina (<70%), warn they may not last
+- Add their name to targetPlayers array
+
+Rules for numbers:
+- Pressing/attacking shout → momentumDelta +2, attackModifier +2, defensiveModifier +1
+- Defensive shout → momentumDelta 0, defensiveModifier -3, attackModifier -1
+- All-out attack → momentumDelta +3, attackModifier +3, defensiveModifier +2 (warns backline exposed)
+- Reassuring/calm → momentumDelta +1, defensiveModifier -1, attackModifier 0
+
+Respond with ONLY valid JSON, no other text:
+{ "momentumDelta": 0, "defensiveModifier": 0, "attackModifier": 0, "commentary": "...", "effectDescription": "...", "targetPlayers": [] }`;
 
     try {
-        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         const parsed = JSON.parse(cleanJson(response.text));
         return {
             momentumDelta: parsed.momentumDelta ?? baseEffect.momentumDelta ?? 0,
             defensiveModifier: parsed.defensiveModifier ?? baseEffect.defensiveModifier ?? 0,
             attackModifier: parsed.attackModifier ?? baseEffect.attackModifier ?? 0,
             commentary: parsed.commentary ?? "The players respond.",
-            effectDescription: parsed.effectDescription ?? "TACTICAL SHIFT"
+            effectDescription: parsed.effectDescription ?? "TACTICAL SHIFT",
+            targetPlayers: Array.isArray(parsed.targetPlayers) ? parsed.targetPlayers : []
         };
     } catch (e) {
+        console.error("Shout processing error:", e);
         return {
             momentumDelta: baseEffect.momentumDelta ?? 0,
             defensiveModifier: baseEffect.defensiveModifier ?? 0,
             attackModifier: baseEffect.attackModifier ?? 0,
-            commentary: "The players respond to the instruction.",
-            effectDescription: "TACTICAL SHIFT"
+            commentary: "The players acknowledge the instruction.",
+            effectDescription: "TACTICAL SHIFT",
+            targetPlayers: []
         };
     }
 };
 
 export const getContextAwareShouts = async (team: Team, isHome: boolean, matchState: MatchState): Promise<TacticalShout[]> => {
-    const prompt = `Halftime shouts for ${team.name}. Score: ${matchState.homeScore}-${matchState.awayScore}. JSON: { "shouts": [{ "id": "string", "label": "string", "description": "string", "effect": "string" }] }`;
+    const prompt = `Halftime shouts for ${team.name}. Score: ${matchState.homeScore}-${matchState.awayScore}. Respond with ONLY valid JSON: { "shouts": [{ "id": "string", "label": "string", "description": "string", "effect": "string" }] }`;
     try {
-        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await getAI().models.generateContent({ model: MODEL_TEXT, contents: prompt });
         return JSON.parse(cleanJson(response.text)).shouts;
     } catch (e) { return [{ id: 'demand', label: 'Demand More', description: 'Show passion!', effect: 'Work rate up' }]; }
 };
