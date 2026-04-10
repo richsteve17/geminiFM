@@ -913,6 +913,8 @@ export default function App() {
             });
         }
 
+        // Update league table for all other simulated fixtures (Club mode)
+        setLeagueTable(prev => applyResultsToTable(prev, results));
         setWeeklyResults(results); setCurrentWeek(nextW);
         setCurrentFixture(fixtures.find(f => (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && f.week === nextW));
         setMatchState(null); setGameState(GameState.PRE_MATCH); setIsLoading(false);

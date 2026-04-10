@@ -499,7 +499,7 @@ export default function MatchView({
                                         {!subPlayerOut ? (
                                             <div className="p-2">
                                                 <p className="text-xs text-gray-500 mb-1.5 px-1">Select a starter to substitute out:</p>
-                                                <div className="max-h-28 overflow-y-auto space-y-1">
+                                                <div className="max-h-48 overflow-y-auto space-y-1">
                                                     {starters.map(p => (
                                                         <button
                                                             key={p.name}
@@ -518,7 +518,7 @@ export default function MatchView({
                                         ) : (
                                             <div className="p-2">
                                                 <p className="text-xs text-gray-500 mb-1.5 px-1">Select who comes on:</p>
-                                                <div className="max-h-28 overflow-y-auto space-y-1">
+                                                <div className="max-h-48 overflow-y-auto space-y-1">
                                                     {bench.map(p => (
                                                         <button
                                                             key={p.name}

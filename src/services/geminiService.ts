@@ -105,6 +105,25 @@ export interface SegmentContext {
     bondPairs?: { playerA: string; playerB: string }[];
 }
 
+// Build minimal local events when Gemini commentary fails
+function buildLocalEvents(
+    homeScoreAdded: number, homeScorer: string | null, homeGoalMin: number | null,
+    awayScoreAdded: number, awayScorer: string | null, awayGoalMin: number | null,
+    homeName: string, awayName: string
+) {
+    const evs: any[] = [];
+    if (homeScoreAdded && homeScorer && homeGoalMin) {
+        evs.push({ minute: homeGoalMin, type: 'goal', teamName: homeName, description: `GOAL! ${homeScorer} puts ${homeName} ahead!`, player: homeScorer });
+    }
+    if (awayScoreAdded && awayScorer && awayGoalMin) {
+        evs.push({ minute: awayGoalMin, type: 'goal', teamName: awayName, description: `GOAL! ${awayScorer} scores for ${awayName}!`, player: awayScorer });
+    }
+    if (evs.length === 0) {
+        evs.push({ minute: homeGoalMin ?? 50, type: 'commentary', teamName: homeName, description: 'Both sides probe but cannot find a way through.', player: '' });
+    }
+    return evs;
+}
+
 export const simulateMatchSegment = async (
     homeTeam: Team, 
     awayTeam: Team, 
@@ -112,95 +131,117 @@ export const simulateMatchSegment = async (
     targetMinute: number, 
     context: SegmentContext
 ) => {
-    const userInstruction = context.shout ? `Manager's touchline instruction: "${context.shout}". Apply this to momentum and events.` : "";
-    const tacticalInfo = context.tacticalContext ? `TACTICAL REALITY CHECK:\n${context.tacticalContext}` : "";
-
+    const segLen = targetMinute - currentMatchState.currentMinute;
     const userTeamLabel = context.userTeamName || homeTeam.name;
     const isUserHome = userTeamLabel === homeTeam.name;
-    const userSide = isUserHome ? 'HOME' : 'AWAY';
+    const mentality = context.userMentality || 'Balanced';
 
-    let formationMentalityBlock = "";
-    if (context.userFormation || context.userMentality) {
-        const oppFormation = context.opponentFormation || "4-4-2";
-        const oppMentality = context.opponentMentality || "Balanced";
-        formationMentalityBlock = `
-FORMATION & MENTALITY (must directly influence events):
-- ${userTeamLabel} [${userSide}]: Formation ${context.userFormation || "4-4-2"}, Mentality "${context.userMentality || "Balanced"}"
-- Opponent: Formation ${oppFormation}, Mentality "${oppMentality}"
+    // ── LOCAL GOAL CALCULATION ──────────────────────────────────────────────
+    // Goals are decided locally by probability. Gemini only writes the narrative.
+    const homeRating = homeTeam.players.filter(p => p.isStarter).reduce((s, p) => s + p.rating, 0) / 11 || 74;
+    const awayRating = awayTeam.players.filter(p => p.isStarter).reduce((s, p) => s + p.rating, 0) / 11 || 74;
+    const total = homeRating + awayRating;
 
-MENTALITY RULES — apply strictly:
-- "All-Out Attack": Generate 3-5 attacking events/chances, high shot frequency, but BACKLINE IS EXPOSED — opponent gets at least 1 clear counter-attack chance.
-- "Attacking": Generate 2-3 chances, some defensive gaps.
-- "Balanced": Realistic mix of attack and defense.
-- "Defensive": Max 1-2 shots for ${userTeamLabel}, tight backline, opponent struggles to create clear chances.
-- "Park the Bus": ${userTeamLabel} generates almost no shots but conceding chances are very rare. Low-event, disciplined segment.
-`;
+    // Base: 3.0 goals / 90 min across both teams, weighted by segment length
+    let homeProb = (segLen / 90) * 3.0 * ((homeRating / total) + 0.05); // +0.05 home advantage
+    let awayProb = (segLen / 90) * 3.0 * ((awayRating  / total) - 0.05);
+
+    // Mentality modifiers
+    if (mentality === 'All-Out Attack') {
+        if (isUserHome) { homeProb *= 1.45; awayProb *= 1.30; }
+        else             { awayProb  *= 1.45; homeProb *= 1.30; }
+    } else if (mentality === 'Attacking') {
+        if (isUserHome) { homeProb *= 1.20; awayProb *= 1.10; }
+        else             { awayProb  *= 1.20; homeProb *= 1.10; }
+    } else if (mentality === 'Defensive') {
+        if (isUserHome) { homeProb *= 0.70; awayProb *= 0.80; }
+        else             { awayProb  *= 0.70; homeProb *= 0.80; }
+    } else if (mentality === 'Park the Bus') {
+        if (isUserHome) { homeProb *= 0.40; awayProb *= 0.50; }
+        else             { awayProb  *= 0.40; homeProb *= 0.50; }
     }
 
-    let shoutEffectBlock = "";
+    // Shout attack/defence modifiers
     if (context.shoutEffect) {
-        const { momentumDelta, defensiveModifier, attackModifier } = context.shoutEffect;
-        shoutEffectBlock = `
-ACTIVE SHOUT EFFECT (apply to this segment):
-- Momentum shift: ${momentumDelta > 0 ? `+${momentumDelta}` : momentumDelta} (add to current momentum).
-- Defensive modifier: ${defensiveModifier < 0 ? `${defensiveModifier} (harder to concede — reduce opponent chances)` : defensiveModifier > 0 ? `+${defensiveModifier} (defensive line pushed up — opponent may exploit space)` : "no change"}.
-- Attack modifier: ${attackModifier > 0 ? `+${attackModifier} (more shots/pressure from ${userTeamLabel})` : attackModifier < 0 ? `${attackModifier} (reduce attacking output)` : "no change"}.
-`;
+        const atkBoost = 1 + context.shoutEffect.attackModifier / 10;
+        const defBoost = 1 - context.shoutEffect.defensiveModifier / 15;
+        if (isUserHome) { homeProb *= atkBoost; awayProb *= defBoost; }
+        else             { awayProb  *= atkBoost; homeProb *= defBoost; }
     }
-    
-    let chemistryInfo = "";
-    if (context.riftPairs && context.riftPairs.length > 0) {
-        chemistryInfo += `\nACTIVE RIFTS (increases Miscommunication probability):\n`;
-        context.riftPairs.forEach(r => {
-            chemistryInfo += `- ${r.playerA} vs ${r.playerB} (${r.severity} rift) — their interactions may cause errors, miscommunications or poor passing.\n`;
-        });
-    }
-    if (context.bondPairs && context.bondPairs.length > 0) {
-        chemistryInfo += `\nACTIVE BONDS (positive chemistry modifier):\n`;
-        context.bondPairs.forEach(b => {
-            chemistryInfo += `- ${b.playerA} and ${b.playerB} have international bond — their combination play is sharper than usual.\n`;
-        });
-    }
-    
-    const segLen = targetMinute - currentMatchState.currentMinute;
-    const expectedGoals = Math.max(1, Math.round(segLen / 22));
-    const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
-    Current State: Minute ${currentMatchState.currentMinute}, Score ${currentMatchState.homeScore}-${currentMatchState.awayScore}, Momentum ${currentMatchState.momentum}.
-    Task: Simulate ONLY from minute ${currentMatchState.currentMinute + 1} to ${targetMinute} (${segLen} minutes). Expect roughly ${expectedGoals} goal(s) total across both teams in this segment.
-    
-    ${userInstruction}
-    ${formationMentalityBlock}
-    ${shoutEffectBlock}
-    ${tacticalInfo}
-    ${chemistryInfo}
-    
-    CRITICAL INSTRUCTIONS:
-    1. If a team has low Tactical Efficiency (<50%), they MUST make mistakes.
-    2. If a player has [FATIGUED] flag, they MUST make an error or be substituted — mention them specifically.
-    3. If a player has [MISPLACED] flag, they are 50% less effective — generate events showing their struggles.
-    4. If a player is Out of Position (e.g. ST in Goal), specific events MUST mention them failing at their role.
-    5. GOAL FREQUENCY (CRITICAL — do not ignore): A real football match produces 2–4 goals total across 90 minutes. Per 15-minute segment that means roughly 0–1 goals per team. You MUST score goals. "Balanced" or "Attacking" teams MUST combine for at least 1 goal somewhere across the 4 segments. Do NOT simulate an entire match with homeScoreAdded=0 and awayScoreAdded=0 for every segment — that is broken. If no goal in previous segments, increase pressure now.
-    6. Mentality and formation MUST visibly shape what events are generated (not just vibe words).
-    7. If there are active rifts, occasionally generate a "commentary" event referencing the miscommunication between the named players.
-    8. If there are active bonds, occasionally generate a "commentary" event highlighting their chemistry.
-    9. When a goal is scored, you MUST add a "goal" type event with the scorer's name in the "player" field AND set homeScoreAdded or awayScoreAdded to 1. Both the event and the score counter must reflect the goal.
-    
-    Respond ONLY in JSON format: { 
-        "homeScoreAdded": number, 
-        "awayScoreAdded": number, 
-        "momentum": number (new value -10 to 10), 
-        "tacticalAnalysis": "string (one short sentence about the flow)", 
-        "events": [{ "minute": number, "type": "goal"|"commentary"|"card"|"injury"|"whistle", "teamName": "string", "description": "string", "player": "string" }] 
-    }`;
+
+    const homeScoreAdded = Math.random() < homeProb ? 1 : 0;
+    const awayScoreAdded = Math.random() < awayProb ? 1 : 0;
+
+    // Pick scorer from attackers/mids — weighted random (attackers more likely)
+    const attackPositions = ['ST','CF','LW','RW','AM','CM'];
+    const pickScorer = (team: Team) => {
+        const attackers = team.players.filter(p => p.isStarter && attackPositions.includes(p.position));
+        const pool = attackers.length > 0 ? attackers : team.players.filter(p => p.isStarter);
+        return pool[Math.floor(Math.random() * pool.length)];
+    };
+    const homeScorerPlayer = pickScorer(homeTeam);
+    const awayScorerPlayer = pickScorer(awayTeam);
+    const homeScorer = homeScoreAdded ? (homeScorerPlayer?.name ?? 'Unknown') : null;
+    const awayScorer = awayScoreAdded ? (awayScorerPlayer?.name ?? 'Unknown') : null;
+    const base = currentMatchState.currentMinute;
+    const homeGoalMin = homeScoreAdded ? base + Math.max(1, Math.floor(Math.random() * segLen)) : null;
+    const awayGoalMin = awayScoreAdded ? base + Math.max(1, Math.floor(Math.random() * segLen)) : null;
+
+    // ── GEMINI — NARRATIVE ONLY ─────────────────────────────────────────────
+    const goalsLine = [
+        homeScoreAdded && homeScorer ? `${homeTeam.name} SCORED at min ${homeGoalMin} (${homeScorer})` : '',
+        awayScoreAdded && awayScorer ? `${awayTeam.name} SCORED at min ${awayGoalMin} (${awayScorer})` : ''
+    ].filter(Boolean).join('; ') || 'NO GOALS — write 2–3 near-miss / chance events';
+
+    let chemLine = '';
+    context.riftPairs?.forEach(r => { chemLine += `RIFT: ${r.playerA}↔${r.playerB} — may cause error. `; });
+    context.bondPairs?.forEach(b => { chemLine += `BOND: ${b.playerA}+${b.playerB} — sharp combo. `; });
+
+    const tacticLine = context.tacticalContext
+        ? context.tacticalContext.split('\n').slice(0, 4).join(' | ')
+        : '';
+
+    const prompt = `Football commentary. ${homeTeam.name} vs ${awayTeam.name}. Min ${base+1}–${targetMinute}. Score: ${currentMatchState.homeScore}–${currentMatchState.awayScore}. Momentum: ${currentMatchState.momentum}.
+Formation: ${context.userFormation || '4-4-2'} (${mentality}). ${tacticLine} ${chemLine}
+${goalsLine}
+
+Respond ONLY with JSON:
+{"momentum":0,"tacticalAnalysis":"one sentence","events":[{"minute":0,"type":"goal","teamName":"","description":"","player":""}]}
+
+Rules:
+- momentum: integer −10 to 10
+- For each SCORED goal above, include exactly one event with type "goal", correct teamName, scorer in "player"
+- Add 1–2 "commentary" events for chances, cards, or key moments
+- Keep descriptions vivid and specific (mention real player names from the lineup)`;
 
     try {
         const response: GenerateContentResponse = await getAI().models.generateContent({
             model: MODEL_TEXT, contents: prompt
         });
-        return JSON.parse(cleanJson(response.text));
-    } catch (error) {
-        console.error("Sim Error", error);
-        return { homeScoreAdded: 0, awayScoreAdded: 0, momentum: 0, tacticalAnalysis: "Steady game.", events: [] };
+        const parsed = JSON.parse(cleanJson(response.text));
+        const events: any[] = Array.isArray(parsed.events) ? parsed.events : [];
+        // Ensure goal events exist for locally-scored goals
+        if (homeScoreAdded && homeScorer && !events.some(e => e.type === 'goal' && e.teamName === homeTeam.name)) {
+            events.push({ minute: homeGoalMin, type: 'goal', teamName: homeTeam.name, description: `GOAL! ${homeScorer} scores for ${homeTeam.name}!`, player: homeScorer });
+        }
+        if (awayScoreAdded && awayScorer && !events.some(e => e.type === 'goal' && e.teamName === awayTeam.name)) {
+            events.push({ minute: awayGoalMin, type: 'goal', teamName: awayTeam.name, description: `GOAL! ${awayScorer} scores for ${awayTeam.name}!`, player: awayScorer });
+        }
+        return {
+            homeScoreAdded,
+            awayScoreAdded,
+            momentum: typeof parsed.momentum === 'number' ? parsed.momentum : currentMatchState.momentum,
+            tacticalAnalysis: parsed.tacticalAnalysis || 'Steady game.',
+            events
+        };
+    } catch {
+        return {
+            homeScoreAdded,
+            awayScoreAdded,
+            momentum: currentMatchState.momentum,
+            tacticalAnalysis: 'Steady game.',
+            events: buildLocalEvents(homeScoreAdded, homeScorer, homeGoalMin, awayScoreAdded, awayScorer, awayGoalMin, homeTeam.name, awayTeam.name)
+        };
     }
 };
 
@@ -1109,11 +1150,8 @@ function buildLocalShoutResponse(
 ): ShoutEffect {
     const lower = userShout.toLowerCase();
 
-    // Extract capitalised words as potential player names
-    const namedPlayer = starters?.find(s => lower.includes(s.name.toLowerCase()))
-        ?? (userShout.match(/\b([A-Z][a-záéíóúñ]+)\b/)?.[1]
-            ? { name: userShout.match(/\b([A-Z][a-záéíóúñ]+)\b/)![1], position: '', condition: 100 }
-            : null);
+    // Only match a player if their exact name appears in the actual starters list
+    const namedPlayer = starters?.find(s => lower.includes(s.name.toLowerCase())) ?? null;
 
     let momentumDelta = 1, defensiveModifier = 0, attackModifier = 1;
     let label = 'TACTICAL SHIFT';
