@@ -19,6 +19,8 @@ const getIconForType = (type: NewsItem['type']) => {
     switch(type) {
         case 'call-up': return <UserGroupIcon className="w-6 h-6 text-blue-400" />;
         case 'tournament-result': return <GlobeAltIcon className="w-6 h-6 text-yellow-400" />;
+        case 'match-report': return <NewspaperIcon className="w-6 h-6 text-blue-300" />;
+        case 'board-message': return <UserIcon className="w-6 h-6 text-purple-400" />;
         case 'player-return': return <UserIcon className="w-6 h-6 text-green-400" />;
         case 'chemistry-rift': return <BrokenLinkIcon className="w-6 h-6 text-orange-400" />;
         case 'serious-rift': return <BrokenLinkIcon className="w-6 h-6 text-red-500" />;
@@ -32,9 +34,22 @@ const getIconForType = (type: NewsItem['type']) => {
 const getBorderForType = (type: NewsItem['type']) => {
     switch (type) {
         case 'serious-rift': return 'border-red-700 bg-red-950/30';
+        case 'board-message': return 'border-purple-800 bg-purple-950/20';
         case 'chemistry-rift': return 'border-orange-800 bg-orange-950/20';
         case 'teammate-bond': return 'border-emerald-800 bg-emerald-950/20';
+        case 'match-report': return 'border-blue-900 bg-blue-950/20';
         default: return 'border-gray-700 bg-gray-800/50';
+    }
+};
+
+const getTitleColorForType = (type: NewsItem['type']) => {
+    switch (type) {
+        case 'serious-rift': return 'text-red-400';
+        case 'board-message': return 'text-purple-300';
+        case 'chemistry-rift': return 'text-orange-400';
+        case 'teammate-bond': return 'text-emerald-400';
+        case 'match-report': return 'text-blue-300';
+        default: return 'text-green-400';
     }
 };
 
@@ -58,7 +73,7 @@ const NewsScreen: React.FC<NewsScreenProps> = ({ news, onBack, onRiftDecision })
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm text-gray-400">Week {item.week}</p>
-                                <h3 className={`font-bold text-lg ${item.type === 'serious-rift' ? 'text-red-400' : item.type === 'teammate-bond' ? 'text-emerald-400' : 'text-green-400'}`}>
+                                <h3 className={`font-bold text-lg ${getTitleColorForType(item.type)}`}>
                                     {item.title}
                                 </h3>
                                 <p className="text-gray-300 mt-1">{item.body}</p>

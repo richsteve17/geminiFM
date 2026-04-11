@@ -92,6 +92,9 @@ export interface PromiseData {
     playerInvolved?: string; // "V. van Dijk"
 }
 
+export type FormResult = 'W' | 'D' | 'L';
+export type BoardConfidenceStatus = 'Delighted' | 'Satisfied' | 'Cautious' | 'Concerned' | 'Under Threat';
+
 export interface Team {
   name: string;
   league: LeagueTier;
@@ -103,6 +106,7 @@ export interface Team {
   balance: number; 
   objectives: string[];
   activePromises: PromiseData[]; // MEMORY SYSTEM
+  form?: FormResult[]; // Last 5 results
   colors?: { // Dynamic Theming
       primary: string;
       secondary: string;
@@ -249,7 +253,7 @@ export interface NewsItem {
     week: number;
     title: string;
     body: string;
-    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance' | 'promise-broken' | 'serious-rift' | 'teammate-bond';
+    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance' | 'promise-broken' | 'serious-rift' | 'teammate-bond' | 'match-report' | 'board-message';
     riftDecision?: RiftDecisionChoice;
 }
 

@@ -403,9 +403,17 @@ export default function MatchView({
             )}
 
             <div className="bg-black p-4 rounded-t-lg border-b border-gray-700 flex-shrink-0">
-                <div className="flex justify-between items-center text-xs uppercase text-gray-500 mb-1">
-                    <span>{fixture?.league}</span>
-                    <span>{isLoading ? 'Thinking...' : (matchState?.isFinished ? 'Full Time' : `${currentMinute}' (LIVE)`)}</span>
+                {/* Competition context strip */}
+                <div className="flex justify-between items-center text-xs uppercase mb-1">
+                    <span className="text-gray-400 font-bold tracking-wide">
+                        {fixture?.stage
+                            ? <>{fixture.league} <span className="text-yellow-500 mx-1">·</span> {fixture.stage}</>
+                            : fixture?.league
+                        }
+                    </span>
+                    <span className="text-gray-500">
+                        {isLoading ? 'Thinking...' : (matchState?.isFinished ? 'Full Time' : `${currentMinute}' (LIVE)`)}
+                    </span>
                 </div>
                 <div className="flex justify-between items-center">
                     <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-right text-white truncate px-2">{fixture?.homeTeam}</h3>
@@ -414,6 +422,33 @@ export default function MatchView({
                     </div>
                     <h3 className="text-xl sm:text-2xl font-bold w-1/3 text-left text-white truncate px-2">{fixture?.awayTeam}</h3>
                 </div>
+                {/* Pre-match context — league position + what's at stake */}
+                {gameState === GameState.PRE_MATCH && userTeamName && (() => {
+                    const userEntry = leagueTable
+                        .filter(e => e.league === (teams[userTeamName]?.league || ''))
+                        .sort((a, b) => b.points !== a.points ? b.points - a.points : b.goalDifference - a.goalDifference)
+                        .findIndex(e => e.teamName === userTeamName);
+                    const pos = userEntry >= 0 ? userEntry + 1 : null;
+                    const form = teams[userTeamName]?.form ?? [];
+                    return (
+                        <div className="mt-2 pt-2 border-t border-gray-800 flex items-center justify-between">
+                            {pos !== null && (
+                                <span className="text-xs text-gray-400">
+                                    League Position: <span className="font-bold text-white">#{pos}</span>
+                                </span>
+                            )}
+                            {form.length > 0 && (
+                                <div className="flex gap-1">
+                                    {form.map((r, i) => (
+                                        <span key={i} className={`w-5 h-5 flex items-center justify-center text-[9px] font-black rounded ${r === 'W' ? 'bg-green-600' : r === 'D' ? 'bg-yellow-600' : 'bg-red-700'} text-white`}>
+                                            {r}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
                 {mediaError && <div className="text-center text-red-400 text-xs mt-2 animate-pulse font-bold">{mediaError}</div>}
             </div>
 

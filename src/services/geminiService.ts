@@ -103,6 +103,15 @@ export interface SegmentContext {
     };
     riftPairs?: { playerA: string; playerB: string; severity: string }[];
     bondPairs?: { playerA: string; playerB: string }[];
+    userForm?: ('W' | 'D' | 'L')[];
+}
+
+export interface ClubRelationshipContext {
+    isRenewal: boolean;
+    isCaptain: boolean;
+    yearsDescription: string;
+    hasBrokenPromise: boolean;
+    moralState: 'high' | 'normal' | 'low';
 }
 
 // Build minimal local events when Gemini commentary fails
@@ -232,6 +241,14 @@ export const simulateMatchSegment = async (
         const defBoost = 1 - context.shoutEffect.defensiveModifier / 15;
         if (isUserHome) { homeProb *= atkBoost; awayProb *= defBoost; }
         else             { awayProb  *= atkBoost; homeProb *= defBoost; }
+    }
+
+    // ── FORM MODIFIER — last 5 results shape team confidence ──────────────
+    if (context.userForm && context.userForm.length > 0) {
+        const formScore = context.userForm.reduce((acc, r) => acc + (r === 'W' ? 1 : r === 'D' ? 0 : -1), 0);
+        const formModifier = 1 + (formScore / context.userForm.length) * 0.07; // max ±7%
+        if (isUserHome) homeProb = Math.max(0.01, homeProb * formModifier);
+        else             awayProb  = Math.max(0.01, awayProb  * formModifier);
     }
 
     const homeScoreAdded = Math.random() < homeProb ? 1 : 0;
@@ -931,7 +948,8 @@ export const continueNegotiationChat = async (
     t: Team,
     context: 'transfer' | 'renewal',
     history: NegotiationMessage[],
-    bondContext?: { squadMate: string; competition: string }
+    bondContext?: { squadMate: string; competition: string },
+    clubContext?: ClubRelationshipContext
 ): Promise<{ reply: string; nextPhase: 'talking' | 'offer' | 'walkout' }> => {
     const isOpening = history.length === 0;
     const transcript = history.map(m => `${m.role === 'agent' ? 'Agent' : 'Manager'}: ${m.text}`).join('\n');
@@ -960,6 +978,20 @@ export const continueNegotiationChat = async (
         txt.trim().endsWith('?') || txt.trim().split(' ').length < 5
     ).length;
 
+    // Build club history note for renewals — agent knows the player's story
+    const clubHistoryNote = (() => {
+        if (!clubContext) return '';
+        if (!clubContext.isRenewal) return '';
+        const parts = [`CRITICAL CONTEXT — THIS IS A RENEWAL. ${p.name} is ALREADY at ${t.name}.`];
+        parts.push(clubContext.yearsDescription);
+        if (clubContext.isCaptain) parts.push(`He is the club CAPTAIN — treat him with appropriate gravitas.`);
+        if (clubContext.hasBrokenPromise) parts.push(`A PROMISE was made to him that was not kept — he is frustrated and expects this to be addressed.`);
+        if (clubContext.moralState === 'high') parts.push(`He is in excellent spirits after recent success.`);
+        if (clubContext.moralState === 'low') parts.push(`He is in a poor mental state — recent disappointments have hit him hard.`);
+        parts.push(`DO NOT say "Good to meet you" or treat this as a first meeting. Acknowledge the existing relationship naturally.`);
+        return parts.join(' ');
+    })();
+
     const prompt = `
 You are the hard-nosed agent for ${p.name} (${p.personality}, age ${p.age}, rating ${p.rating}/100, ${p.position}).
 Negotiating a ${context === 'renewal' ? 'CONTRACT RENEWAL' : 'TRANSFER'} with ${t.name}.
@@ -968,9 +1000,10 @@ Player's current wage: $${p.wage.toLocaleString()}/week. Contract: ${p.contractE
 ${prestigeTier}
 Agent personality: ${personalityNote[p.personality] || 'Pragmatic, deal-focused.'}
 ${bondNote}
+${clubHistoryNote}
 
 ${isOpening
-    ? `This is the OPENING of the meeting. Greet the manager briefly and raise your FIRST specific concern — something real about this player's situation and this particular club. Do not mention money yet. Keep it to 2–3 sentences. Make it feel like a real meeting starting.`
+    ? `This is the OPENING of the meeting. ${context === 'renewal' && clubContext ? 'This player has history here — do NOT introduce yourself as if meeting for the first time. Acknowledge the existing relationship, then raise your first specific concern about what the renewal needs to include.' : 'Greet the manager briefly and raise your FIRST specific concern.'} Do not mention money yet. Keep it to 2–3 sentences. Make it feel like a real meeting.`
     : `Full conversation so far:\n${transcript}\n\nThe manager just said: "${history[history.length - 1]?.text}"\n\nRespond naturally. React directly to what they said — if they gave a strong answer, acknowledge it and probe further. If they deflected or asked a question back, call it out. Keep it to 2–3 sentences. Sound like a real agent in a real meeting room, not a chatbot.`
 }
 
@@ -986,7 +1019,6 @@ Respond with ONLY valid JSON, no other text:
 { "reply": "...", "nextPhase": "talking" }`;
 
     try {
-        // Use plain text response + cleanJson to avoid JSON-mode parse failures
         const response = await getAI().models.generateContent({
             model: MODEL_TEXT, contents: prompt
         });
@@ -996,9 +1028,10 @@ Respond with ONLY valid JSON, no other text:
     } catch (e) {
         console.error('[continueNegotiationChat] API/parse error:', e);
         const fallback = isOpening
-            ? `Good to meet you. Before we get into numbers, I need to understand exactly what ${p.name} would be walking into here — squad role, expectations, the full picture.`
+            ? context === 'renewal'
+                ? `Right, let's get straight to it. ${p.name} has given a lot to this club, and I want to make sure what we're discussing today reflects that properly.`
+                : `Good to meet you. Before we get into numbers, I need to understand exactly what ${p.name} would be walking into here — squad role, expectations, the full picture.`
             : `I hear you, but I need something more specific than that. What exactly is the plan for my client here?`;
-        // Never auto-trigger offer phase from fallback — let the conversation develop
         return { reply: fallback, nextPhase: 'talking' };
     }
 };

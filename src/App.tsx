@@ -1,14 +1,15 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect, PlayerEffect, WorldCupResult, WorldCupOutcome, NegotiationMessage } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ShoutEffect, PlayerEffect, WorldCupResult, WorldCupOutcome, NegotiationMessage, FormResult, BoardConfidenceStatus } from './types';
 import { AppScreen, GameState } from './types';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
+import BoardSidebarPanel from './components/BoardSidebarPanel';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
 import AtmosphereWidget from './components/AtmosphereWidget';
-import { simulateMatchSegment, evaluateInterview, scoutPlayers, scoutFollowUp, getInternationalBreakSummary, getInterviewOpeningMessage, continueInterviewChat, generatePressConferenceOpener, continuePressConferenceChat, getTeammateTournamentRivalry, getPlayerPostTournamentMorale, continueNegotiationChat, evaluateNegotiationOffer, type ChatMessage, type InterviewContext, type PressConferenceContext } from './services/geminiService';
+import { simulateMatchSegment, evaluateInterview, scoutPlayers, scoutFollowUp, getInternationalBreakSummary, getInterviewOpeningMessage, continueInterviewChat, generatePressConferenceOpener, continuePressConferenceChat, getTeammateTournamentRivalry, getPlayerPostTournamentMorale, continueNegotiationChat, evaluateNegotiationOffer, type ChatMessage, type InterviewContext, type PressConferenceContext, type ClubRelationshipContext } from './services/geminiService';
 import type { ScoutArchetype, ScoutReport } from './services/geminiService';
 import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS } from './utils';
@@ -104,7 +105,8 @@ export default function App() {
     const [scoutResults, setScoutResults] = useState<Player[]>([]);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     const [managerReputation, setManagerReputation] = useState<number>(0);
-    
+    const [boardConfidence, setBoardConfidence] = useState<number>(65);
+
     // --- CHANT STATE ---
     // Season-level melody tracker — persists across matches within a season
     const [seasonUsedMelodies, setSeasonUsedMelodies] = useState<string[]>([]);
@@ -234,7 +236,8 @@ export default function App() {
                                 attackModifier: activeShoutEffect.attackModifier
                             } : undefined,
                             riftPairs,
-                            bondPairs
+                            bondPairs,
+                            userForm: teams[userTeamName]?.form
                         }
                     );
 
@@ -1376,6 +1379,14 @@ export default function App() {
         }
     };
 
+    const getBoardConfidenceStatus = (confidence: number): BoardConfidenceStatus => {
+        if (confidence >= 90) return 'Delighted';
+        if (confidence >= 70) return 'Satisfied';
+        if (confidence >= 50) return 'Cautious';
+        if (confidence >= 30) return 'Concerned';
+        return 'Under Threat';
+    };
+
     const finishMatch = () => {
         setGameState(GameState.POST_MATCH);
         if (!matchState || !userTeamName || !currentFixture) return;
@@ -1383,9 +1394,74 @@ export default function App() {
         const isHome = currentFixture.homeTeam === userTeamName;
         const userGoals = isHome ? matchState.homeScore : matchState.awayScore;
         const oppGoals = isHome ? matchState.awayScore : matchState.homeScore;
+        const opponent = isHome ? currentFixture.awayTeam : currentFixture.homeTeam;
+        const resultChar: FormResult = userGoals > oppGoals ? 'W' : userGoals === oppGoals ? 'D' : 'L';
+
+        // Reputation
         if (userGoals > oppGoals) setManagerReputation(r => Math.min(100, r + 2));
         else if (userGoals === oppGoals) setManagerReputation(r => Math.min(100, r + 1));
         else setManagerReputation(r => Math.max(0, r - 1));
+
+        // Board confidence
+        const margin = Math.abs(userGoals - oppGoals);
+        const confidenceDelta = userGoals > oppGoals
+            ? Math.min(15, 7 + margin * 2)
+            : userGoals === oppGoals
+            ? -2
+            : Math.max(-18, -(8 + margin * 3));
+        setBoardConfidence(prev => {
+            const next = Math.max(0, Math.min(100, prev + confidenceDelta));
+            // Board message when confidence crosses a critical threshold downward
+            if (next < 30 && prev >= 30) {
+                setNews(n => [{
+                    id: Date.now(),
+                    week: currentWeek,
+                    title: 'Board Issues Formal Warning',
+                    body: `The board has expressed serious concerns about the team's recent performances. Chairman sources indicate patience is wearing thin — results must improve immediately.`,
+                    type: 'board-message'
+                }, ...n]);
+            } else if (next < 50 && prev >= 50) {
+                setNews(n => [{
+                    id: Date.now(),
+                    week: currentWeek,
+                    title: 'Board Growing Restless',
+                    body: `Internal sources suggest the board is becoming concerned about the direction of the team. They are monitoring the situation closely.`,
+                    type: 'board-message'
+                }, ...n]);
+            }
+            return next;
+        });
+
+        // Form — append result to team's form array, keep last 5
+        setTeams(prev => {
+            const t = prev[userTeamName];
+            const currentForm = t.form ?? [];
+            const newForm: FormResult[] = [...currentForm, resultChar].slice(-5);
+            return { ...prev, [userTeamName]: { ...t, form: newForm } };
+        });
+
+        // Match report news item
+        const scoreStr = `${userGoals}-${oppGoals}`;
+        const competition = currentFixture.stage ? `${currentFixture.league} — ${currentFixture.stage}` : currentFixture.league;
+        const scorers = matchState.events
+            .filter(e => e.type === 'goal' && e.teamName === userTeamName && e.player)
+            .map(e => e.player!);
+        const resultWord = userGoals > oppGoals ? 'WIN' : userGoals === oppGoals ? 'DRAW' : 'DEFEAT';
+        const headlines: Record<string, string[]> = {
+            WIN: [`${userTeamName} claim three points against ${opponent}`, `Clinical ${userTeamName} see off ${opponent}`, `${userTeamName} grind out a vital win`],
+            DRAW: [`${userTeamName} share the spoils with ${opponent}`, `Honours even in ${userTeamName}'s clash with ${opponent}`],
+            DEFEAT: [`${userTeamName} fall to ${opponent} — pressure mounts`, `Concerning defeat for ${userTeamName} against ${opponent}`, `${opponent} inflict damage on ${userTeamName}`]
+        };
+        const headlineArr = headlines[resultWord];
+        const scorerNote = scorers.length > 0 ? ` Scorers: ${scorers.join(', ')}.` : '';
+        setNews(n => [{
+            id: Date.now() + 1,
+            week: currentWeek,
+            title: `${resultWord} ${scoreStr} — ${headlineArr[Math.floor(Math.random() * headlineArr.length)]}`,
+            body: `${userTeamName} ${userGoals > oppGoals ? 'won' : userGoals === oppGoals ? 'drew' : 'lost'} ${userGoals}-${oppGoals} against ${opponent} in the ${competition}.${scorerNote}`,
+            type: 'match-report'
+        }, ...n]);
+
         setLeagueTable(prev => {
             const newTable = [...prev];
             const updateTeam = (name: string, goalsFor: number, goalsAgainst: number) => {
@@ -1421,13 +1497,42 @@ export default function App() {
         return undefined;
     };
 
+    const buildClubRelationshipContext = (player: Player, context: 'transfer' | 'renewal'): ClubRelationshipContext => {
+        if (context === 'transfer') {
+            return { isRenewal: false, isCaptain: false, yearsDescription: '', hasBrokenPromise: false, moralState: 'normal' };
+        }
+        const team = userTeamName ? teams[userTeamName] : null;
+        const nonGkStarters = team?.players.filter(p => p.isStarter && p.position !== 'GK') ?? [];
+        const isCaptain = nonGkStarters.length > 0 &&
+            [...nonGkStarters].sort((a, b) => b.rating - a.rating)[0]?.name === player.name;
+        const weeksLeft = player.contractExpires;
+        const yearsDescription = weeksLeft <= 8
+            ? `${player.name} has served ${team?.name ?? 'this club'} faithfully and is in the final weeks of his contract`
+            : weeksLeft <= 26
+            ? `${player.name} is a well-established figure at ${team?.name ?? 'this club'} and is entering his final year`
+            : `${player.name} has been a key part of ${team?.name ?? 'this club'}'s squad throughout his contract`;
+        const hasBrokenPromise = player.effects.some(e => e.type === 'PromiseBroken');
+        const hasPositiveMorale = player.effects.some(e =>
+            e.type === 'PostTournamentMorale' && (e.morale === 'Winner' || e.morale === 'FiredUp'));
+        const hasNegativeMorale = player.effects.some(e =>
+            e.type === 'PostTournamentMorale' && e.morale === 'Disappointed');
+        return {
+            isRenewal: true,
+            isCaptain,
+            yearsDescription,
+            hasBrokenPromise,
+            moralState: hasPositiveMorale ? 'high' : hasNegativeMorale ? 'low' : 'normal'
+        };
+    };
+
     const handleStartPlayerTalk = async (player: Player, context: 'transfer' | 'renewal') => {
         if (!userTeamName) return;
         setIsLoading(true); setTalkResult(null); setPlayerTalk(null); setError(null); setPendingContractTerms(null);
         setAppScreen(AppScreen.PLAYER_TALK);
         try {
             const bondContext = getBondContext(player.name, context);
-            const { reply, nextPhase } = await continueNegotiationChat(player, teams[userTeamName], context, [], bondContext);
+            const clubContext = buildClubRelationshipContext(player, context);
+            const { reply, nextPhase } = await continueNegotiationChat(player, teams[userTeamName], context, [], bondContext, clubContext);
             setPlayerTalk({
                 player,
                 context,
@@ -1654,7 +1759,18 @@ export default function App() {
                                 onMelodyUsed={(id) => setSeasonUsedMelodies(prev => [...prev, id])}
                             />
                         </div>
-                        <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} knockoutResults={gameMode === 'WorldCup' ? [...wcKnockoutResults, ...fixtures.filter(f => f.isKnockout && !wcKnockoutResults.find(r => r.id === f.id))] : []} /></div>
+                        <div className="lg:col-span-3">
+                            <BoardSidebarPanel
+                                leagueTable={leagueTable}
+                                userTeamName={userTeamName}
+                                userTeam={userTeam}
+                                boardConfidence={boardConfidence}
+                                boardStatus={getBoardConfidenceStatus(boardConfidence)}
+                                knockoutResults={gameMode === 'WorldCup' ? [...wcKnockoutResults, ...fixtures.filter(f => f.isKnockout && !wcKnockoutResults.find(r => r.id === f.id))] : []}
+                                currentWeek={currentWeek}
+                                weeksInSeason={weeksInSeason}
+                            />
+                        </div>
                         </main>
                     </div>
                 );
