@@ -136,15 +136,80 @@ export const simulateMatchSegment = async (
     const isUserHome = userTeamLabel === homeTeam.name;
     const mentality = context.userMentality || 'Balanced';
 
+    // ── EFFECTIVE RATING — condition, personality, and morale all matter ────
+    const effectiveRating = (player: Player): number => {
+        // Condition penalty: fatigue degrades a player's contribution
+        const condFactor = player.condition >= 80 ? 1.00
+            : player.condition >= 65 ? 0.94
+            : player.condition >= 50 ? 0.84
+            : 0.70;
+
+        // Professional players resist fatigue better
+        const adjustedCond = player.personality === 'Professional'
+            ? Math.min(1.0, condFactor + 0.05)
+            : condFactor;
+
+        // Personality modifier — Leader lifts the team, Volatile is a gamble
+        const personalityBonus = player.personality === 'Leader' ? 2.5
+            : player.personality === 'Volatile' ? (Math.random() < 0.45 ? 4.0 : -2.5)
+            : player.personality === 'Young Prospect' ? -1.0
+            : 0;
+
+        // Morale from tournaments or press conferences
+        const moraleBonus = player.effects.reduce((acc, e) => {
+            if (e.type === 'PostTournamentMorale') {
+                if (e.morale === 'Winner')      return acc + 3.0;
+                if (e.morale === 'FiredUp')     return acc + 1.5;
+                if (e.morale === 'Disappointed') return acc - 2.0;
+            }
+            return acc;
+        }, 0);
+
+        return player.rating * adjustedCond + personalityBonus + moraleBonus;
+    };
+
+    // ── TEAM CHEMISTRY — bonds help, rifts hurt ───────────────────────────
+    const chemistryBonus = (team: Team, isUserTeam: boolean): number => {
+        if (!isUserTeam) return 0;
+        const starters = new Set(team.players.filter(p => p.isStarter).map(p => p.name));
+        let bonus = 0;
+        context.bondPairs?.forEach(b => {
+            if (starters.has(b.playerA) && starters.has(b.playerB)) bonus += 0.5;
+        });
+        context.riftPairs?.forEach(r => {
+            if (starters.has(r.playerA) || starters.has(r.playerB)) {
+                bonus += r.severity === 'serious' ? -1.5 : r.severity === 'moderate' ? -0.7 : -0.2;
+            }
+        });
+        return bonus;
+    };
+
     // ── LOCAL GOAL CALCULATION ──────────────────────────────────────────────
-    // Goals are decided locally by probability. Gemini only writes the narrative.
-    const homeRating = homeTeam.players.filter(p => p.isStarter).reduce((s, p) => s + p.rating, 0) / 11 || 74;
-    const awayRating = awayTeam.players.filter(p => p.isStarter).reduce((s, p) => s + p.rating, 0) / 11 || 74;
-    const total = homeRating + awayRating;
+    const homeStarters = homeTeam.players.filter(p => p.isStarter);
+    const awayStarters = awayTeam.players.filter(p => p.isStarter);
+    const homeRatingRaw = (homeStarters.reduce((s, p) => s + effectiveRating(p), 0) / (homeStarters.length || 11));
+    const awayRatingRaw = (awayStarters.reduce((s, p) => s + effectiveRating(p), 0) / (awayStarters.length || 11));
+    const homeRating = homeRatingRaw + chemistryBonus(homeTeam, isUserHome);
+    const awayRating = awayRatingRaw + chemistryBonus(awayTeam, !isUserHome);
+    const total = homeRating + awayRating || 148;
 
     // Base: 3.0 goals / 90 min across both teams, weighted by segment length
     let homeProb = (segLen / 90) * 3.0 * ((homeRating / total) + 0.05); // +0.05 home advantage
     let awayProb = (segLen / 90) * 3.0 * ((awayRating  / total) - 0.05);
+
+    // ── SCORE-STATE FEEDBACK ── losing team pushes harder; winning team can sit back
+    const userGoals = isUserHome ? currentMatchState.homeScore : currentMatchState.awayScore;
+    const oppGoals  = isUserHome ? currentMatchState.awayScore : currentMatchState.homeScore;
+    const goalDiff  = userGoals - oppGoals;
+    if (goalDiff < 0) {
+        const desperation = Math.min(0.30, Math.abs(goalDiff) * 0.12);
+        if (isUserHome) { homeProb *= (1 + desperation); awayProb *= (1 - desperation * 0.4); }
+        else            { awayProb  *= (1 + desperation); homeProb *= (1 - desperation * 0.4); }
+    } else if (goalDiff > 0 && (mentality === 'Defensive' || mentality === 'Park the Bus' || mentality === 'Balanced')) {
+        const comfort = Math.min(0.15, goalDiff * 0.05);
+        if (isUserHome) { homeProb *= (1 - comfort); awayProb *= (1 + comfort * 0.4); }
+        else            { awayProb  *= (1 - comfort); homeProb *= (1 + comfort * 0.4); }
+    }
 
     // Mentality modifiers
     if (mentality === 'All-Out Attack') {
