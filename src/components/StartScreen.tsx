@@ -107,7 +107,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 </h1>
                 
                 <div className="flex items-center justify-center gap-4 text-xs font-mono tracking-widest text-[var(--team-secondary,rgb(74,222,128))] opacity-80 mb-8">
-                    <span>BUILD v2.7</span>
+                    <span>BUILD v2.8</span>
                     <span>•</span>
                     <span>CREATOR ECONOMY LIVE</span>
                     <span>•</span>
@@ -251,11 +251,16 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                             <li>Streamer Mode Profit Calculation enabled (Revenue - COGS).</li>
                             <li>Net Profit per Clip displayed in Viral Studio.</li>
                         </ul>
-                        <p className="text-blue-400 mt-2">{'>'} PATCH NOTES v2.7:</p>
+                        <p className="text-blue-400 mt-2">{'>'} PATCH NOTES v2.8:</p>
                         <ul className="list-disc list-inside text-gray-500 pl-2">
-                            <li>Implemented 3-Way Kit Selector (Primary / Secondary / Unhinged Third).</li>
-                            <li>Removed legacy striping artifacts for cleaner UI.</li>
-                            <li>Updated Kit Palette keys for better accessibility.</li>
+                            <li>Board Status panel: Delighted / Satisfied / Cautious / Concerned / Under Threat with confidence bar.</li>
+                            <li>Match engine: player condition, personality, and PostTournamentMorale now affect ratings mathematically.</li>
+                            <li>Chemistry: bond pairs (+0.5) and rifts (−0.2 to −1.5) apply per match.</li>
+                            <li>Form tracking: last 5 results stored on team, ±7% attack probability modifier.</li>
+                            <li>Score-state: trailing teams push harder (up to +30% goal probability).</li>
+                            <li>Negotiation: agent opens with full club-relationship context (captain status, morale, broken promises).</li>
+                            <li>Newspaper: match report and board warning items now auto-generate after every result.</li>
+                            <li>Fixture header now shows competition + stage; pre-match strip shows league position and form.</li>
                         </ul>
                     </div>
                 )}

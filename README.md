@@ -2,7 +2,7 @@
 # ⚽ Gemini Football Manager '27
 **The World's First Multimedia AI Sports Simulation**
 
-> **Current Build:** v2.7 (The "Unhinged" Kit Update)
+> **Current Build:** v2.8 (The "Board Room" Update)
 > **Engine:** React 19 · TypeScript · Google GenAI SDK · Tailwind CSS
 
 **Gemini Football Manager '27 (GFM '27)** is a hybrid simulation engine. It combines a rigid, deterministic mathematical core with a creative, generative AI layer to produce a football world that feels alive, visually distinct, and narratively deep.
@@ -102,6 +102,25 @@ VITE_GEMINI_API_KEY=your_api_key_here
 npm install
 npm run dev
 ```
+
+---
+
+## 📋 Changelog
+
+### v2.8 — "The Board Room" Update
+- **Board Status Sidebar** — New panel showing Delighted / Satisfied / Cautious / Concerned / Under Threat with a confidence bar, form dots (W/D/L), season progress tracker, and live finances (balance + weekly wage bill).
+- **Match Engine Overhaul** — Player condition (70–100% factor), personality archetypes (Leader +2.5, Professional resists fatigue, Volatile ±gamble), and post-tournament morale now apply mathematically to every match segment.
+- **Chemistry System** — Bond pairs between starters add +0.5 to team average per match; rifts subtract −0.2 to −1.5 depending on severity.
+- **Form Tracking** — Last 5 results stored on the Team object; a ±7% attack probability modifier applies based on current form streak.
+- **Score-State Pressure** — Trailing teams push harder as the deficit grows, adding up to +30% goal probability when chasing by 2+.
+- **Negotiation Context** — The AI agent opens renewals with full club-relationship context: captain status, contract situation, morale state, and any broken promises. No more generic openers.
+- **Auto Match Reports** — Newspaper receives a result headline and scorer summary after every match. Board warning news items generate automatically when confidence drops below 50 or 30.
+- **Fixture Header** — Competition name + stage (e.g. "Champions League · Quarter Final") now visible at all times. Pre-match strip shows league position and last-5 form inline.
+
+### v2.7 — "The Unhinged Kit" Update
+- Implemented 3-way kit selector (Primary / Secondary / Unhinged Third).
+- Removed legacy striping artifacts for a cleaner UI.
+- Updated kit palette keys for better colour-system accessibility.
 
 ---
 
