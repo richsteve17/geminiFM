@@ -10,7 +10,7 @@ interface PlayerTalkScreenProps {
     isLoading: boolean;
     error: string | null;
     talkResult: NegotiationResult | null;
-    onAnswerSubmit: (answer: string, offer?: { wage: number, length: number }) => void;
+    onAnswerSubmit: (answer: string, offer?: { wage: number, length: number, incentives?: string }) => void;
     onFinish: () => void;
 }
 
@@ -20,6 +20,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
     // Negotiation State
     const [wageOffer, setWageOffer] = useState<number>(0);
     const [contractLength, setContractLength] = useState<number>(3);
+    const [incentives, setIncentives] = useState<string>('');
     const [hasNegotiated, setHasNegotiated] = useState(false);
 
     // Initialize defaults when talk loads
@@ -58,7 +59,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
             }
         } else {
             // Final Step: Submit the Offer
-            onAnswerSubmit(currentAnswer || "I believe this offer reflects your value.", { wage: wageOffer, length: contractLength });
+            onAnswerSubmit(currentAnswer || "I believe this offer reflects your value.", { wage: wageOffer, length: contractLength, incentives });
             setHasNegotiated(true);
             setCurrentAnswer('');
         }
@@ -190,6 +191,16 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                                             <span className="w-full text-center font-bold text-white bg-gray-800 p-2 rounded border border-gray-600">{contractLength} Years</span>
                                             <button type="button" onClick={() => setContractLength(l => Math.min(7, l + 1))} className="p-2 bg-green-900/30 text-green-400 rounded hover:bg-green-900/50">+</button>
                                         </div>
+                                    </div>
+                                    <div className="md:col-span-2 mt-2">
+                                        <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Incentives / Promises (Optional)</label>
+                                        <input 
+                                            type="text" 
+                                            value={incentives} 
+                                            onChange={(e) => setIncentives(e.target.value)}
+                                            placeholder="e.g. 'Goal Bonus', 'Captaincy', 'Key Player Status'"
+                                            className="w-full bg-gray-800 text-white p-2 rounded border border-gray-600 focus:border-green-500 outline-none"
+                                        />
                                     </div>
                                 </div>
                             )}

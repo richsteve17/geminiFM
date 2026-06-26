@@ -1,6 +1,7 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import type { Chant } from '../services/chantService';
+import { playMatchCommentary } from '../services/geminiService';
 
 interface Props {
     chant: Chant | null;
@@ -10,6 +11,8 @@ interface Props {
 
 export default function AtmosphereWidget({ chant, momentum, teamName }: Props) {
     const [bars, setBars] = useState<number[]>([20, 30, 25, 35, 20]);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const lastChantRef = useRef<string | null>(null);
 
     // Animate the decibel bars based on momentum intensity
     useEffect(() => {
@@ -21,6 +24,33 @@ export default function AtmosphereWidget({ chant, momentum, teamName }: Props) {
         }, 100);
         return () => clearInterval(interval);
     }, [momentum]);
+
+    // Auto-play chant when a new one arrives
+    useEffect(() => {
+        if (chant) {
+            const chantKey = chant.lyrics.join(' ');
+            if (chantKey !== lastChantRef.current) {
+                lastChantRef.current = chantKey;
+                handlePlayChant();
+            }
+        }
+    }, [chant]);
+
+    const handlePlayChant = async () => {
+        if (!chant || isPlaying) return;
+        setIsPlaying(true);
+        try {
+            // Combine lyrics into a single string for TTS
+            const lyricsText = `(Chanting to the tune of ${chant.tune}) ${chant.lyrics.join('. ')}`;
+            // Use a unique ID for caching based on lyrics hash or timestamp
+            const chantId = Date.now(); 
+            await playMatchCommentary(lyricsText, chantId);
+        } catch (e) {
+            console.error("Failed to play chant", e);
+        } finally {
+            setIsPlaying(false);
+        }
+    };
 
     // Calculate color based on momentum (Red = Hostile/Pressure, Green = Dominance)
     const getBarColor = () => {
@@ -71,11 +101,12 @@ export default function AtmosphereWidget({ chant, momentum, teamName }: Props) {
                 </div>
 
                 {/* LYRICS DISPLAY (Center) */}
-                <div className="flex-1 bg-black/30 rounded border border-gray-700/50 p-2 min-h-[80px] flex flex-col justify-center items-center text-center">
+                <div className="flex-1 bg-black/30 rounded border border-gray-700/50 p-2 min-h-[80px] flex flex-col justify-center items-center text-center relative group">
                     {chant ? (
-                        <div className="animate-in fade-in zoom-in duration-300">
-                            <p className="text-[9px] text-yellow-500 font-mono mb-1 tracking-widest uppercase">
+                        <div className="animate-in fade-in zoom-in duration-300 cursor-pointer" onClick={handlePlayChant}>
+                            <p className="text-[9px] text-yellow-500 font-mono mb-1 tracking-widest uppercase flex items-center justify-center gap-2">
                                 🎵 Tune: {chant.tune}
+                                {isPlaying && <span className="animate-pulse text-green-400">🔊</span>}
                             </p>
                             <div className="space-y-0.5">
                                 {chant.lyrics.map((line, idx) => (
@@ -88,6 +119,9 @@ export default function AtmosphereWidget({ chant, momentum, teamName }: Props) {
                                         "{line.toUpperCase()}"
                                     </p>
                                 ))}
+                            </div>
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[1px]">
+                                <span className="text-xs font-bold text-white border border-white/50 px-2 py-1 rounded">Click to Chant</span>
                             </div>
                         </div>
                     ) : (

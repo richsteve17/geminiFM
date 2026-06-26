@@ -1,55 +1,64 @@
 
-# 📘 Feature Guide: Galácticos Media Update (v2.5)
+# 📘 Feature Guide: AI Football Manager
 
 ## 📡 Generative Media Suite
+AI Football Manager utilizes generative AI to create a uniquely immersive experience, elevating standard text-based simulations into a living, breathing media environment.
 
-The v2.5 update introduces the "Media Layer," allowing the game to generate assets on the fly.
+### 🎙️ AI Commentary
+- **Model:** `gemini-2.5-flash-preview-tts` (or equivalent)
+- **How it works:** When a key event happens during a match, the AI's textual description is passed to a TTS model with an "Excited Commentator" system instruction.
+- **Playback:** The app synthesizes audio directly in the browser to provide real-time commentary for match highlights.
 
-### 🎙️ AI Commentary (TTS)
-*   **Model:** `gemini-2.5-flash-preview-tts`
-*   **How it works:** When a goal is scored, the text description (e.g., "Haaland smashes it top bin") is sent to the TTS model with a specific "Excited Commentator" system instruction.
-*   **Playback:** The app decodes the raw PCM audio stream directly in the browser using the Web Audio API.
+### 🎥 Viral Clips & Social Media
+- **Feature:** Generate social media posts and reactions based on the match events.
+- **Logic:** After significant events, the AI creates short, punchy captions and synthesizes voiceovers mimicking the hyper-reactive nature of modern footballing social media.
 
-### 🎥 Streamer Studio Audio (New in v2.5)
-*   **Feature:** TikTok-style viral clips now include auto-generated voiceovers.
-*   **Logic:** When you click the purple "Clip It" button, the AI generates a hype caption ("SCENES!"). This caption is immediately sent to the TTS engine to create a voiceover that plays automatically when the vertical video loads.
-
-### 📺 Instant Replay (Veo)
-*   **Model:** `veo-3.1-fast-generate-preview`
-*   **How it works:**
+### 📺 Replay Engine
+- **How it works:**
     1.  The Match Engine generates a text description of the goal.
-    2.  This text is enhanced with visual prompts ("Cinematic angle, professional stadium lighting, 4k").
-    3.  Veo generates a video URI.
+    2.  This text is enhanced with visual prompts ("Cinematic angle, professional stadium lighting").
+    3.  A video-generation model creates a short replay clip. (Requires supported Google Cloud Project and API keys).
     4.  The app polls for completion and overlays a video player.
 
 ---
 
-## 🌍 Real-World Scouting (Grounding)
+## 🎨 Dynamic Club & Managerial Identity
+The UI adapts to your club's identity with granular control.
 
-The Scouting Network has been upgraded with **Google Search Grounding**.
-
-*   **Legacy Mode (Fictional):** The AI invents players ("Ricardo Silva, 19, Brazil") based on probability distributions. Good for long-term saves where real players would retire.
-*   **Real World Mode (Grounded):** The AI searches the live internet.
-    *   *Query:* "Fastest winger in the Premier League under 23"
-    *   *Result:* The AI finds players like **Mickey van de Ven** or **Brennan Johnson** with their actual current stats.
-
----
-
-## 🏟️ The Match Engine (PitchView™)
-
-The simulation core remains a hybrid system:
-
-*   **Momentum System:** A mathematical tug-of-war (-10 to +10) driven by player ratings and tactics.
-*   **Visualizer:** The 2D pitch responds to Momentum. If you are dominating (+8), your team's dots will press high up the pitch.
-*   **Atmosphere:** The "Decibel Meter" visualizes the crowd's mood.
-    *   *Green:* Party Atmosphere.
-    *   *Red:* Toxic/Hostile.
-    *   *Chants:* The AI generates rhyming, context-aware chants based on the scoreline.
+- **Kit Selector:** Before starting, visualize your club's identity via home, away, and alternate kit color schemes.
+- **Behavior:**
+    - **Instant Preview:** The selected palette is applied directly to the game's UI (headers, buttons, gradients).
+    - **Gameplay Integration:** The selected palette persists throughout the manager career, coloring your menus and highlighting your club's colors.
 
 ---
 
-## 👔 Tactical & Roster Systems
+## 🌍 Real-World & Fictional Scouting
 
-*   **Swiss Model UCL:** A custom algorithm generates a 36-team league phase for the Champions League.
-*   **Chemistry Rifts:** Players can develop feuds (e.g., after playing against each other internationally), reducing team coherence.
-*   **Tactical Analysis:** The AI analyzes your formation for logical errors (e.g., playing a Striker in Goal) and warns you before kickoff.
+The Scouting Network offers two distinct ways to build your squad:
+
+- **Legacy Mode (Fictional):** The AI invents entirely new players with unique backstories, potential ceilings, and playstyles. Perfect for long-term saves taking place decades into the future.
+- **Real World Mode (Grounded):** The AI searches the live internet to find real players matching your criteria.
+    - *Query:* "Youngest starting centre-back in the Premier League"
+    - *Result:* The AI identifies the real-world player and translates their attributes into game-compatible stats for you to sign.
+
+---
+
+## 🏟️ The Match Engine 
+
+The simulation core is a mathematical framework brought to life by the Gemini API:
+
+- **Momentum System:** A mathematical tug-of-war driven by player ratings, match events, and your touchline shouts.
+- **Tactical Adjustments:** Use precise touchline commands ("Demand More", "Focus") to shift the momentum in key moments.
+- **Live Upgrades:** Dynamically adjust the match speed (Slow, Normal, Fast, Instant) directly from the touchline to control how you consume the action.
+- **Atmosphere:** The "Decibel Meter" visualizes the crowd's mood based on performance.
+    - *Green:* Party Atmosphere.
+    - *Red:* Hostile / Discontent.
+    - *Chants:* The AI generates context-aware text chants based on the scoreline and team history.
+
+---
+
+## 👔 Deep Interactions & Management
+
+- **Dynamic Job Interviews:** Board expectations shift based on the club's current predicament (e.g. relegation battle vs. title push). 
+- **Player Talks:** Manage your relationship with players. Have fluid conversations about their role in your tactic, future plans, or expected playing time, directly influencing their decision to sign or leave.
+- **Continental Football:** Compete across regular leagues and progress to comprehensive European tournament structures.

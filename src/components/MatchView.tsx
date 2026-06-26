@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team, MatchEvent, TacticalShout } from '../types';
 import { GameState } from '../types';
@@ -20,7 +21,8 @@ interface MatchViewProps {
     matchState: MatchState | null;
     gameState: GameState;
     onPlayFirstHalf: () => void;
-    onPlaySecondHalf: (shout: TouchlineShout) => void;
+    onPlaySecondHalf: (shout?: TouchlineShout) => void;
+    onPauseMatch: () => void;
     onSimulateSegment: (targetMinute: number, momentumShift?: number) => void; 
     onNextMatch: () => void;
     error: string | null;
@@ -30,12 +32,15 @@ interface MatchViewProps {
     isLoading: boolean;
     currentWeek: number;
     teams: Record<string, Team>;
+    matchSpeed: 'slow' | 'normal' | 'fast' | 'instant';
+    onMatchSpeedChange: (speed: 'slow' | 'normal' | 'fast' | 'instant') => void;
 }
 
 export default function MatchView({ 
     fixture, weeklyResults, matchState, gameState, 
-    onPlayFirstHalf, onPlaySecondHalf, onSimulateSegment, onNextMatch, 
-    userTeamName, teams, isLoading, currentWeek, error, isSeasonOver 
+    onPlayFirstHalf, onPlaySecondHalf, onPauseMatch, onSimulateSegment, onNextMatch, 
+    userTeamName, teams, isLoading, currentWeek, error, isSeasonOver,
+    matchSpeed, onMatchSpeedChange
 }: MatchViewProps) {
     
     const feedRef = useRef<HTMLDivElement>(null);
@@ -63,7 +68,8 @@ export default function MatchView({
     const [isShouting, setIsShouting] = useState(false);
     const [shoutFeedback, setShoutFeedback] = useState<{msg: string, effect: string} | null>(null);
 
-    // Smooth Auto-scroll
+    // Smooth Auto-scroll REMOVED for reverse order
+    /*
     useEffect(() => {
         if (feedRef.current) {
             feedRef.current.scrollTo({
@@ -71,7 +77,8 @@ export default function MatchView({
                 behavior: 'smooth'
             });
         }
-    }, [matchState?.events.length]);
+    }, [matchState?.events?.length]);
+    */
 
     // Load Shouts at Halftime
     useEffect(() => {
@@ -91,7 +98,7 @@ export default function MatchView({
 
     // Chant Trigger Logic
     useEffect(() => {
-        if (matchState?.events.length && gameState === GameState.PLAYING) {
+        if (matchState?.events?.length && gameState === GameState.PLAYING) {
             const lastEvent = matchState.events[matchState.events.length - 1];
             if (matchState.currentMinute - lastEvent.minute < 2) {
                 if (lastEvent.type === 'goal') {
@@ -104,7 +111,7 @@ export default function MatchView({
                 }
             }
         }
-    }, [matchState?.events.length, userTeamName, gameState]);
+    }, [matchState?.events?.length, userTeamName, gameState]);
 
     const handleAskAssistant = async () => {
         if (!fixture || !matchState || !userTeamName) return;
@@ -210,7 +217,12 @@ export default function MatchView({
         );
     }
 
-    if (isSeasonOver) return <div className="text-center p-8"><h2 className="text-3xl font-bold text-green-400 mb-4">Season Over!</h2></div>;
+    if (isSeasonOver) return (
+        <div className="text-center p-8">
+            <h2 className="text-3xl font-bold text-green-400 mb-4">Season Over!</h2>
+            <button onClick={onNextMatch} className="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">End Season</button>
+        </div>
+    );
     
     if (gameState === GameState.PRE_MATCH && !fixture) {
          return <div className="text-center p-8"><h2 className="text-xl font-bold mb-2 text-green-400">Week {currentWeek}</h2><p>No match scheduled.</p></div>;
@@ -291,13 +303,13 @@ export default function MatchView({
             <div className="flex-1 bg-gray-900/50 p-4 flex flex-col overflow-hidden">
                 {gameState !== GameState.PRE_MATCH && (
                     <div className="flex-shrink-0 mb-4">
-                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events[matchState.events.length-1] || null} />
+                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events?.[matchState.events.length-1] || null} />
                     </div>
                 )}
                 
-                <div ref={feedRef} className="overflow-y-auto space-y-1 scroll-smooth flex-1 pr-2 min-h-0">
-                    {matchState?.events.length === 0 && <div className="text-center text-gray-500 italic mt-10">Match is about to start...</div>}
-                    {matchState?.events.map(renderEvent)}
+                <div ref={feedRef} className="overflow-y-auto space-y-1 scroll-smooth flex-1 pr-2 min-h-0 flex flex-col">
+                    {(!matchState?.events || matchState.events.length === 0) && <div className="text-center text-gray-500 italic mt-10">Match is about to start...</div>}
+                    {matchState?.events?.slice().reverse().map(renderEvent)}
                     {isLoading && <div className="flex justify-center py-4"><FootballIcon className="w-6 h-6 text-green-500 animate-spin" /></div>}
                 </div>
             </div>
@@ -307,7 +319,25 @@ export default function MatchView({
                     <div className="space-y-3">
                         <div className="flex items-center justify-between bg-gray-900/50 p-2 rounded">
                             <span className="text-xs text-green-400 font-bold animate-pulse">● LIVE MATCH</span>
-                            <button onClick={() => onSimulateSegment(0)} className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">PAUSE</button>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-gray-400 font-bold uppercase">Speed:</span>
+                                <div className="flex items-center gap-1 bg-gray-800 p-0.5 rounded border border-gray-750">
+                                    {(['slow', 'normal', 'fast', 'instant'] as const).map(speed => (
+                                        <button
+                                            key={speed}
+                                            onClick={() => onMatchSpeedChange(speed)}
+                                            className={`text-[9px] uppercase px-2 py-0.5 rounded font-bold transition-all ${
+                                                matchSpeed === speed 
+                                                ? 'bg-green-600 text-white' 
+                                                : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                                            }`}
+                                        >
+                                            {speed === 'slow' ? '🐢' : speed === 'normal' ? '▶' : speed === 'fast' ? '⚡' : '🚀'}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button onClick={onPauseMatch} className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded">PAUSE</button>
+                            </div>
                         </div>
                         <form onSubmit={handleCustomShout} className="relative opacity-100 transition-opacity">
                             <input 

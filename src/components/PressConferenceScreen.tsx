@@ -7,12 +7,13 @@ interface PressConferenceScreenProps {
     onFinish: () => void;
 }
 
-const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({ questions, onFinish }) => {
+const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({ questions = [], onFinish }) => {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answer, setAnswer] = useState('');
     const [history, setHistory] = useState<{q: string, a: string}[]>([]);
 
-    const currentQuestion = questions[currentQuestionIndex];
+    const safeQuestions = questions || ["What are your thoughts on the match?", "How will you prepare for the next game?", "Any words for the fans?"];
+    const currentQuestion = safeQuestions[currentQuestionIndex] || "No further questions.";
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -22,10 +23,9 @@ const PressConferenceScreen: React.FC<PressConferenceScreenProps> = ({ questions
         setHistory(newHistory);
         setAnswer('');
 
-        if (currentQuestionIndex < questions.length - 1) {
+        if (currentQuestionIndex < safeQuestions.length - 1) {
             setCurrentQuestionIndex(currentQuestionIndex + 1);
         } else {
-            // End of conference
             onFinish();
         }
     };

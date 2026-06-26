@@ -1,11 +1,31 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) throw new Error("API_KEY not set");
+let _ai: GoogleGenAI | null = null;
+const api_key_raw = process.env.API_KEY || process.env.GEMINI_API_KEY;
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
-const model = 'gemini-2.0-flash-exp';
+const getAIInstance = (): GoogleGenAI => {
+    if (!_ai) {
+        if (!api_key_raw || api_key_raw === "undefined" || api_key_raw === "null") {
+            console.warn("GEMINI_API_KEY / API_KEY is not set. Using local simulation fallback.");
+            throw new Error("API_KEY_NOT_SET");
+        }
+        _ai = new GoogleGenAI({ apiKey: api_key_raw });
+    }
+    return _ai;
+};
+
+// Define a proxy object for ai to lazily load and avoid crashing on startup
+export const ai = {
+    get models() {
+        return getAIInstance().models;
+    },
+    get operations() {
+        return getAIInstance().operations;
+    }
+};
+
+const model = 'gemini-3-flash-preview';
 
 export interface Chant {
     lyrics: string[];
@@ -26,21 +46,32 @@ export const generatePunkChant = async (
     if (trigger === 'losing') context = `We are losing badly. Depression. Dark humor. "Sack the board".`;
 
     const prompt = `
-    You are the Capo of the ${teamName} Ultras. You love Ska-Punk and Oi! music (Cock Sparrer, The Specials, Dropkick Murphys).
+    You are the Capo of the ${teamName} Ultras. You are a musical genius who adapts classic songs into football chants.
 
-    Generate a 4-line terrace chant based on: ${context}
+    CONTEXT: ${context}
+
+    TASK: Write a 4-line chant.
+    
+    CRITICAL INSTRUCTION:
+    You MUST pick a specific, well-known tune FIRST, and then write lyrics that MATCH THE SYLLABLE COUNT AND RHYTHM of that tune exactly.
+    Do not just write a poem. It must be singable to the melody.
+
+    Example:
+    Tune: "Sloop John B"
+    Original: "We come on the sloop John B, my grandfather and me" (13 syllables)
+    Chant: "We follow the ${teamName}, across the land and sea" (13 syllables)
 
     RULES:
-    1. Must rhyme (AABB or ABAB).
-    2. Must have a catchy, stomping rhythm.
-    3. If losing, be cynical/funny.
-    4. If winning, be rowdy.
-    5. Do not use generic "Olé Olé". Make it specific to the situation.
+    1. Pick a tune from: "Yellow Submarine", "Sloop John B", "Seven Nation Army", "Hey Jude", "Anarchy in the UK", "Twist and Shout".
+    2. Write lyrics that fit the melody perfectly.
+    3. Rhyme Scheme: AABB or ABAB.
+    4. If losing, be cynical/funny.
+    5. If winning, be rowdy.
 
     Return JSON ONLY:
     {
         "lyrics": ["Line 1", "Line 2", "Line 3", "Line 4 (Punchline)"],
-        "tune": "Name of a classic song it sounds like (e.g. Yellow Submarine, Anarchy in the UK)",
+        "tune": "Name of the song used",
         "intensity": "high"
     }
     `;

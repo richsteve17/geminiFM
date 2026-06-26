@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import type { Team, Tactic, Formation, Mentality, PlayerEffect, Player, GameState, PlayerPersonality } from '../types';
+import { GameState } from '../types';
+import type { Team, Tactic, Formation, Mentality, PlayerEffect, Player, PlayerPersonality } from '../types';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { ArrowsRightLeftIcon } from './icons/ArrowsRightLeftIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
@@ -60,7 +61,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     const [selectedListPlayer, setSelectedListPlayer] = useState<string | null>(null);
 
     const isNationalTeam = team.league === 'International';
-    const isMatchLive = gameState === 'PAUSED'; 
+    const isMatchLive = gameState === GameState.PAUSED; 
 
     // Financial Calcs
     const totalWageBill = team.players.reduce((sum, p) => sum + p.wage, 0);
@@ -165,6 +166,9 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                     <div className="flex items-center gap-2 mt-0.5">
                         <span className={`text-[9px] font-bold px-1.5 rounded border ${personalityColor} uppercase tracking-wider`}>
                             {player.personality}
+                        </span>
+                        <span className={`text-[9px] font-bold px-1.5 rounded border ${player.condition > 80 ? 'text-green-400 border-green-800 bg-green-900/30' : player.condition > 60 ? 'text-yellow-400 border-yellow-800 bg-yellow-900/30' : 'text-red-400 border-red-800 bg-red-900/30'} uppercase tracking-wider`}>
+                            {player.condition}% FIT
                         </span>
                         {!isNationalTeam && (
                             <span className="text-[9px] text-gray-500">
@@ -279,7 +283,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                                 {isMatchLive && <span className="text-[10px] text-blue-400 font-bold uppercase">SUBS: {subsUsed}/5</span>}
                             </div>
                             
-                            {!isNationalTeam && playersWithContractIssues.length > 0 && gameState === 'PRE_MATCH' && (
+                            {!isNationalTeam && playersWithContractIssues.length > 0 && gameState === GameState.PRE_MATCH && (
                                 <button 
                                     onClick={() => setShowContracts(!showContracts)}
                                     className="w-full mb-2 flex justify-between items-center text-[10px] font-bold bg-red-900/40 text-red-200 border border-red-800 p-1.5 rounded hover:bg-red-900/60 transition-colors"
