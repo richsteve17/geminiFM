@@ -15,7 +15,7 @@ import type {
 } from '../types';
 
 let _ai: GoogleGenAI | null = null;
-const api_key_raw = process.env.API_KEY || process.env.GEMINI_API_KEY;
+const api_key_raw = process.env.API_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
 const getAIInstance = (): GoogleGenAI => {
     if (!_ai) {
@@ -434,7 +434,7 @@ export const generateReplayVideo = async (description: string, eventId: number, 
 
         const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
         if (videoUri) {
-            const fullUrl = `${videoUri}&key=${API_KEY}`;
+            const fullUrl = `${videoUri}&key=${api_key_raw}`;
             mediaCache.set(cacheKey, fullUrl); 
             return fullUrl;
         }
