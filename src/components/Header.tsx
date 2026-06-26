@@ -4,7 +4,7 @@ import { FootballIcon } from './icons/FootballIcon';
 import { ArrowLeftStartOnRectangleIcon } from './icons/ArrowLeftStartOnRectangleIcon';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
-import { StarIcon } from './icons/StarIcon'; // Assuming StarIcon exists or reusing a generic icon, otherwise standard SVG
+import { StarIcon } from './icons/StarIcon'; 
 
 const StarIconSVG = (props: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -12,20 +12,29 @@ const StarIconSVG = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+import { CommandLineIcon } from './icons/CommandLineIcon';
+
 interface HeaderProps {
     onQuit?: () => void;
     onSave?: () => void;
     onToggleGuide?: () => void;
+    onToggleTerminal?: () => void;
     showQuit?: boolean;
     managerReputation?: number;
 }
 
-const Header: React.FC<HeaderProps> = ({ onQuit, onSave, onToggleGuide, showQuit, managerReputation }) => {
+const Header: React.FC<HeaderProps> = ({ onQuit, onSave, onToggleGuide, onToggleTerminal, showQuit, managerReputation }) => {
     return (
-        <header className="flex items-center justify-between p-4 bg-gray-800/90 backdrop-blur rounded-lg shadow-lg border border-gray-700 sticky top-0 z-40">
+        <header 
+            className="flex items-center justify-between p-4 bg-gray-800/90 backdrop-blur rounded-lg shadow-lg border border-gray-700 sticky top-0 z-40 transition-colors duration-500"
+            style={{ 
+                borderColor: 'var(--team-secondary, #374151)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px var(--team-primary, rgba(0,0,0,0.1))'
+            }}
+        >
             <div className="flex items-center justify-center sm:justify-start gap-4">
                 <div className="flex items-center">
-                    <FootballIcon className="w-8 h-8 text-green-400" />
+                    <FootballIcon className="w-8 h-8 text-[var(--team-secondary,rgb(74,222,128))]" />
                     <h1 className="ml-4 text-xl sm:text-2xl font-bold tracking-wider text-white hidden sm:block">
                         Gemini Football Manager '27
                     </h1>
@@ -43,6 +52,14 @@ const Header: React.FC<HeaderProps> = ({ onQuit, onSave, onToggleGuide, showQuit
             </div>
             
             <div className="flex items-center gap-2">
+                <button 
+                    onClick={onToggleTerminal}
+                    className="flex items-center gap-2 text-xs font-bold text-green-400 hover:text-green-300 bg-green-900/20 px-3 py-2 rounded border border-green-900/50 hover:border-green-500 transition-colors"
+                    title="System Terminal"
+                >
+                    <CommandLineIcon className="w-4 h-4" />
+                </button>
+
                 {showQuit && (
                     <>
                         <button 

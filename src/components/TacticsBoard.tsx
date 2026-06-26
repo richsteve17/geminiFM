@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { Player, Formation, PlayerPosition } from '../types';
 import type { TacticalAssignment } from '../utils';
 import { FORMATION_SLOTS } from '../utils';
@@ -8,10 +8,12 @@ interface TacticsBoardProps {
     assignments: TacticalAssignment[];
     formation: Formation;
     onSlotClick: (slotIndex: number) => void;
+    onSlotSwap?: (fromSlotIndex: number, toSlotIndex: number) => void;
     selectedSlotIndex: number | null;
 }
 
-const TacticsBoard: React.FC<TacticsBoardProps> = ({ assignments, formation, onSlotClick, selectedSlotIndex }) => {
+const TacticsBoard: React.FC<TacticsBoardProps> = ({ assignments, formation, onSlotClick, onSlotSwap, selectedSlotIndex }) => {
+    const [dragOverSlotIndex, setDragOverSlotIndex] = useState<number | null>(null);
     
     // Mapping FORMATION SLOTS to pitch coordinates
     const getSlotCoordinates = (role: PlayerPosition, indexInRole: number, totalInRole: number) => {
@@ -101,7 +103,7 @@ const TacticsBoard: React.FC<TacticsBoardProps> = ({ assignments, formation, onS
 
             {/* Title */}
             <div className="absolute top-2 left-2 text-[10px] font-bold text-white/50 bg-black/20 px-2 py-1 rounded">
-                TAP TO SWAP
+                DRAG OR TAP TO SWAP
             </div>
 
             {/* Render Slots */}
@@ -140,8 +142,32 @@ const TacticsBoard: React.FC<TacticsBoardProps> = ({ assignments, formation, onS
                 return (
                     <div
                         key={idx}
+                        draggable={Boolean(player)}
+                        onDragStart={(e) => {
+                            e.dataTransfer.setData('text/slot-index', String(idx));
+                            e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragOver={(e) => {
+                            if (!onSlotSwap) return;
+                            e.preventDefault();
+                            setDragOverSlotIndex(idx);
+                        }}
+                        onDragLeave={() => {
+                            if (dragOverSlotIndex === idx) setDragOverSlotIndex(null);
+                        }}
+                        onDrop={(e) => {
+                            e.preventDefault();
+                            const from = Number(e.dataTransfer.getData('text/slot-index'));
+                            if (Number.isFinite(from) && onSlotSwap) {
+                                onSlotSwap(from, idx);
+                            }
+                            setDragOverSlotIndex(null);
+                        }}
+                        onDragEnd={() => setDragOverSlotIndex(null)}
                         onClick={() => onSlotClick(idx)}
-                        className="absolute cursor-pointer transition-all duration-200 transform hover:scale-110 z-10"
+                        className={`absolute cursor-pointer transition-all duration-200 transform hover:scale-110 z-10 ${
+                            dragOverSlotIndex === idx ? 'ring-2 ring-blue-400 rounded-full' : ''
+                        }`}
                         style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
                     >
                         {/* Jersey / Circle */}

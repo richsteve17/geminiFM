@@ -1,5 +1,18 @@
+
 import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
-import type { Team, MatchState, Player, MatchEvent, TournamentStage, NegotiationResult, TacticalShout, PromiseData } from '../types';
+import type {
+    Team,
+    MatchState,
+    Player,
+    MatchEvent,
+    TournamentStage,
+    NegotiationResult,
+    TacticalShout,
+    PromiseData,
+    ContractTerms,
+    ContractBonusType,
+    PlayerPosition,
+} from '../types';
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) throw new Error("API_KEY not set");
@@ -7,7 +20,7 @@ if (!API_KEY) throw new Error("API_KEY not set");
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 // Models configuration
-const MODEL_TEXT = 'gemini-2.0-flash-exp'; 
+const MODEL_TEXT = 'gemini-3-flash-preview'; 
 const MODEL_SEARCH = 'gemini-3-flash-preview'; 
 const MODEL_TTS = 'gemini-2.5-flash-preview-tts'; 
 const MODEL_VIDEO = 'veo-3.1-fast-generate-preview'; 
@@ -21,6 +34,13 @@ const RPM_SHORTS = 0.03; // $0.03 per 1k views
 
 // --- CACHE LAYER ---
 const mediaCache = new Map<string, string | AudioBuffer>();
+const FREE_MODE = ["1", "true", "yes", "on"].includes(
+    String(
+        import.meta.env.VITE_FREE_MODE ||
+        (typeof process !== "undefined" ? process.env.FREE_MODE || process.env.VITE_FREE_MODE : "")
+    ).toLowerCase()
+);
+export const isFreeModeEnabled = () => FREE_MODE;
 
 // --- MEDIA HELPERS ---
 
@@ -137,7 +157,7 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
         const jsonStr = cleanJson(response.text);
         const res = JSON.parse(jsonStr);
         
-        return res.players.map((p: any) => ({ 
+        return (res.players || []).map((p: any) => ({ 
             ...p, 
             status: { type: 'Available' }, 
             effects: [], 
@@ -153,6 +173,9 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
 };
 
 export const playMatchCommentary = async (text: string, eventId: number) => {
+    if (FREE_MODE) {
+        return;
+    }
     const cacheKey = `tts-${eventId}`;
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 24000});
 
@@ -201,6 +224,9 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
 };
 
 export const generateReplayVideo = async (description: string, eventId: number, format: 'landscape' | 'portrait' = 'landscape'): Promise<string | null> => {
+    if (FREE_MODE) {
+        return null;
+    }
     const cacheKey = `video-${eventId}-${format}`;
     if (mediaCache.has(cacheKey)) {
         return mediaCache.get(cacheKey) as string;
@@ -285,34 +311,223 @@ export const evaluateInterview = async (teamName: string, qs: string[], ans: str
     return JSON.parse(cleanJson(response.text));
 };
 
-export const getPlayerTalkQuestions = async (p: Player, t: Team, c: string) => {
-    const prompt = `Negotiation with ${p.name}. JSON: { "questions": [] }`;
-    const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-    return JSON.parse(cleanJson(response.text)).questions;
+const ATTACKING_POSITIONS = new Set<PlayerPosition>(['ST', 'CF', 'LW', 'RW', 'AM']);
+const DEFENSIVE_POSITIONS = new Set<PlayerPosition>(['GK', 'LB', 'CB', 'RB', 'LWB', 'RWB']);
+
+const roundTo = (value: number, step: number) => Math.max(0, Math.round(value / step) * step);
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const sanitizeText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+const getBonusTypeForPosition = (position: PlayerPosition): ContractBonusType => {
+    if (ATTACKING_POSITIONS.has(position)) return 'goal';
+    if (DEFENSIVE_POSITIONS.has(position)) return 'cleanSheet';
+    return 'appearance';
 };
 
-export const evaluatePlayerTalk = async (p: Player, qs: string[], ans: string[], t: Team, c: string, offer: any): Promise<NegotiationResult> => {
+const bonusTypeLabel = (bonusType: ContractBonusType) => {
+    if (bonusType === 'goal') return 'goal bonus';
+    if (bonusType === 'cleanSheet') return 'clean-sheet bonus';
+    return 'appearance bonus';
+};
+
+const getPreferredLengthRange = (personality: Player['personality']) => {
+    switch (personality) {
+        case 'Young Prospect':
+            return { min: 4, max: 6 };
+        case 'Ambitious':
+            return { min: 3, max: 5 };
+        case 'Leader':
+            return { min: 2, max: 4 };
+        case 'Loyal':
+            return { min: 3, max: 6 };
+        default:
+            return { min: 2, max: 5 };
+    }
+};
+
+const normalizeOffer = (
+    player: Player,
+    context: 'transfer' | 'renewal',
+    offer?: Partial<ContractTerms> | null
+): ContractTerms => {
+    const bonusType = (offer?.bonusType && ['goal', 'cleanSheet', 'appearance'].includes(offer.bonusType))
+        ? offer.bonusType
+        : getBonusTypeForPosition(player.position);
+    const defaultSigning = roundTo(player.wage * (context === 'transfer' ? 8 : 4), 1000);
+    const defaultPerformance = roundTo(player.wage * (bonusType === 'goal' ? 0.2 : bonusType === 'cleanSheet' ? 0.12 : 0.08), 500);
+    return {
+        wage: roundTo(clamp(Number(offer?.wage) || player.wage, 1000, 2_500_000), 1000),
+        length: clamp(Number(offer?.length) || Math.max(2, player.contractExpires || 3), 1, 7),
+        signingBonus: roundTo(clamp(Number(offer?.signingBonus) || defaultSigning, 0, 20_000_000), 1000),
+        performanceBonus: roundTo(clamp(Number(offer?.performanceBonus) || defaultPerformance, 0, 1_500_000), 500),
+        bonusType,
+    };
+};
+
+const extractPromisesFromAnswers = (answers: string[]) => {
+    const joined = answers.join(' ').toLowerCase();
+    const promises: string[] = [];
+    if (/start|starter|starting xi|first team|undroppable/.test(joined)) {
+        promises.push('Regular starting role.');
+    }
+    if (/captain|leadership|vice-captain/.test(joined)) {
+        promises.push('Leadership responsibility in the squad.');
+    }
+    if (/title|trophy|champions league|europe|win/.test(joined)) {
+        promises.push('Compete for major honors this season.');
+    }
+    if (/develop|improve|progress|growth|minutes/.test(joined)) {
+        promises.push('Structured player development and consistent minutes.');
+    }
+    return [...new Set(promises)].slice(0, 3);
+};
+
+export const getPlayerTalkQuestions = async (
+    player: Player,
+    team: Team,
+    context: 'transfer' | 'renewal'
+): Promise<string[]> => {
+    const objective = team.objectives?.[0] || 'push the club forward this season';
+    const bonusType = getBonusTypeForPosition(player.position);
+    const fallback = [
+        context === 'transfer'
+            ? `You are pitching ${team.name} to ${player.name}. Why should they leave ${player.currentClub || 'their current club'} for your project right now?`
+            : `${player.name} is open to renewal talks. What role will you guarantee over the next season?`,
+        `How exactly will you use ${player.name} as a ${player.position} in your ${team.tactic.formation} setup?`,
+        `What can you promise about starts, competition, and long-term growth at ${team.name}?`,
+        `The board objective is "${objective}". How does signing this deal help you deliver that target?`,
+        `We are ready for numbers. What are your weekly wage, signing bonus, and ${bonusTypeLabel(bonusType)} terms?`,
+    ];
+
     const prompt = `
-    Roleplay as the Agent for ${p.name}.
-    User offer: $${offer.wage}, ${offer.length} years.
-    History: ${JSON.stringify(ans)}.
-    Context: Negotiation with ${t.name}.
-    Previous Wage: $${p.wage}.
-    
-    Return JSON: 
-    { 
-        "decision": "accepted" | "rejected" | "counter", 
-        "reasoning": "string (Agent's reply in third person)", 
-        "counterOffer": { "wage": number, "length": number },
-        "extractedPromises": ["string"]
-    }
+    You are the player's AGENT in football contract talks.
+    Context: ${context}. Club: ${team.name}. Player: ${player.name} (${player.position}, ${player.personality}).
+    Generate exactly 5 negotiation questions addressed to the MANAGER.
+
+    Hard rules:
+    1. Questions must be manager-facing (use "you/your club"), never first-person player roleplay.
+    2. Keep first 4 questions focused on role, ambitions, starts, project fit.
+    3. 5th question must ask for weekly wage + signing bonus + ${bonusTypeLabel(bonusType)}.
+    4. One sentence per question, no fluff.
+
+    Return JSON: { "questions": ["q1", "q2", "q3", "q4", "q5"] }
     `;
+
     try {
-        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
-        return JSON.parse(cleanJson(response.text));
-    } catch (e) {
-        return { decision: "accepted", reasoning: "Okay, we have a deal.", extractedPromises: [] };
+        const response = await ai.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: { responseMimeType: "application/json" },
+        });
+        const parsed = JSON.parse(cleanJson(response.text));
+        const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
+        const cleaned = rawQuestions
+            .map((q: unknown) => sanitizeText(q))
+            .filter(Boolean)
+            .map((q: string) => (q.endsWith('?') ? q : `${q}?`));
+
+        if (cleaned.length === 5 && cleaned.every((q: string) => /you|your/i.test(q))) {
+            return cleaned;
+        }
+        return fallback;
+    } catch {
+        return fallback;
     }
+};
+
+export const evaluatePlayerTalk = async (
+    player: Player,
+    questions: string[],
+    answers: string[],
+    team: Team,
+    context: 'transfer' | 'renewal',
+    offer?: Partial<ContractTerms>
+): Promise<NegotiationResult> => {
+    const safeOffer = normalizeOffer(player, context, offer);
+    const preferredLength = getPreferredLengthRange(player.personality);
+    const bonusType = safeOffer.bonusType;
+    const personalityMultiplier: Record<Player['personality'], number> = {
+        Ambitious: 1.2,
+        Loyal: 0.95,
+        Mercenary: 1.25,
+        'Young Prospect': 1.05,
+        Leader: 1.1,
+        Professional: 1.0,
+        Volatile: 1.15,
+    };
+
+    const expectedWage = roundTo(player.wage * personalityMultiplier[player.personality] * (context === 'transfer' ? 1.12 : 1.03), 1000);
+    const expectedSigningBonus = roundTo(player.wage * (context === 'transfer' ? 8 : 4) * personalityMultiplier[player.personality], 1000);
+    const expectedPerformanceBonus = roundTo(
+        player.wage * (bonusType === 'goal' ? 0.2 : bonusType === 'cleanSheet' ? 0.12 : 0.08),
+        500
+    );
+
+    const wageScore = safeOffer.wage / Math.max(expectedWage, 1);
+    const signingScore = safeOffer.signingBonus / Math.max(expectedSigningBonus, 1);
+    const performanceScore = safeOffer.performanceBonus / Math.max(expectedPerformanceBonus, 1);
+    const lengthDistance =
+        safeOffer.length < preferredLength.min
+            ? preferredLength.min - safeOffer.length
+            : safeOffer.length > preferredLength.max
+                ? safeOffer.length - preferredLength.max
+                : 0;
+    const lengthScore = clamp(1 - (lengthDistance * 0.18), 0.3, 1.2);
+
+    const joinedAnswers = answers.join(' ').toLowerCase();
+    const ambitionSignal = /champions|title|trophy|europe|project|elite/.test(joinedAnswers) ? 0.08 : 0;
+    const roleSignal = /start|starter|starting|key player|build around|regular minutes/.test(joinedAnswers) ? 0.08 : 0;
+    const developmentSignal = /develop|improve|growth|plan/.test(joinedAnswers) ? 0.05 : 0;
+    const financePenalty = team.balance < safeOffer.signingBonus ? -0.2 : 0;
+
+    const totalScore =
+        (wageScore * 0.5) +
+        (signingScore * 0.2) +
+        (performanceScore * 0.15) +
+        (lengthScore * 0.15) +
+        ambitionSignal +
+        roleSignal +
+        developmentSignal +
+        financePenalty;
+
+    const promises = extractPromisesFromAnswers(answers);
+    const label = bonusTypeLabel(bonusType);
+
+    if (totalScore >= 1.02 && wageScore >= 0.88) {
+        return {
+            decision: 'accepted',
+            reasoning: `The package is acceptable. ${player.name} agrees to ${safeOffer.length} years on $${safeOffer.wage.toLocaleString()}/week, a $${safeOffer.signingBonus.toLocaleString()} signing bonus, and a $${safeOffer.performanceBonus.toLocaleString()} ${label}.`,
+            extractedPromises: promises,
+        };
+    }
+
+    if (totalScore >= 0.76) {
+        const counter: ContractTerms = {
+            wage: roundTo(Math.max(safeOffer.wage, expectedWage), 1000),
+            length: clamp(
+                safeOffer.length < preferredLength.min ? preferredLength.min :
+                safeOffer.length > preferredLength.max ? preferredLength.max :
+                safeOffer.length,
+                1,
+                7
+            ),
+            signingBonus: roundTo(Math.max(safeOffer.signingBonus, expectedSigningBonus * 0.9), 1000),
+            performanceBonus: roundTo(Math.max(safeOffer.performanceBonus, expectedPerformanceBonus), 500),
+            bonusType,
+        };
+        return {
+            decision: 'counter',
+            reasoning: `We are close, but the terms need improvement. We need around $${counter.wage.toLocaleString()}/week, $${counter.signingBonus.toLocaleString()} signing bonus, and $${counter.performanceBonus.toLocaleString()} ${label} over ${counter.length} years.`,
+            counterOffer: counter,
+            extractedPromises: promises,
+        };
+    }
+
+    return {
+        decision: 'rejected',
+        reasoning: `The proposal is too far below expectations. Wage, incentives, and/or contract structure do not match ${player.name}'s market level.`,
+        extractedPromises: promises,
+    };
 };
 
 export const checkPromises = async (promises: PromiseData[], currentWeek: number, teamState: any): Promise<PromiseData[]> => {

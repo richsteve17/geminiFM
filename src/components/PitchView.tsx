@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FootballIcon } from './icons/FootballIcon';
 import type { MatchEvent } from '../types';
 
@@ -10,16 +9,51 @@ interface PitchViewProps {
     lastEvent: MatchEvent | null;
 }
 
+type Dot = { x: number; y: number };
+
+const HOME_SHAPE: Dot[] = [
+    { x: 10, y: 50 }, // GK
+    { x: 23, y: 18 }, { x: 24, y: 37 }, { x: 24, y: 63 }, { x: 23, y: 82 },
+    { x: 40, y: 24 }, { x: 43, y: 50 }, { x: 40, y: 76 },
+    { x: 57, y: 33 }, { x: 57, y: 67 },
+    { x: 72, y: 50 },
+];
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const shortName = (name: string) =>
+    name
+        .split(/\s+/)
+        .map((part) => part[0] || '')
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
+
+const renderDot = (
+    key: string,
+    x: number,
+    y: number,
+    colorClass: string,
+    ringClass: string
+) => (
+    <div
+        key={key}
+        className={`absolute w-4 h-4 rounded-full border border-white/70 ${colorClass} ${ringClass} shadow-[0_0_6px_rgba(0,0,0,0.35)]`}
+        style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
+    />
+);
+
 const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamName, lastEvent }) => {
-    const normalizedMomentum = Math.min(Math.max(((momentum + 10) / 20) * 100, 10), 90);
-    
-    const [fieldPos, setFieldPos] = useState(50);
+    const [phase, setPhase] = useState(0);
     const [isGoalAnim, setIsGoalAnim] = useState(false);
-    const [animTeam, setAnimTeam] = useState<'home'|'away'|null>(null);
+    const [animTeam, setAnimTeam] = useState<'home' | 'away' | null>(null);
 
     useEffect(() => {
-        setFieldPos(normalizedMomentum);
-    }, [momentum]);
+        const timer = setInterval(() => {
+            setPhase((prev) => prev + 1);
+        }, 800);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         if (lastEvent?.type === 'goal') {
@@ -28,62 +62,83 @@ const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamN
             const timer = setTimeout(() => {
                 setIsGoalAnim(false);
                 setAnimTeam(null);
-            }, 3000);
+            }, 2800);
             return () => clearTimeout(timer);
         }
     }, [lastEvent, homeTeamName]);
 
+    const homeDots = useMemo(() => {
+        return HOME_SHAPE.map((dot, idx) => {
+            const swayX = Math.sin((phase + idx) * 0.7) * 1.2;
+            const swayY = Math.cos((phase + idx) * 0.9) * 1.4;
+            const pressShift = (momentum / 10) * 2.8;
+            return {
+                x: clamp(dot.x + swayX + pressShift, 6, 94),
+                y: clamp(dot.y + swayY, 10, 90),
+            };
+        });
+    }, [phase, momentum]);
+
+    const awayDots = useMemo(() => {
+        return HOME_SHAPE.map((dot, idx) => {
+            const mirroredX = 100 - dot.x;
+            const swayX = Math.sin((phase + idx + 3) * 0.75) * 1.2;
+            const swayY = Math.cos((phase + idx + 4) * 0.9) * 1.4;
+            const pressShift = (-momentum / 10) * 2.8;
+            return {
+                x: clamp(mirroredX + swayX + pressShift, 6, 94),
+                y: clamp(dot.y + swayY, 10, 90),
+            };
+        });
+    }, [phase, momentum]);
+
+    const ball = useMemo(() => {
+        const driftX = Math.sin(phase * 0.6) * 3.2;
+        const driftY = Math.cos(phase * 0.8) * 6.2;
+        const momentumPush = momentum * 1.85;
+        return {
+            x: clamp(50 + driftX + momentumPush, 8, 92),
+            y: clamp(50 + driftY, 12, 88),
+        };
+    }, [phase, momentum]);
+
     return (
-        <div className="relative w-full aspect-[16/9] max-h-[300px] bg-green-700 rounded-lg overflow-hidden shadow-inner border-2 border-green-800 mb-0 select-none mx-auto">
-            <div className="absolute inset-0 opacity-20 pointer-events-none">
-                 <div className="w-full h-full bg-[linear-gradient(90deg,transparent_50%,rgba(0,0,0,0.1)_50%)] bg-[length:10%_100%]"></div>
-                 <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-white"></div>
-                 <div className="absolute top-1/2 left-1/2 w-24 h-24 border-2 border-white rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-                 <div className="absolute top-1/4 bottom-1/4 left-0 w-[15%] border-r-2 border-y-2 border-white bg-transparent"></div>
-                 <div className="absolute top-1/4 bottom-1/4 right-0 w-[15%] border-l-2 border-y-2 border-white bg-transparent"></div>
+        <div className="relative w-full aspect-[16/9] max-h-[300px] rounded-lg overflow-hidden border-2 border-emerald-900 shadow-inner bg-gradient-to-b from-emerald-700 via-emerald-800 to-emerald-900 select-none mx-auto">
+            <div className="absolute inset-0 opacity-35 pointer-events-none bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_0,rgba(255,255,255,0.06)_10%,transparent_10%,transparent_20%,rgba(255,255,255,0.06)_20%,rgba(255,255,255,0.06)_30%,transparent_30%,transparent_40%,rgba(255,255,255,0.06)_40%,rgba(255,255,255,0.06)_50%,transparent_50%,transparent_60%,rgba(255,255,255,0.06)_60%,rgba(255,255,255,0.06)_70%,transparent_70%,transparent_80%,rgba(255,255,255,0.06)_80%,rgba(255,255,255,0.06)_90%,transparent_90%,transparent_100%)]" />
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-0 bottom-0 left-1/2 w-[2px] bg-white/75" />
+                <div className="absolute top-1/2 left-1/2 w-24 h-24 border-2 border-white/70 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                <div className="absolute top-[34%] bottom-[34%] left-0 w-[16%] border-r-2 border-y-2 border-white/70" />
+                <div className="absolute top-[34%] bottom-[34%] right-0 w-[16%] border-l-2 border-y-2 border-white/70" />
             </div>
 
             {isGoalAnim && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/65 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
                     <div className="text-center">
                         <FootballIcon className="w-16 h-16 text-white mx-auto mb-2 animate-bounce" />
-                        <h2 className="text-4xl font-black text-white uppercase tracking-tighter drop-shadow-[0_0_10px_rgba(34,197,94,0.8)]">
-                            GOAL!
-                        </h2>
-                        <p className="text-xl text-green-400 font-bold">{animTeam === 'home' ? homeTeamName : awayTeamName}</p>
+                        <h2 className="text-4xl font-black text-white uppercase tracking-tight">GOAL</h2>
+                        <p className="text-xl text-emerald-300 font-bold">{animTeam === 'home' ? homeTeamName : awayTeamName}</p>
                     </div>
                 </div>
             )}
 
-            <div 
-                className="absolute top-0 bottom-0 left-0 right-0 transition-all duration-1000 ease-in-out"
-                style={{ transform: `translateX(${(fieldPos - 50) / 2}%)` }} 
-            >
-                <div className="absolute top-1/2 left-[45%] w-full h-full -translate-y-1/2 transition-all duration-1000">
-                     <div className="absolute top-[40%] left-[10%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
-                     <div className="absolute top-[60%] left-[10%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
-                     <div className="absolute top-[30%] left-[20%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
-                     <div className="absolute top-[50%] left-[25%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
-                     <div className="absolute top-[70%] left-[20%] w-3 h-3 bg-red-500 rounded-full shadow border border-white"></div>
-                </div>
-
-                 <div className="absolute top-1/2 left-[55%] w-full h-full -translate-y-1/2 transition-all duration-1000">
-                     <div className="absolute top-[40%] right-[10%] w-3 h-3 bg-blue-500 rounded-full shadow border border-white"></div>
-                     <div className="absolute top-[60%] right-[10%] w-3 h-3 bg-blue-500 rounded-full shadow border border-white"></div>
-                     <div className="absolute top-[30%] right-[20%] w-3 h-3 bg-blue-500 rounded-full shadow border border-white"></div>
-                     <div className="absolute top-[50%] right-[25%] w-3 h-3 bg-blue-500 rounded-full shadow border border-white"></div>
-                     <div className="absolute top-[70%] right-[20%] w-3 h-3 bg-blue-500 rounded-full shadow border border-white"></div>
-                </div>
-                
-                <div className="absolute top-[50%] left-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_5px_white] -translate-x-1/2 -translate-y-1/2 transition-all duration-500"></div>
+            <div className="absolute inset-0">
+                {homeDots.map((dot, idx) => renderDot(`h-${idx}`, dot.x, dot.y, 'bg-rose-500', 'ring-rose-300/40'))}
+                {awayDots.map((dot, idx) => renderDot(`a-${idx}`, dot.x, dot.y, 'bg-sky-500', 'ring-sky-300/40'))}
+                <div
+                    className="absolute w-2.5 h-2.5 rounded-full bg-white border border-gray-100 shadow-[0_0_8px_rgba(255,255,255,0.85)] transition-all duration-700 ease-out"
+                    style={{ left: `${ball.x}%`, top: `${ball.y}%`, transform: 'translate(-50%, -50%)' }}
+                />
             </div>
 
-            <div className="absolute bottom-2 left-2 right-2 flex justify-between text-[10px] font-bold text-white/70 uppercase">
-                <span>{awayTeamName} Pressure</span>
-                <span>{homeTeamName} Pressure</span>
+            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] font-bold text-white/85 uppercase tracking-wider">
+                <span>{shortName(awayTeamName)}</span>
+                <span>Pressure Tilt {momentum > 0 ? `+${momentum}` : momentum}</span>
+                <span>{shortName(homeTeamName)}</span>
             </div>
         </div>
     );
 };
 
 export default PitchView;
+

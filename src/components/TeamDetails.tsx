@@ -58,6 +58,8 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
 
     // List Selection State (for click-to-swap in List View)
     const [selectedListPlayer, setSelectedListPlayer] = useState<string | null>(null);
+    const [dragSourcePlayer, setDragSourcePlayer] = useState<string | null>(null);
+    const [dragOverPlayer, setDragOverPlayer] = useState<string | null>(null);
 
     const isNationalTeam = team.league === 'International';
     const isMatchLive = gameState === 'PAUSED'; 
@@ -101,6 +103,14 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
         }
     };
 
+    const swapByName = (sourceName: string, targetName: string) => {
+        if (sourceName === targetName || !onSwapPlayers) return;
+        const sourcePlayer = team.players.find(p => p.name === sourceName);
+        const targetPlayer = team.players.find(p => p.name === targetName);
+        if (!sourcePlayer || !targetPlayer) return;
+        onSwapPlayers(sourcePlayer, targetPlayer);
+    };
+
     // Handle List View Interaction (Swap Mode)
     const handleListClick = (clickedPlayer: Player) => {
         if (selectedListPlayer === null) {
@@ -112,12 +122,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 setSelectedListPlayer(null);
             } else {
                 // Swap Action
-                const p1 = team.players.find(p => p.name === selectedListPlayer);
-                const p2 = clickedPlayer;
-                
-                if (p1 && p2 && onSwapPlayers) {
-                    onSwapPlayers(p1, p2);
-                }
+                swapByName(selectedListPlayer, clickedPlayer.name);
                 setSelectedListPlayer(null);
             }
         }
@@ -148,7 +153,38 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
         const outOfPosition = assignment?.isOutOfPosition;
 
         return (
-            <li key={player.name} onClick={() => handleListClick(player)} className={`p-2 rounded border cursor-pointer flex items-center gap-2 transition-all group ${
+            <li
+                key={player.name}
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('text/player-name', player.name);
+                    e.dataTransfer.effectAllowed = 'move';
+                    setDragSourcePlayer(player.name);
+                    setSelectedListPlayer(null);
+                }}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragSourcePlayer && dragSourcePlayer !== player.name) {
+                        setDragOverPlayer(player.name);
+                    }
+                }}
+                onDragLeave={() => {
+                    if (dragOverPlayer === player.name) setDragOverPlayer(null);
+                }}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    const sourceName = e.dataTransfer.getData('text/player-name') || dragSourcePlayer;
+                    if (sourceName) swapByName(sourceName, player.name);
+                    setDragOverPlayer(null);
+                    setDragSourcePlayer(null);
+                }}
+                onDragEnd={() => {
+                    setDragOverPlayer(null);
+                    setDragSourcePlayer(null);
+                }}
+                onClick={() => handleListClick(player)}
+                className={`p-2 rounded border cursor-pointer flex items-center gap-2 transition-all group ${
+                dragOverPlayer === player.name ? 'ring-2 ring-blue-400 border-blue-400' :
                 isSelected ? 'bg-yellow-900/40 border-yellow-500 ring-1 ring-yellow-500' :
                 player.status.type === 'Injured' ? 'bg-red-900/30 border-red-500' :
                 isBench ? 'bg-gray-900/50 border-gray-700 hover:bg-gray-700 opacity-80 hover:opacity-100' :
@@ -169,6 +205,9 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         {!isNationalTeam && (
                             <span className="text-[9px] text-gray-500">
                                 {player.contractExpires === 0 ? <span className="text-red-400 font-bold">Expiring!</span> : `${player.contractExpires}y`} · ${player.wage.toLocaleString()}/wk
+                                {player.contractIncentives && player.contractIncentives.performanceBonus > 0 && (
+                                    <> · +${player.contractIncentives.performanceBonus.toLocaleString()}/{player.contractIncentives.bonusType === 'goal' ? 'goal' : player.contractIncentives.bonusType === 'cleanSheet' ? 'CS' : 'app'}</>
+                                )}
                             </span>
                         )}
                     </div>
@@ -237,6 +276,18 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                             assignments={tacticalAnalysis.assignments} 
                             formation={team.tactic.formation} 
                             onSlotClick={handleSlotClick} 
+                            onSlotSwap={(fromIndex, toIndex) => {
+                                if (fromIndex === toIndex) return;
+                                const currentStarters = [...starters];
+                                if (!currentStarters[fromIndex] || !currentStarters[toIndex]) return;
+                                const temp = currentStarters[fromIndex];
+                                currentStarters[fromIndex] = currentStarters[toIndex];
+                                currentStarters[toIndex] = temp;
+                                if (onReorderPlayers) {
+                                    onReorderPlayers([...currentStarters, ...bench]);
+                                }
+                                setSelectedSlot(null);
+                            }}
                             selectedSlotIndex={selectedSlot}
                         />
                         
@@ -265,6 +316,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                 
                 {view === 'squad' && (
                     <div className="space-y-4">
+                        <p className="text-[10px] text-gray-500 -mt-1">Drag and drop to switch players. Tap still works.</p>
                         {/* Swap Mode Indicator */}
                         {selectedListPlayer && (
                             <div className="bg-blue-900/50 border border-blue-500 p-2 rounded text-center animate-pulse mb-2">

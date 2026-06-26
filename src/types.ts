@@ -37,6 +37,16 @@ export type PlayerPosition =
     | 'DM' | 'CM' | 'AM' | 'LM' | 'RM' 
     | 'LW' | 'RW' | 'ST' | 'CF';
 
+export type ContractBonusType = 'goal' | 'cleanSheet' | 'appearance';
+
+export interface ContractTerms {
+    wage: number;
+    length: number;
+    signingBonus: number;
+    performanceBonus: number;
+    bonusType: ContractBonusType;
+}
+
 export interface Player {
   name: string;
   position: PlayerPosition;
@@ -53,6 +63,10 @@ export interface Player {
   scoutingReport?: string;
   marketValue?: number;
   currentClub?: string; // New field for scouting flavor
+  contractIncentives?: {
+    performanceBonus: number;
+    bonusType: ContractBonusType;
+  };
   condition: number; // 0 to 100
 }
 
@@ -86,9 +100,15 @@ export interface Team {
   balance: number; 
   objectives: string[];
   activePromises: PromiseData[]; // MEMORY SYSTEM
+  colors?: { // Dynamic Theming
+      primary: string;
+      secondary: string;
+      text: string;
+      third?: string; // The "Unhinged" Kit Option
+  };
 }
 
-export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance' | 'objectives' | 'activePromises'> {
+export interface NationalTeam extends Omit<Team, 'chairmanPersonality' | 'players' | 'league' | 'balance' | 'objectives' | 'activePromises' | 'colors'> {
     countryCode: string;
     players: Player[];
     objectives?: string[];
@@ -192,13 +212,13 @@ export interface PlayerTalk {
     currentQuestionIndex: number;
     context: 'transfer' | 'renewal';
     teammates?: string[];
-    negotiationHistory: { offer: { wage: number, length: number }, response: string }[];
+    negotiationHistory: { offer: ContractTerms, response: string }[];
 }
 
 export interface NegotiationResult {
     decision: 'accepted' | 'rejected' | 'counter';
     reasoning: string;
-    counterOffer?: { wage: number, length: number };
+    counterOffer?: ContractTerms;
     extractedPromises?: string[]; // New field for extracted text promises
 }
 
