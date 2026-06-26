@@ -1,15 +1,13 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ContractTerms } from './types';
 import { AppScreen, GameState } from './types';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
-import AtmosphereWidget from './components/AtmosphereWidget';
 import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary } from './services/geminiService';
-import { generatePunkChant, type Chant } from './services/chantService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
@@ -31,7 +29,7 @@ import { logger, LogEntry } from './utils/logger';
 
 const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
 const SIMULATION_CHUNK_MINUTES = 10; 
-const DEFAULT_TICK_DELAY_MS = 1500; 
+const CLEAN_SHEET_POSITIONS = new Set(['GK', 'LB', 'CB', 'RB', 'LWB', 'RWB']);
 
 const convertNationalTeam = (nt: NationalTeam): Team => ({
     name: nt.name,
@@ -82,7 +80,7 @@ export default function App() {
     // Negotiation States
     const [playerTalk, setPlayerTalk] = useState<PlayerTalk | null>(null);
     const [talkResult, setTalkResult] = useState<NegotiationResult | null>(null);
-    const [pendingContractTerms, setPendingContractTerms] = useState<{ wage: number, length: number, incentives?: string } | null>(null);
+    const [pendingContractTerms, setPendingContractTerms] = useState<ContractTerms | null>(null);
     
     // Transfer Market State (Mutable!)
     const [transferMarket, setTransferMarket] = useState<Player[]>(TRANSFER_TARGETS);
@@ -94,9 +92,6 @@ export default function App() {
     const [managerReputation, setManagerReputation] = useState<number>(0);
     
     const [matchSpeed, setMatchSpeed] = useState<'slow' | 'normal' | 'fast' | 'instant'>('normal');
-
-    // --- CHANT STATE ---
-    const [currentChant, setCurrentChant] = useState<Chant | null>(null);
 
     // --- THEMING STATE ---
     const [activeTheme, setActiveTheme] = useState<{ primary: string, secondary: string, text: string } | null>(null);
@@ -167,7 +162,7 @@ export default function App() {
                     // --- CONSTRUCT TACTICAL CONTEXT ---
                     const starters = userTeam.players.filter(p => p.isStarter);
                     const analysis = analyzeTactics(starters, userTeam.tactic.formation);
-                    const formationSlots = FORMATION_SLOTS[userTeam.tactic.formation];
+                    const formationSlots = FORMATION_SLOTS[userTeam.tactic.formation] || FORMATION_SLOTS['4-4-2'];
                     
                     let tacticalContext = `User Team Efficiency: ${analysis.score}%.\nFormation: ${userTeam.tactic.formation}\n`;
                     tacticalContext += `Lineup:\n`;
@@ -181,30 +176,69 @@ export default function App() {
                         tacticalContext += `\nCRITICAL: The team is confused. Players are out of position. Expect errors.`;
                     }
 
+                    const homeTeam = teams[currentFixture.homeTeam];
+                    const awayTeam = teams[currentFixture.awayTeam];
+                    if (!homeTeam || !awayTeam) {
+                        setError(`Missing team data for fixture: ${currentFixture.homeTeam} vs ${currentFixture.awayTeam}`);
+                        setGameState(GameState.PAUSED);
+                        setIsLoading(false);
+                        return;
+                    }
+
                     try {
                         const result = await simulateMatchSegment(
-                            teams[currentFixture.homeTeam], 
-                            teams[currentFixture.awayTeam], 
-                            matchState, 
-                            nextTarget, 
+                            homeTeam,
+                            awayTeam,
+                            matchState,
+                            nextTarget,
                             { shout: activeShout, userTeamName, tacticalContext }
                         );
 
-                        setPendingEvents(prev => [...prev, ...result.events]);
-                        
+                        const rawEvents = Array.isArray(result?.events) ? result.events : [];
+                        const safeEvents: MatchEvent[] = rawEvents.map((event: any, index: number) => {
+                            const parsedMinute = Number(event?.minute);
+                            const minute = Number.isFinite(parsedMinute)
+                                ? Math.max(currentPlaybackMinute + 1, Math.min(nextTarget, Math.floor(parsedMinute)))
+                                : nextTarget;
+                            const validTypes: MatchEvent['type'][] = ['goal', 'sub', 'injury', 'card', 'whistle', 'commentary'];
+                            const type: MatchEvent['type'] = validTypes.includes(event?.type) ? event.type : 'commentary';
+                            return {
+                                id: Number.isFinite(Number(event?.id)) ? Number(event.id) : Date.now() + index,
+                                minute,
+                                type,
+                                teamName: typeof event?.teamName === 'string' ? event.teamName : undefined,
+                                player: typeof event?.player === 'string' ? event.player : undefined,
+                                description: typeof event?.description === 'string' && event.description.trim()
+                                    ? event.description
+                                    : 'The play develops without a clear chance.',
+                                scoreAfter: typeof event?.scoreAfter === 'string' ? event.scoreAfter : undefined,
+                                cardType: event?.cardType === 'yellow' || event?.cardType === 'red' ? event.cardType : undefined,
+                            };
+                        });
+
+                        const safeHomeAdd = Number.isFinite(Number(result?.homeScoreAdded)) ? Number(result.homeScoreAdded) : 0;
+                        const safeAwayAdd = Number.isFinite(Number(result?.awayScoreAdded)) ? Number(result.awayScoreAdded) : 0;
+                        const parsedMomentum = Number(result?.momentum);
+                        const safeMomentum = Number.isFinite(parsedMomentum) ? Math.max(-100, Math.min(100, parsedMomentum)) : 0;
+                        const safeAnalysis = typeof result?.tacticalAnalysis === 'string' && result.tacticalAnalysis.trim()
+                            ? result.tacticalAnalysis
+                            : 'The match continues.';
+
+                        setPendingEvents(prev => [...prev, ...safeEvents]);
                         setMatchState(prev => prev ? ({
                             ...prev,
-                            homeScore: prev.homeScore + result.homeScoreAdded,
-                            awayScore: prev.awayScore + result.awayScoreAdded,
-                            momentum: result.momentum,
-                            tacticalAnalysis: result.tacticalAnalysis
+                            homeScore: prev.homeScore + safeHomeAdd,
+                            awayScore: prev.awayScore + safeAwayAdd,
+                            momentum: safeMomentum,
+                            tacticalAnalysis: safeAnalysis
                         }) : null);
-
                         setSimulationTargetMinute(nextTarget);
-                        
                         if (activeShout) setActiveShout(undefined);
-                    } catch (e) {
-                        console.error("Playback tick: Simulation error", e);
+                        setError(null);
+                    } catch (simError) {
+                        console.error("Live simulation tick failed", simError);
+                        setError("Match simulation failed for this segment. Resume to continue.");
+                        setGameState(GameState.PAUSED);
                     } finally {
                         setIsLoading(false);
                     }
@@ -237,7 +271,20 @@ export default function App() {
         runPlaybackTick();
 
         return () => clearTimeout(timeoutId);
-    }, [gameState, currentPlaybackMinute, simulationTargetMinute, isLoading, matchSpeed]); 
+    }, [
+        gameState,
+        currentPlaybackMinute,
+        simulationTargetMinute,
+        isLoading,
+        matchSpeed,
+        currentFixture,
+        userTeam,
+        matchState,
+        pendingEvents,
+        teams,
+        activeShout,
+        userTeamName
+    ]); 
 
     // --- SAVE / LOAD SYSTEM ---
     const saveGame = () => {
@@ -248,6 +295,7 @@ export default function App() {
                 managerReputation, transferMarket
             };
             localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
+            logger.success("Game Saved Successfully!");
             alert("Game Saved Successfully!");
         }
     };
@@ -542,17 +590,6 @@ export default function App() {
             Object.keys(newTeams).forEach(teamName => {
                 newTeams[teamName].players = newTeams[teamName].players.map(p => ({
                     ...p,
-                    condition: Math.min(100, p.condition + 30)
-                }));
-            });
-            return newTeams;
-        });
-
-        setTeams(prev => {
-            const newTeams = { ...prev };
-            Object.keys(newTeams).forEach(teamName => {
-                newTeams[teamName].players = newTeams[teamName].players.map(p => ({
-                    ...p,
                     condition: Math.min(100, p.condition + 15)
                 }));
             });
@@ -567,6 +604,7 @@ export default function App() {
 
     const handleStartMatch = () => {
         if (!currentFixture || !userTeam) return;
+        setError(null);
         setMatchState({ currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off." });
         setGameState(GameState.PLAYING); 
         setCurrentPlaybackMinute(0);
@@ -576,6 +614,7 @@ export default function App() {
 
     const handleResumeMatch = (shout?: TouchlineShout) => {
         if (shout) setActiveShout(shout);
+        setError(null);
         setGameState(GameState.PLAYING);
         // Fix: If at halftime (45'), force simulation to advance to 46' to break the pause loop
         if (currentPlaybackMinute === 45) {
@@ -588,7 +627,12 @@ export default function App() {
         if (momentumShift !== 0) {
             setMatchState(prev => prev ? { ...prev, momentum: Math.max(-100, Math.min(100, prev.momentum + momentumShift)) } : null);
         }
+        if (targetMinute <= 0) {
+            setGameState(GameState.PAUSED);
+            return;
+        }
         setSimulationTargetMinute(targetMinute);
+        setError(null);
         setGameState(GameState.PLAYING);
     };
 
@@ -636,6 +680,58 @@ export default function App() {
             updateTeam(currentFixture.awayTeam, matchState.awayScore, matchState.homeScore);
             return newTable;
         });
+
+        const playerGoals = new Map<string, number>();
+        matchState.events.forEach(event => {
+            if (event.type === 'goal' && event.teamName === userTeamName && event.player) {
+                playerGoals.set(event.player, (playerGoals.get(event.player) || 0) + 1);
+            }
+        });
+
+        const currentTeam = teams[userTeamName];
+        if (!currentTeam) return;
+
+        let bonusPayout = 0;
+        for (const player of currentTeam.players) {
+            const contractIncentives = player.contractIncentives;
+            if (!contractIncentives || contractIncentives.performanceBonus <= 0) continue;
+
+            if (contractIncentives.bonusType === 'goal') {
+                const goals = playerGoals.get(player.name) || 0;
+                bonusPayout += goals * contractIncentives.performanceBonus;
+                continue;
+            }
+
+            if (contractIncentives.bonusType === 'cleanSheet') {
+                const cleanSheetEarned = oppGoals === 0 && player.isStarter && CLEAN_SHEET_POSITIONS.has(player.position);
+                if (cleanSheetEarned) bonusPayout += contractIncentives.performanceBonus;
+                continue;
+            }
+
+            if (player.isStarter) {
+                bonusPayout += contractIncentives.performanceBonus;
+            }
+        }
+
+        if (bonusPayout > 0) {
+            setTeams(prev => ({
+                ...prev,
+                [userTeamName]: {
+                    ...prev[userTeamName],
+                    balance: prev[userTeamName].balance - bonusPayout,
+                },
+            }));
+            setNews(prev => ([
+                {
+                    id: Date.now(),
+                    week: currentWeek,
+                    title: 'Performance Bonuses Paid',
+                    body: `${userTeamName} paid $${bonusPayout.toLocaleString()} in contractual incentives after the match.`,
+                    type: 'finance',
+                },
+                ...prev,
+            ]).slice(0, 100));
+        }
     };
 
     const handleSubstitute = (playerIn: Player, playerOut: Player) => {
@@ -659,7 +755,7 @@ export default function App() {
         } catch (e) { setError("Negotiations failed."); setAppScreen(AppScreen.GAMEPLAY); } finally { setIsLoading(false); }
     };
 
-    const handlePlayerTalkAnswer = async (answer: string, offer?: { wage: number, length: number, incentives?: string }) => {
+    const handlePlayerTalkAnswer = async (answer: string, offer?: ContractTerms) => {
         if (!playerTalk || !userTeamName) return;
         const newAnswers = [...playerTalk.answers, answer];
         
@@ -677,6 +773,7 @@ export default function App() {
 
     const handlePlayerTalkFinish = () => {
         if (talkResult?.decision === 'accepted' && playerTalk && userTeamName && pendingContractTerms) {
+            const signingBonus = pendingContractTerms.signingBonus;
             setTeams(prev => {
                 const team = prev[userTeamName];
                 let updatedPlayers;
@@ -694,7 +791,15 @@ export default function App() {
                 if (playerTalk.context === 'renewal') {
                     updatedPlayers = team.players.map(p => 
                         p.name === playerTalk.player.name 
-                        ? { ...p, wage: pendingContractTerms.wage, contractExpires: pendingContractTerms.length } 
+                        ? {
+                            ...p,
+                            wage: pendingContractTerms.wage,
+                            contractExpires: pendingContractTerms.length,
+                            contractIncentives: {
+                                performanceBonus: pendingContractTerms.performanceBonus,
+                                bonusType: pendingContractTerms.bonusType,
+                            },
+                        }
                         : p
                     );
                 } else {
@@ -703,6 +808,10 @@ export default function App() {
                         isStarter: false, 
                         contractExpires: pendingContractTerms.length, 
                         wage: pendingContractTerms.wage,
+                        contractIncentives: {
+                            performanceBonus: pendingContractTerms.performanceBonus,
+                            bonusType: pendingContractTerms.bonusType,
+                        },
                         status: { type: 'Available' as const }, 
                         effects: [] 
                     };
@@ -711,9 +820,25 @@ export default function App() {
                 
                 return { 
                     ...prev, 
-                    [userTeamName]: { ...team, players: updatedPlayers, activePromises } 
+                    [userTeamName]: {
+                        ...team,
+                        players: updatedPlayers,
+                        activePromises,
+                        balance: team.balance - signingBonus,
+                    } 
                 };
             });
+
+            setNews(prev => ([
+                {
+                    id: Date.now(),
+                    week: currentWeek,
+                    title: playerTalk.context === 'renewal' ? 'Contract Renewed' : 'Signing Completed',
+                    body: `${playerTalk.player.name} agreed terms: $${pendingContractTerms.wage.toLocaleString()}/week, $${pendingContractTerms.signingBonus.toLocaleString()} signing bonus, and $${pendingContractTerms.performanceBonus.toLocaleString()} ${pendingContractTerms.bonusType === 'goal' ? 'goal bonus' : pendingContractTerms.bonusType === 'cleanSheet' ? 'clean-sheet bonus' : 'appearance bonus'}.`,
+                    type: 'finance',
+                },
+                ...prev,
+            ]).slice(0, 100));
 
             if (playerTalk.context === 'transfer') {
                 setTransferMarket(prev => prev.filter(p => p.name !== playerTalk.player.name));
@@ -753,11 +878,6 @@ export default function App() {
                 if (!userTeam) return <div>Loading...</div>;
                 return (
                     <div className="relative">
-                        {gameState !== GameState.PRE_MATCH && matchState && userTeamName && (
-                            <div className="mb-4">
-                                <AtmosphereWidget chant={currentChant} momentum={matchState.momentum || 0} teamName={userTeamName} />
-                            </div>
-                        )}
                         <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
                         {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
@@ -775,7 +895,7 @@ export default function App() {
                                 onPauseMatch={() => setGameState(GameState.PAUSED)}
                                 onSimulateSegment={handleSimulateSegment} 
                                 onNextMatch={handleAdvanceWeek} 
-                                error={null} 
+                                error={error} 
                                 isSeasonOver={currentWeek > weeksInSeason} 
                                 userTeamName={userTeamName} 
                                 leagueTable={leagueTable} 
@@ -802,12 +922,9 @@ export default function App() {
             backgroundImage: activeTheme ? `radial-gradient(circle at 50% 0%, ${activeTheme.primary}40 0%, #111827 60%)` : undefined 
         }}>
             <Header 
-                onQuit={appScreen !== AppScreen.START_SCREEN ? () => setAppScreen(AppScreen.START_SCREEN) : undefined} 
+                onQuit={appScreen !== AppScreen.START_SCREEN ? handleQuit : undefined} 
                 showQuit={appScreen !== AppScreen.START_SCREEN} 
-                onSave={() => {
-                    logger.success("Game Saved (Simulated)");
-                    alert("Game Saved!");
-                }}
+                onSave={saveGame}
                 onToggleGuide={() => setShowMechanicsGuide(true)} 
                 onToggleTerminal={() => setShowTerminal(!showTerminal)}
                 managerReputation={userTeamName ? managerReputation : undefined} 

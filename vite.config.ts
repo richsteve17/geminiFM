@@ -12,7 +12,9 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'process.env.FREE_MODE': JSON.stringify(env.FREE_MODE || env.VITE_FREE_MODE || ''),
+        'process.env.VITE_FREE_MODE': JSON.stringify(env.VITE_FREE_MODE || env.FREE_MODE || '')
       },
       resolve: {
         alias: {

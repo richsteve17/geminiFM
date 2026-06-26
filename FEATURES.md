@@ -1,64 +1,74 @@
+# 📘 Feature Guide: Galácticos Media Update (v2.6)
 
-# 📘 Feature Guide: AI Football Manager
+## 📡 Generative Media Suite & Creator Economy
 
-## 📡 Generative Media Suite
-AI Football Manager utilizes generative AI to create a uniquely immersive experience, elevating standard text-based simulations into a living, breathing media environment.
+The v2.6 update fully integrates the "Streamer Mode" mechanics, allowing users to run a profitable content studio within the game.
 
-### 🎙️ AI Commentary
-- **Model:** `gemini-2.5-flash-preview-tts` (or equivalent)
-- **How it works:** When a key event happens during a match, the AI's textual description is passed to a TTS model with an "Excited Commentator" system instruction.
-- **Playback:** The app synthesizes audio directly in the browser to provide real-time commentary for match highlights.
+### 💰 The Streamer Arbitrage Engine (New in v2.6)
+*   **Net Profit Calculation:** The Viral Clip Studio now calculates the real-world profitability of your content.
+    *   **Revenue:** Uses an estimated RPM ($0.03 per 1k views) for Gaming Shorts.
+    *   **COGS (Cost of Goods Sold):** Subtracts the real API cost of generation ($0.08 Veo + $0.005 TTS + $0.005 Text).
+    *   **Result:** You see a live "Net Profit" metric (e.g., "+$2.91 Net") on every clip you generate.
 
-### 🎥 Viral Clips & Social Media
-- **Feature:** Generate social media posts and reactions based on the match events.
-- **Logic:** After significant events, the AI creates short, punchy captions and synthesizes voiceovers mimicking the hyper-reactive nature of modern footballing social media.
+### 🎙️ AI Commentary (TTS)
+*   **Model:** `gemini-2.5-flash-preview-tts`
+*   **How it works:** When a goal is scored, the text description (e.g., "Haaland smashes it top bin") is sent to the TTS model with a specific "Excited Commentator" system instruction.
+*   **Playback:** The app decodes the raw PCM audio stream directly in the browser using the Web Audio API.
 
-### 📺 Replay Engine
-- **How it works:**
+### 🎥 Streamer Studio Audio
+*   **Feature:** TikTok-style viral clips now include auto-generated voiceovers.
+*   **Logic:** When you click the purple "Clip It" button, the AI generates a hype caption ("SCENES!"). This caption is immediately sent to the TTS engine to create a voiceover that plays automatically when the vertical video loads.
+
+### 📺 Instant Replay (Veo)
+*   **Model:** `veo-3.1-fast-generate-preview`
+*   **How it works:**
     1.  The Match Engine generates a text description of the goal.
-    2.  This text is enhanced with visual prompts ("Cinematic angle, professional stadium lighting").
-    3.  A video-generation model creates a short replay clip. (Requires supported Google Cloud Project and API keys).
+    2.  This text is enhanced with visual prompts ("Cinematic angle, professional stadium lighting, 4k").
+    3.  Veo generates a video URI.
     4.  The app polls for completion and overlays a video player.
 
 ---
 
-## 🎨 Dynamic Club & Managerial Identity
-The UI adapts to your club's identity with granular control.
+## 🎨 Dynamic Club Theming (New in v2.7)
 
-- **Kit Selector:** Before starting, visualize your club's identity via home, away, and alternate kit color schemes.
-- **Behavior:**
-    - **Instant Preview:** The selected palette is applied directly to the game's UI (headers, buttons, gradients).
-    - **Gameplay Integration:** The selected palette persists throughout the manager career, coloring your menus and highlighting your club's colors.
+The UI now adapts to your club's identity with granular control.
 
----
-
-## 🌍 Real-World & Fictional Scouting
-
-The Scouting Network offers two distinct ways to build your squad:
-
-- **Legacy Mode (Fictional):** The AI invents entirely new players with unique backstories, potential ceilings, and playstyles. Perfect for long-term saves taking place decades into the future.
-- **Real World Mode (Grounded):** The AI searches the live internet to find real players matching your criteria.
-    - *Query:* "Youngest starting centre-back in the Premier League"
-    - *Result:* The AI identifies the real-world player and translates their attributes into game-compatible stats for you to sign.
+*   **3-Card Kit Selector:** Before starting, visualize your club's identity via three kit cards.
+    *   **Primary:** The classic home strip.
+    *   **Secondary:** The traditional away colors.
+    *   **Third:** The "Unhinged" option. Often neon, dark, or clashing colors (e.g., Chelsea's pink/black) for when you want to break the mold.
+*   **Behavior:**
+    *   **Instant Preview:** Clicking a kit card instantly applies that palette to the game UI (headers, buttons, gradients).
+    *   **Gameplay Integration:** The selected palette persists throughout the manager career, coloring the Start Screen background and accentuating important metrics.
 
 ---
 
-## 🏟️ The Match Engine 
+## 🌍 Real-World Scouting (Grounding)
 
-The simulation core is a mathematical framework brought to life by the Gemini API:
+The Scouting Network has been upgraded with **Google Search Grounding**.
 
-- **Momentum System:** A mathematical tug-of-war driven by player ratings, match events, and your touchline shouts.
-- **Tactical Adjustments:** Use precise touchline commands ("Demand More", "Focus") to shift the momentum in key moments.
-- **Live Upgrades:** Dynamically adjust the match speed (Slow, Normal, Fast, Instant) directly from the touchline to control how you consume the action.
-- **Atmosphere:** The "Decibel Meter" visualizes the crowd's mood based on performance.
-    - *Green:* Party Atmosphere.
-    - *Red:* Hostile / Discontent.
-    - *Chants:* The AI generates context-aware text chants based on the scoreline and team history.
+*   **Legacy Mode (Fictional):** The AI invents players ("Ricardo Silva, 19, Brazil") based on probability distributions. Good for long-term saves where real players would retire.
+*   **Real World Mode (Grounded):** The AI searches the live internet.
+    *   *Query:* "Fastest winger in the Premier League under 23"
+    *   *Result:* The AI finds players like **Mickey van de Ven** or **Brennan Johnson** with their actual current stats.
 
 ---
 
-## 👔 Deep Interactions & Management
+## 🏟️ The Match Engine (PitchView™)
 
-- **Dynamic Job Interviews:** Board expectations shift based on the club's current predicament (e.g. relegation battle vs. title push). 
-- **Player Talks:** Manage your relationship with players. Have fluid conversations about their role in your tactic, future plans, or expected playing time, directly influencing their decision to sign or leave.
-- **Continental Football:** Compete across regular leagues and progress to comprehensive European tournament structures.
+The simulation core remains a hybrid system:
+
+*   **Momentum System:** A mathematical tug-of-war (-10 to +10) driven by player ratings and tactics.
+*   **Visualizer:** The 2D pitch responds to Momentum. If you are dominating (+8), your team's dots will press high up the pitch.
+*   **Atmosphere:** The "Decibel Meter" visualizes the crowd's mood.
+    *   *Green:* Party Atmosphere.
+    *   *Red:* Toxic/Hostile.
+    *   *Chants:* The AI generates rhyming, context-aware chants based on the scoreline.
+
+---
+
+## 👔 Tactical & Roster Systems
+
+*   **Swiss Model UCL:** A custom algorithm generates a 36-team league phase for the Champions League.
+*   **Chemistry Rifts:** Players can develop feuds (e.g., after playing against each other internationally), reducing team coherence.
+*   **Tactical Analysis:** The AI analyzes your formation for logical errors (e.g., playing a Striker in Goal) and warns you before kickoff.

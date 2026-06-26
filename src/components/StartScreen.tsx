@@ -98,14 +98,14 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 <div className="flex items-center justify-center gap-4 text-xs font-mono tracking-widest text-[var(--team-secondary,rgb(74,222,128))] opacity-80 mb-8">
                     <span>BUILD v2.7</span>
                     <span>•</span>
-                    <span>DEEP TACTICAL ENGINE</span>
+                    <span>CREATOR ECONOMY LIVE</span>
                     <span>•</span>
-                    <span>AUDIO-VISUAL MATCHES</span>
+                    <span>AUDIO-VISUAL</span>
                 </div>
 
                 <p className="text-lg md:text-xl text-gray-300 font-light max-w-2xl mx-auto leading-relaxed border-t border-b border-gray-700/50 py-4 bg-black/20 backdrop-blur-sm rounded-lg">
-                    A next-generation <span className="text-white font-semibold">AI Football Simulation</span>.<br/> 
-                    Take full control of your club with live match events, shouts, and tactical depth.
+                    The world's first <span className="text-white font-semibold">Deep Learning Sports Simulation</span>.<br/> 
+                    Turn your managerial career into a profitable content studio.
                 </p>
             </div>
             
@@ -208,17 +208,17 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         <p className="text-green-500 mb-2">&gt; SYSTEM INITIALIZED</p>
                         <p className="text-gray-400 mb-1">&gt; LOADING MODULE: GEMINI-3-FLASH-PREVIEW... OK</p>
                         <p className="text-gray-400 mb-1">&gt; LOADING MODULE: VEO-3.1... OK</p>
-                        <p className="text-blue-400 mt-2">&gt; MATCH ENGINE MODULES LOADED:</p>
+                        <p className="text-blue-400 mt-2">&gt; ECONOMIC AUDIT COMPLETE:</p>
                         <ul className="list-disc list-inside text-gray-500 pl-2 mb-2">
-                            <li>Live Match Event Simulation Engine initialized.</li>
-                            <li>Touchline shouts & tactical analysis active.</li>
-                            <li>Advanced generation for press conferences & interviews.</li>
+                            <li>FIFA vs GFM Cost Crossover confirmed at Month 4.</li>
+                            <li>Streamer Mode Profit Calculation enabled (Revenue - COGS).</li>
+                            <li>Net Profit per Clip displayed in Viral Studio.</li>
                         </ul>
-                        <p className="text-blue-400 mt-2">&gt; PATCH NOTES (FOOTBALL ENGINE):</p>
+                        <p className="text-blue-400 mt-2">&gt; PATCH NOTES v2.7:</p>
                         <ul className="list-disc list-inside text-gray-500 pl-2">
-                            <li>Implemented 3-Way Kit Selector for Manager Identity.</li>
-                            <li>Real-world scouting integrated with fictional wonderkids.</li>
-                            <li>Tactical formations and positional proficiency enabled.</li>
+                            <li>Implemented 3-Way Kit Selector (Primary / Secondary / Unhinged Third).</li>
+                            <li>Removed legacy striping artifacts for cleaner UI.</li>
+                            <li>Updated Kit Palette keys for better accessibility.</li>
                         </ul>
                     </div>
                 )}

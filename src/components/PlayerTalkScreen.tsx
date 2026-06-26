@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import type { PlayerTalk, NegotiationResult } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import type { PlayerTalk, NegotiationResult, ContractTerms, ContractBonusType, PlayerPosition } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
 import { UserIcon } from './icons/UserIcon';
 import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
@@ -10,9 +10,29 @@ interface PlayerTalkScreenProps {
     isLoading: boolean;
     error: string | null;
     talkResult: NegotiationResult | null;
-    onAnswerSubmit: (answer: string, offer?: { wage: number, length: number, incentives?: string }) => void;
+    onAnswerSubmit: (answer: string, offer?: ContractTerms) => void;
     onFinish: () => void;
 }
+
+const ATTACKING_POSITIONS = new Set<PlayerPosition>(['ST', 'CF', 'LW', 'RW', 'AM']);
+const DEFENSIVE_POSITIONS = new Set<PlayerPosition>(['GK', 'LB', 'CB', 'RB', 'LWB', 'RWB']);
+
+const getBonusTypeForPosition = (position: PlayerPosition): ContractBonusType => {
+    if (ATTACKING_POSITIONS.has(position)) return 'goal';
+    if (DEFENSIVE_POSITIONS.has(position)) return 'cleanSheet';
+    return 'appearance';
+};
+
+const bonusTypeLabel = (bonusType: ContractBonusType) => {
+    if (bonusType === 'goal') return 'Goal Bonus';
+    if (bonusType === 'cleanSheet') return 'Clean-Sheet Bonus';
+    return 'Appearance Bonus';
+};
+
+const getDefaultPerformanceBonus = (wage: number, bonusType: ContractBonusType) => {
+    const multiplier = bonusType === 'goal' ? 0.2 : bonusType === 'cleanSheet' ? 0.12 : 0.08;
+    return Math.round((wage * multiplier) / 500) * 500;
+};
 
 const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, error, talkResult, onAnswerSubmit, onFinish }) => {
     const [currentAnswer, setCurrentAnswer] = useState('');
@@ -20,32 +40,40 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
     // Negotiation State
     const [wageOffer, setWageOffer] = useState<number>(0);
     const [contractLength, setContractLength] = useState<number>(3);
-    const [incentives, setIncentives] = useState<string>('');
+    const [signingBonus, setSigningBonus] = useState<number>(0);
+    const [performanceBonus, setPerformanceBonus] = useState<number>(0);
+    const [bonusType, setBonusType] = useState<ContractBonusType>('appearance');
     const [hasNegotiated, setHasNegotiated] = useState(false);
+    const talkSessionKey = talk ? `${talk.player.name}-${talk.context}` : '';
 
-    // Initialize defaults when talk loads
-    useMemo(() => {
-        if (talk && wageOffer === 0) {
+    // Initialize defaults when a new negotiation starts
+    useEffect(() => {
+        if (talk) {
+            const defaultBonusType = getBonusTypeForPosition(talk.player.position);
             setWageOffer(talk.player.wage);
             setContractLength(talk.player.contractExpires || 3);
+            setBonusType(defaultBonusType);
+            setSigningBonus(Math.round((talk.player.wage * (talk.context === 'transfer' ? 8 : 4)) / 1000) * 1000);
+            setPerformanceBonus(getDefaultPerformanceBonus(talk.player.wage, defaultBonusType));
+            setCurrentAnswer('');
+            setHasNegotiated(false);
         }
-    }, [talk]);
+    }, [talkSessionKey]);
 
     // Update state if AI counters
-    useMemo(() => {
+    useEffect(() => {
         if (talkResult?.decision === 'counter' && talkResult.counterOffer) {
             setWageOffer(talkResult.counterOffer.wage);
             setContractLength(talkResult.counterOffer.length);
+            setSigningBonus(talkResult.counterOffer.signingBonus);
+            setPerformanceBonus(talkResult.counterOffer.performanceBonus);
+            setBonusType(talkResult.counterOffer.bonusType);
         }
     }, [talkResult]);
 
     const formatMoney = (amount: number) => `$${amount.toLocaleString()}`;
 
-    // Estimate market value if not present (approx 250x weekly wage for display)
-    const getMarketValue = () => {
-        if (!talk) return 0;
-        return talk.player.marketValue || talk.player.wage * 250;
-    }
+    const bonusLabel = useMemo(() => bonusTypeLabel(bonusType), [bonusType]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -59,7 +87,16 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
             }
         } else {
             // Final Step: Submit the Offer
-            onAnswerSubmit(currentAnswer || "I believe this offer reflects your value.", { wage: wageOffer, length: contractLength, incentives });
+            onAnswerSubmit(
+                currentAnswer || "I believe this package reflects your value and role in our project.",
+                {
+                    wage: wageOffer,
+                    length: contractLength,
+                    signingBonus,
+                    performanceBonus,
+                    bonusType
+                }
+            );
             setHasNegotiated(true);
             setCurrentAnswer('');
         }
@@ -107,6 +144,14 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                                 <p className="text-xs text-gray-500 uppercase">Duration</p>
                                 <p className="text-xl font-bold text-blue-400">{contractLength} Years</p>
                             </div>
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 uppercase">Signing Bonus</p>
+                                <p className="text-xl font-bold text-yellow-400">{formatMoney(signingBonus)}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-xs text-gray-500 uppercase">{bonusLabel}</p>
+                                <p className="text-xl font-bold text-purple-400">{formatMoney(performanceBonus)}</p>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -134,7 +179,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
         currentQuestion = talkResult.reasoning; // Show the agent's counter argument
     } else if (isFinalStage) {
         // OVERRIDE: Ensure the final question matches the UI context (Money)
-        currentQuestion = "We are ready to discuss financial terms. What is your offer?";
+        currentQuestion = `We are ready to discuss financial terms: weekly wage, signing bonus, and ${bonusLabel.toLowerCase()}. What is your offer?`;
     }
 
     return (
@@ -192,15 +237,47 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                                             <button type="button" onClick={() => setContractLength(l => Math.min(7, l + 1))} className="p-2 bg-green-900/30 text-green-400 rounded hover:bg-green-900/50">+</button>
                                         </div>
                                     </div>
-                                    <div className="md:col-span-2 mt-2">
-                                        <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Incentives / Promises (Optional)</label>
-                                        <input 
-                                            type="text" 
-                                            value={incentives} 
-                                            onChange={(e) => setIncentives(e.target.value)}
-                                            placeholder="e.g. 'Goal Bonus', 'Captaincy', 'Key Player Status'"
-                                            className="w-full bg-gray-800 text-white p-2 rounded border border-gray-600 focus:border-green-500 outline-none"
-                                        />
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Signing Bonus</label>
+                                        <div className="flex items-center gap-2">
+                                            <button type="button" onClick={() => setSigningBonus(b => Math.max(0, b - 10000))} className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">-</button>
+                                            <input
+                                                type="number"
+                                                value={signingBonus}
+                                                onChange={(e) => setSigningBonus(parseInt(e.target.value, 10) || 0)}
+                                                className="w-full bg-gray-800 text-white font-mono text-center p-2 rounded border border-gray-600"
+                                            />
+                                            <button type="button" onClick={() => setSigningBonus(b => b + 10000)} className="p-2 bg-green-900/30 text-green-400 rounded hover:bg-green-900/50">+</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase block mb-1">Incentive Type</label>
+                                        <select
+                                            value={bonusType}
+                                            onChange={(e) => {
+                                                const nextBonusType = e.target.value as ContractBonusType;
+                                                setBonusType(nextBonusType);
+                                                setPerformanceBonus(getDefaultPerformanceBonus(wageOffer, nextBonusType));
+                                            }}
+                                            className="w-full bg-gray-800 text-white p-2 rounded border border-gray-600"
+                                        >
+                                            <option value="goal">Goal Bonus</option>
+                                            <option value="cleanSheet">Clean-Sheet Bonus</option>
+                                            <option value="appearance">Appearance Bonus</option>
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="text-xs font-bold text-gray-400 uppercase block mb-1">{bonusLabel}</label>
+                                        <div className="flex items-center gap-2">
+                                            <button type="button" onClick={() => setPerformanceBonus(b => Math.max(0, b - 1000))} className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50">-</button>
+                                            <input
+                                                type="number"
+                                                value={performanceBonus}
+                                                onChange={(e) => setPerformanceBonus(parseInt(e.target.value, 10) || 0)}
+                                                className="w-full bg-gray-800 text-white font-mono text-center p-2 rounded border border-gray-600"
+                                            />
+                                            <button type="button" onClick={() => setPerformanceBonus(b => b + 1000)} className="p-2 bg-green-900/30 text-green-400 rounded hover:bg-green-900/50">+</button>
+                                        </div>
                                     </div>
                                 </div>
                             )}

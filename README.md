@@ -3,6 +3,9 @@
 
 A next-generation football management simulation powered by AI.
 
+> **Current Build:** v2.7 (The "Unhinged" Kit Update)
+> **Engine:** React 19 · TypeScript · Google GenAI SDK · Tailwind CSS
+
 ## Overview
 
 **AI Football Manager** uses cutting-edge generative AI to provide a dynamic, realistic, and deeply tailored football simulation experience. Moving beyond standard static databases and pre-written dialogue trees, this game integrates AI into every facet of club management: live match simulation, press conferences, player interactions, job interviews, and scouting.
