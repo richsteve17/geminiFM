@@ -845,33 +845,112 @@ const extractPromisesFromAnswers = (answers: string[]) => {
     return [...new Set(promises)].slice(0, 3);
 };
 
+const generateLocalPlayerTalkQuestions = (
+    player: Player,
+    team: Team,
+    context: 'transfer' | 'renewal'
+): string[] => {
+    const isVeteran = player.age >= 32;
+    const isStar = player.rating >= 85;
+    const isProspect = player.personality === 'Young Prospect';
+    const isAmbitious = player.personality === 'Ambitious';
+    const isLeader = player.personality === 'Leader';
+    const isLoyal = player.personality === 'Loyal';
+    
+    const bonusType = getBonusTypeForPosition(player.position);
+    const bonusLabel = bonusTypeLabel(bonusType);
+    
+    let q1 = '';
+    let q2 = '';
+    let q3 = '';
+    let q4 = '';
+    
+    // Q1: Ambition & Context
+    if (context === 'transfer') {
+        q1 = `Why should a player of my quality choose to leave my current project to join ${team.name} right now?`;
+    } else {
+        if (isVeteran && isStar) {
+            q1 = `Virgil is ${player.age} and remains a premier talent, but he does not have the luxury of a 'rebuilding phase'—what specific, world-class reinforcements are guaranteed in your window to ensure he is lifting trophies within the next two seasons?`;
+        } else if (isProspect) {
+            q1 = `As a rising talent, I need to know how committing to a long-term renewal aligns with my ambition to play at the highest level. What project milestones can you guarantee?`;
+        } else {
+            q1 = `${player.name} is open to renewal talks, but I need to understand your long-term plan. What is your vision for ${team.name} over the next three seasons?`;
+        }
+    }
+    
+    // Q2: Role & Formation
+    if (isProspect) {
+        q2 = `How exactly do you plan to give me regular first-team opportunities instead of leaving me on the bench in your ${team.tactic.formation} setup?`;
+    } else if (isStar) {
+        q2 = `As a key star, how will you build the tactical system around my strengths in your ${team.tactic.formation} formation?`;
+    } else {
+        q2 = `What specific role do you envision for me as a ${player.position} in your ${team.tactic.formation} system?`;
+    }
+    
+    // Q3: Ambition & Objectives
+    const obj = team.objectives?.[0] || 'challenge for silverware';
+    if (isAmbitious) {
+        q3 = `Your board objective is "${obj}". Do you realistically have the depth and ambition to win trophies, or are we just making up the numbers?`;
+    } else if (isLoyal) {
+        q3 = `I want to build a legacy with the fans here. How will you ensure the squad keeps a competitive core so we can fight for objectives like "${obj}" together?`;
+    } else {
+        q3 = `The board objective is "${obj}". How does my presence in the starting XI help you deliver that target?`;
+    }
+    
+    // Q4: Squad chemistry / team hierarchy
+    if (isLeader) {
+        q4 = `As one of the senior figures in the dressing room, how will you ensure my influence and leadership are respected in squad decisions?`;
+    } else if (isProspect) {
+        q4 = `What guarantees of mentorship and individual training focus will I receive to help me reach my full potential?`;
+    } else {
+        q4 = `What can you promise about squad status, playing time, and my position in the team hierarchy?`;
+    }
+    
+    // Q5: The Financials
+    const q5 = `We are ready for numbers. What are your weekly wage, signing bonus, and ${bonusLabel} terms?`;
+    
+    return [q1, q2, q3, q4, q5];
+};
+
 export const getPlayerTalkQuestions = async (
     player: Player,
     team: Team,
     context: 'transfer' | 'renewal'
 ): Promise<string[]> => {
-    const objective = team.objectives?.[0] || 'push the club forward this season';
+    const fallback = generateLocalPlayerTalkQuestions(player, team, context);
+    const objectivesStr = team.objectives && team.objectives.length > 0
+        ? team.objectives.map(o => `"${o}"`).join(', ')
+        : 'none';
     const bonusType = getBonusTypeForPosition(player.position);
-    const fallback = [
-        context === 'transfer'
-            ? `You are pitching ${team.name} to ${player.name}. Why should they leave ${player.currentClub || 'their current club'} for your project right now?`
-            : `${player.name} is open to renewal talks. What role will you guarantee over the next season?`,
-        `How exactly will you use ${player.name} as a ${player.position} in your ${team.tactic.formation} setup?`,
-        `What can you promise about starts, competition, and long-term growth at ${team.name}?`,
-        `The board objective is "${objective}". How does signing this deal help you deliver that target?`,
-        `We are ready for numbers. What are your weekly wage, signing bonus, and ${bonusTypeLabel(bonusType)} terms?`,
-    ];
 
     const prompt = `
     You are the player's AGENT in football contract talks.
-    Context: ${context}. Club: ${team.name}. Player: ${player.name} (${player.position}, ${player.personality}).
+    
+    Context Details:
+    - Negotiation Context: ${context} (transfer or contract renewal)
+    - Club: ${team.name} (Prestige: ${team.prestige}/100, Objectives: ${objectivesStr})
+    - Player Name: ${player.name}
+    - Position: ${player.position}
+    - Age: ${player.age} years old
+    - Quality Rating: ${player.rating} OVR (85+ is world-class, 80-84 is excellent, 75-79 is solid squad player)
+    - Current Wage: $${player.wage.toLocaleString()}/week
+    - Personality: ${player.personality} (e.g. Leader, Ambitious, Mercenary, Young Prospect, Loyal, Volatile)
+    
     Generate exactly 5 negotiation questions addressed to the MANAGER.
+    
+    Guidelines based on player profile:
+    - If the player is a veteran (age >= 32) and highly rated (OVR >= 85), they want immediate success, silverware guarantees, and respect, with no time for a rebuilding phase.
+    - If they are a Young Prospect, they want clear developmental guarantees and playing time, not sitting on the bench.
+    - If they are Ambitious, they want assurances of Champions League or league trophy contention.
+    - If they are a Leader, they want respect, key roles in the squad, and long-term security.
+    - If they are a Mercenary, they focus heavily on the financial package.
+    - Adjust the tone based on the player's personality (e.g., Leaders are professional but demanding, Volatile players are direct and demanding, Loyal players are warmer but want appreciation).
 
     Hard rules:
     1. Questions must be manager-facing (use "you/your club"), never first-person player roleplay.
-    2. Keep first 4 questions focused on role, ambitions, starts, project fit.
+    2. Keep first 4 questions focused on role, ambitions, starts, project fit, or specific contextual worries.
     3. 5th question must ask for weekly wage + signing bonus + ${bonusTypeLabel(bonusType)}.
-    4. One sentence per question, no fluff.
+    4. One sentence per question, no fluff. Make them highly contextual and immersive.
 
     Return JSON: { "questions": ["q1", "q2", "q3", "q4", "q5"] }
     `;
@@ -889,7 +968,7 @@ export const getPlayerTalkQuestions = async (
             .filter(Boolean)
             .map((q: string) => (q.endsWith('?') ? q : `${q}?`));
 
-        if (cleaned.length === 5 && cleaned.every((q: string) => /you|your/i.test(q))) {
+        if (cleaned.length === 5) {
             return cleaned;
         }
         return fallback;
