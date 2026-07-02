@@ -22,6 +22,7 @@ import ScoutingScreen from './components/ScoutingScreen';
 import PressConferenceScreen from './components/PressConferenceScreen';
 import MechanicsGuide from './components/MechanicsGuide';
 import TransferCenter from './components/TransferCenter';
+import TacticsManager from './components/TacticsManager';
 import { 
     generateWorldCupStructure, 
     generateEurosStructure, 
@@ -2592,19 +2593,12 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                         <div className="lg:col-span-3">
                             <TeamDetails 
                                 team={userTeam} 
-                                onTacticChange={handleTacticChange} 
-                                onNavigateToTransfers={() => setGameplayTab('scouting')} 
-                                onNavigateToNews={() => setGameplayTab('news')} 
-                                onNavigateToTransferCenter={() => setGameplayTab('transfers')} 
-                                onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')} 
-                                onToggleStarter={handleToggleStarter} 
-                                onSwapPlayers={handleSwapPlayers} 
                                 gameState={gameState} 
-                                subsUsed={matchState?.subsUsed?.home || 0} 
-                                onSubstitute={handleSubstitute} 
-                                onReorderPlayers={handleReorderPlayers} 
-                                onResign={handleResign} 
-                                onNavigateToHonors={() => setGameplayTab('honors')} 
+                                managerReputation={managerReputation}
+                                nextFixture={currentFixture}
+                                activeTab={gameplayTab}
+                                onNavigateToTab={setGameplayTab}
+                                onResign={handleResign}
                             />
                         </div>
                         
@@ -2613,6 +2607,9 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                             <div className="flex border-b border-gray-800 bg-gray-950/60 p-1.5 rounded-lg gap-2 shadow-inner border border-slate-800/40 backdrop-blur-md">
                                 <button onClick={() => setGameplayTab('match')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'match' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
                                     <span>🎮</span> Match Center
+                                </button>
+                                <button onClick={() => setGameplayTab('tactics')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'tactics' ? 'bg-gradient-to-r from-yellow-600 to-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <span>📋</span> Roster & Tactics
                                 </button>
                                 <button onClick={() => setGameplayTab('news')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'news' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
                                     <span>📰</span> Inbox Feed
@@ -2629,6 +2626,23 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                             </div>
 
                             {/* Active Tab Panel */}
+                            {gameplayTab === 'tactics' && (
+                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                    <TacticsManager 
+                                        team={userTeam}
+                                        onTacticChange={handleTacticChange}
+                                        onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')}
+                                        onToggleStarter={handleToggleStarter}
+                                        onSwapPlayers={handleSwapPlayers}
+                                        gameState={gameState}
+                                        subsUsed={matchState?.subsUsed?.home || 0}
+                                        onSubstitute={handleSubstitute}
+                                        onReorderPlayers={handleReorderPlayers}
+                                        isNationalTeam={gameMode === 'WorldCup'}
+                                    />
+                                </div>
+                            )}
+
                             {gameplayTab === 'match' && (
                                 <div className="grid grid-cols-1 lg:grid-cols-9 gap-6">
                                     <div className="lg:col-span-6">

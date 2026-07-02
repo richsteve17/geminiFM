@@ -110,6 +110,11 @@ const LIVERPOOL_SQUAD: Player[] = [
     { name: 'C. Jones', position: 'CM', rating: 79, age: 23, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Loyal', wage: 70000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
     { name: 'J. Gomez', position: 'CB', rating: 80, age: 29, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Professional', wage: 85000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
     { name: 'K. Tsimikas', position: 'LB', rating: 79, age: 30, nationality: '🇬🇷', personality: 'Professional', wage: 70000, status: { type: 'Available' }, effects: [], contractExpires: 2, isStarter: false, condition: 100 },
+    { name: 'J. Quansah', position: 'CB', rating: 78, age: 21, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 30000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
+    { name: 'C. Bradley', position: 'RB', rating: 78, age: 21, nationality: '🏴󠁧󠁢󠁮󠁧󠁿', personality: 'Young Prospect', wage: 30000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
+    { name: 'W. Endo', position: 'DM', rating: 79, age: 31, nationality: '🇯🇵', personality: 'Professional', wage: 60000, status: { type: 'Available' }, effects: [], contractExpires: 2, isStarter: false, condition: 100 },
+    { name: 'T. Morton', position: 'CM', rating: 74, age: 22, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 25000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
+    { name: 'V. Jaros', position: 'GK', rating: 72, age: 23, nationality: '🇨🇿', personality: 'Young Prospect', wage: 15000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
 ];
 
 const CHELSEA_SQUAD: Player[] = [
@@ -132,6 +137,11 @@ const CHELSEA_SQUAD: Player[] = [
     { name: 'T. Adarabioyo', position: 'CB', rating: 79, age: 27, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Professional', wage: 75000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: false, condition: 100 },
     { name: 'M. Gusto', position: 'RB', rating: 80, age: 22, nationality: '🇫🇷', personality: 'Young Prospect', wage: 60000, status: { type: 'Available' }, effects: [], contractExpires: 6, isStarter: false, condition: 100 },
     { name: 'F. Jorgensen', position: 'GK', rating: 76, age: 23, nationality: '🇩🇰', personality: 'Young Prospect', wage: 40000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
+    { name: 'B. Badiashile', position: 'CB', rating: 78, age: 25, nationality: '🇫🇷', personality: 'Professional', wage: 90000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: false, condition: 100 },
+    { name: 'A. Disasi', position: 'CB', rating: 79, age: 26, nationality: '🇫🇷', personality: 'Professional', wage: 85000, status: { type: 'Available' }, effects: [], contractExpires: 4, isStarter: false, condition: 100 },
+    { name: 'R. Lavia', position: 'DM', rating: 79, age: 21, nationality: '🇧🇪', personality: 'Young Prospect', wage: 65000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
+    { name: 'C. Casadei', position: 'CM', rating: 72, age: 22, nationality: '🇮🇹', personality: 'Young Prospect', wage: 30000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
+    { name: 'M. Mudryk', position: 'LW', rating: 78, age: 25, nationality: '🇺🇦', personality: 'Volatile', wage: 100000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
 ];
 
 const MAN_CITY_SQUAD: Player[] = [
@@ -154,6 +164,10 @@ const MAN_CITY_SQUAD: Player[] = [
     { name: 'M. Kovacic', position: 'CM', rating: 84, age: 33, nationality: '🇭🇷', personality: 'Professional', wage: 120000, status: { type: 'Available' }, effects: [], contractExpires: 2, isStarter: false, condition: 100 },
     { name: 'Savinho', position: 'RW', rating: 84, age: 23, nationality: '🇧🇷', personality: 'Young Prospect', wage: 90000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
     { name: 'J. Grealish', position: 'LW', rating: 85, age: 31, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Volatile', wage: 180000, status: { type: 'Available' }, effects: [], contractExpires: 2, isStarter: false, condition: 100 },
+    { name: 'R. Lewis', position: 'RB', rating: 79, age: 21, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 45000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
+    { name: 'J. McAtee', position: 'CM', rating: 76, age: 23, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 35000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
+    { name: 'Oscar Bobb', position: 'RW', rating: 78, age: 22, nationality: '🇳🇴', personality: 'Young Prospect', wage: 45000, status: { type: 'Available' }, effects: [], contractExpires: 5, isStarter: false, condition: 100 },
+    { name: 'M. O\'Reilly', position: 'CM', rating: 70, age: 20, nationality: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', personality: 'Young Prospect', wage: 120000, status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100 },
 ];
 
 export const TEAMS: Record<string, Team> = {
