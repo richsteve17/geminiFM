@@ -2562,19 +2562,22 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
     const renderScreen = () => {
         switch (appScreen) {
             case AppScreen.START_SCREEN: return (
-                <div>
-                    <StartScreen 
-                        onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} 
-                        onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} 
-                        onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} 
-                        onThemeSelect={(colors) => setActiveTheme(colors)}
-                    />
-                    {localStorage.getItem('gfm_save_v1') && (
-                        <div className="text-center pb-8 -mt-8">
-                            <button onClick={handleContinue} className="text-sm font-bold text-blue-400 hover:text-blue-300 underline">Continue Saved Career</button>
-                        </div>
-                    )}
-                </div>
+                <StartScreen
+                    onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)}
+                    onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)}
+                    onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)}
+                    onThemeSelect={(colors) => setActiveTheme(colors)}
+                    onContinue={handleContinue}
+                    hasSave={!!localStorage.getItem('gfm_save_v1')}
+                    saveMetadata={(() => {
+                        const raw = localStorage.getItem('gfm_save_v1');
+                        if (!raw) return null;
+                        try {
+                            const p = JSON.parse(raw);
+                            return { teamName: p.userTeamName, week: p.currentWeek, year: p.currentYear || 1 };
+                        } catch { return null; }
+                    })()}
+                />
             );
             case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={clubTeams} onTeamSelect={initializeGame} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={worldCupTeams} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
