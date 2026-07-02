@@ -3,7 +3,7 @@ import { FootballIcon } from './icons/FootballIcon';
 import { BriefcaseIcon } from './icons/BriefcaseIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
 import { TEAMS } from '../constants';
-import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled } from '../services/geminiService';
+import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled, getPaidVoiceName, setPaidVoiceName } from '../services/geminiService';
 
 interface StartScreenProps {
     onSelectTeam: () => void;
@@ -17,6 +17,12 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
     const [selectedTeam, setSelectedTeam] = useState<string>('Manchester City');
     const [paidAudio, setPaidAudio] = useState(isPaidAudioEnabled());
     const [paidVideo, setPaidVideo] = useState(isPaidVideoEnabled());
+    const [paidVoice, setPaidVoice] = useState(getPaidVoiceName());
+
+    const handleVoiceChange = (voiceName: string) => {
+        setPaidVoice(voiceName);
+        setPaidVoiceName(voiceName);
+    };
 
     const togglePaidAudio = () => {
         const newVal = !paidAudio;
@@ -216,6 +222,27 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         </button>
                     </div>
                 </div>
+                
+                {/* Voice Selection Selector (Only relevant when Paid AI Commentary is Enabled) */}
+                {paidAudio && (
+                    <div className="flex items-center justify-between gap-4 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50 mt-2">
+                        <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">🗣️ Commentator Voice</span>
+                            <span className="text-[8px] text-slate-500 uppercase mt-0.5">Select Gemini native voice personality</span>
+                        </div>
+                        <select
+                            value={paidVoice}
+                            onChange={(e) => handleVoiceChange(e.target.value)}
+                            className="bg-slate-900 border border-slate-800 text-white rounded text-[10px] font-black uppercase px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 cursor-pointer"
+                        >
+                            <option value="Puck">Puck (Energetic Male)</option>
+                            <option value="Charon">Charon (Deep Male)</option>
+                            <option value="Fenrir">Fenrir (Powerful Male)</option>
+                            <option value="Aoede">Aoede (Clear Female)</option>
+                            <option value="Kore">Kore (Crisp Female)</option>
+                        </select>
+                    </div>
+                )}
             </div>
 
             {/* --- TEAM KIT THEME SELECTOR & JERSEYS --- */}

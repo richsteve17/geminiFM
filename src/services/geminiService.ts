@@ -83,6 +83,26 @@ export const setPaidVideoEnabled = (val: boolean) => {
     }
 };
 
+const getInitialString = (key: string, defaultVal: string): string => {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(key);
+        if (saved !== null) {
+            return saved;
+        }
+    }
+    return defaultVal;
+};
+
+let paidVoiceState = getInitialString('GFM_PAID_VOICE', 'Puck');
+
+export const getPaidVoiceName = () => paidVoiceState;
+export const setPaidVoiceName = (val: string) => {
+    paidVoiceState = val;
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('GFM_PAID_VOICE', val);
+    }
+};
+
 // --- MEDIA HELPERS ---
 
 const cleanJson = (text?: string) => (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -368,8 +388,16 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
                 utterance.rate = 1.15; // standard excitement rate
                 utterance.pitch = 1.0;
                 const voices = window.speechSynthesis.getVoices();
-                const engVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
-                if (engVoice) utterance.voice = engVoice;
+                
+                // Prioritize high-quality natural sounding English voices (Siri, Google, Samantha, Premium, Daniel)
+                const engVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Siri') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Premium') || v.name.includes('Natural')))
+                    || voices.find(v => v.lang.startsWith('en') && v.name.includes('Daniel'))
+                    || voices.find(v => v.lang.startsWith('en'))
+                    || voices[0];
+                    
+                if (engVoice) {
+                    utterance.voice = engVoice;
+                }
                 window.speechSynthesis.speak(utterance);
             } catch (e) {
                 console.error("Browser speech synthesis failed in free mode:", e);
@@ -398,7 +426,7 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {
                     voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: 'Fenrir' },
+                        prebuiltVoiceConfig: { voiceName: getPaidVoiceName() },
                     },
                 },
             },
