@@ -75,7 +75,10 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
         }
     }, [talkResult]);
 
-    const formatMoney = (amount: number) => `$${amount.toLocaleString()}`;
+    const formatMoney = (amount: number | undefined | null) => {
+        if (amount === undefined || amount === null) return '$0';
+        return `$${amount.toLocaleString()}`;
+    };
 
     const bonusLabel = useMemo(() => bonusTypeLabel(bonusType), [bonusType]);
 
