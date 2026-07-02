@@ -546,6 +546,127 @@ export const generatePressConference = async (context: string): Promise<string[]
     }
 };
 
+export interface PressConferenceReport {
+    headline: string;
+    article: string;
+    mediaTone: 'positive' | 'negative' | 'neutral' | 'sensationalist';
+    reputationChange: number;
+    squadFormChange: number;
+    newspaperName: string;
+}
+
+export const evaluatePressConference = async (
+    history: { q: string, a: string }[],
+    resultContext: string
+): Promise<PressConferenceReport> => {
+    const prompt = `You are a sports editor. Evaluate this post-match press conference:
+Result Context: ${resultContext}
+Interview Q&A:
+${history.map(item => `Journalist: "${item.q}"\nManager: "${item.a}"`).join('\n')}
+
+Analyze the tone of the manager's responses.
+Generate:
+1. A realistic sports newspaper headline (max 10 words).
+2. A short newspaper article analyzing the comments (2-3 sentences).
+3. The media tone: "positive" (supportive), "negative" (critical), "neutral", or "sensationalist" (dramatic).
+4. reputationChange: integer between -10 and +10 (how this affects manager reputation).
+5. squadFormChange: integer between -5 and +5 (positive answers praising squad increase form, criticizing players decrease it).
+6. newspaperName: Choose a realistic sports news outlet (e.g. "The Daily Pitch", "World Football Athletic", "Sky Sports News", "La Gazzetta dello Sport", "L'Équipe").
+
+Response MUST be JSON format:
+{
+  "headline": "headline here",
+  "article": "article text here",
+  "mediaTone": "positive" | "negative" | "neutral" | "sensationalist",
+  "reputationChange": 3,
+  "squadFormChange": 1,
+  "newspaperName": "name here"
+}`;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+        });
+        const report: PressConferenceReport = JSON.parse(cleanJson(response.text));
+        report.reputationChange = Math.max(-10, Math.min(10, report.reputationChange || 0));
+        report.squadFormChange = Math.max(-5, Math.min(5, report.squadFormChange || 0));
+        return report;
+    } catch (e) {
+        console.warn("Press Conference evaluation failed, using rich local engine:", e);
+        const combinedAnswers = history.map(h => h.a.toLowerCase()).join(' ');
+        
+        let headline = "Manager Speaks Out After Match";
+        let article = "The manager faced the press and answered questions about the team's performance. The media will be watching how the squad responds in the next match.";
+        let mediaTone: 'positive' | 'negative' | 'neutral' | 'sensationalist' = 'neutral';
+        let reputationChange = 0;
+        let squadFormChange = 0;
+        const newspaperName = resultContext.toLowerCase().includes("champions league") ? "World Football Athletic" : "The Daily Pitch";
+
+        const hasPraise = combinedAnswers.includes("great") || combinedAnswers.includes("proud") || combinedAnswers.includes("excellent") || combinedAnswers.includes("love") || combinedAnswers.includes("good") || combinedAnswers.includes("brilliant") || combinedAnswers.includes("work");
+        const hasBlame = combinedAnswers.includes("poor") || combinedAnswers.includes("blame") || combinedAnswers.includes("fault") || combinedAnswers.includes("referee") || combinedAnswers.includes("bad") || combinedAnswers.includes("mistake");
+        const hasExcuse = combinedAnswers.includes("unlucky") || combinedAnswers.includes("pitch") || combinedAnswers.includes("tired") || combinedAnswers.includes("stamina");
+
+        if (resultContext.toLowerCase().includes("won") || resultContext.toLowerCase().includes("win")) {
+            if (hasPraise) {
+                headline = "Victorious Manager Praises Team Spirit!";
+                article = "Following a brilliant win, the manager expressed deep pride in the squad's performance. Team chemistry looks at an all-time high.";
+                mediaTone = 'positive';
+                reputationChange = 3;
+                squadFormChange = 2;
+            } else {
+                headline = "Manager Demands More Despite Victory";
+                article = "Even in victory, the manager remained cautious, urging players to stay focused. A professional tone that the board will likely appreciate.";
+                mediaTone = 'neutral';
+                reputationChange = 1;
+                squadFormChange = 0;
+            }
+        } else if (resultContext.toLowerCase().includes("lost") || resultContext.toLowerCase().includes("defeat")) {
+            if (hasBlame) {
+                headline = "Manager Slams Squad After Defeat!";
+                article = "A tense press conference saw the manager publicly criticize individual errors. Critics suggest this outburst could harm locker room morale.";
+                mediaTone = 'sensationalist';
+                reputationChange = -3;
+                squadFormChange = -2;
+            } else if (hasExcuse) {
+                headline = "Manager Blames Bad Luck for Lost Points";
+                article = "Deflecting blame, the manager pointed to unfortunate decisions and pitch conditions. Fans are debating whether the excuses hold weight.";
+                mediaTone = 'negative';
+                reputationChange = -1;
+                squadFormChange = -1;
+            } else {
+                headline = "Under Fire: Manager Promises Reaction After Loss";
+                article = "Accepting responsibility for the poor result, the manager promised key adjustments in training. The board is giving them space to react.";
+                mediaTone = 'neutral';
+                reputationChange = 1;
+                squadFormChange = 1;
+            }
+        } else {
+            if (hasPraise) {
+                headline = "Glass Half Full: Manager Sees Positives in Draw";
+                article = "Focusing on the positives, the manager highlighted the team's combativeness. A solid base to build upon for the next fixture.";
+                mediaTone = 'positive';
+                reputationChange = 1;
+                squadFormChange = 1;
+            } else {
+                headline = "Frustration Boils Over After Stalemate";
+                article = "Struggling to find the breakthrough, the manager expressed clear disappointment in the final third quality. Training adjustments are expected.";
+                mediaTone = 'negative';
+                reputationChange = -1;
+                squadFormChange = -1;
+            }
+        }
+
+        return {
+            headline,
+            article,
+            mediaTone,
+            reputationChange,
+            squadFormChange,
+            newspaperName
+        };
+    }
+};
+
 export const getInterviewQuestions = async (teamName: string, personality: string, league: string, team?: Team) => {
     let richContext = '';
     if (team) {

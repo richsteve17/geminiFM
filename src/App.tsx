@@ -7,7 +7,7 @@ import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
-import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, getInternationalBreakSummary, getTeammateTournamentRivalry } from './services/geminiService';
+import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, evaluatePressConference, PressConferenceReport, getInternationalBreakSummary, getTeammateTournamentRivalry } from './services/geminiService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS, calculatePlayerDevelopment } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
@@ -119,6 +119,7 @@ export default function App() {
     const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
     const [scoutResults, setScoutResults] = useState<Player[]>([]);
     const [pressQuestions, setPressQuestions] = useState<string[]>([]);
+    const [pressContext, setPressContext] = useState<string>('');
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     const [managerReputation, setManagerReputation] = useState<number>(0);
     const [careerHistory, setCareerHistory] = useState<CareerHistoryEntry[]>([]);
@@ -665,6 +666,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
 
                 const qs = await generatePressConference(context); 
                 setPressQuestions(qs); 
+                setPressContext(`${userTeamName} just ${result} against ${oppName} with a score of ${scoreLine}.`);
                 setAppScreen(AppScreen.PRESS_CONFERENCE); 
                 setIsLoading(false); 
                 return; 
@@ -1104,6 +1106,42 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
             });
             return updated;
         });
+    };
+
+    const handleFinishPressConference = (report: PressConferenceReport) => {
+        setManagerReputation(r => Math.max(0, Math.min(100, r + report.reputationChange)));
+
+        if (userTeamName) {
+            setTeams(prev => {
+                const updated = { ...prev };
+                const club = updated[userTeamName];
+                if (club) {
+                    club.players = club.players.map(p => {
+                        if (p.isStarter) {
+                            return { 
+                                ...p, 
+                                form: Math.max(0, Math.min(100, p.form + report.squadFormChange)) 
+                            };
+                        }
+                        return p;
+                    });
+                }
+                return updated;
+            });
+        }
+
+        setNews(prev => [
+            {
+                id: Date.now(),
+                week: currentWeek,
+                title: `📰 ${report.newspaperName}: ${report.headline}`,
+                body: `${report.article}\n\n📊 Impact: Reputation (${report.reputationChange >= 0 ? '+' : ''}${report.reputationChange}%), Squad Form (${report.squadFormChange >= 0 ? '+' : ''}${report.squadFormChange} pts)`,
+                type: 'press'
+            },
+            ...prev
+        ]);
+
+        proceedToNextWeek();
     };
 
     const proceedToNextWeek = async () => {
@@ -2673,7 +2711,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                         </div>
                     </div>
                 );
-            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen questions={pressQuestions} onFinish={() => proceedToNextWeek()} />;
+            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen questions={pressQuestions} resultContext={pressContext} onFinish={handleFinishPressConference} />;
             default: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
         }
     };
