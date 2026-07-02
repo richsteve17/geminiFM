@@ -125,6 +125,7 @@ export default function App() {
     const [careerHistory, setCareerHistory] = useState<CareerHistoryEntry[]>([]);
     
     const [matchSpeed, setMatchSpeed] = useState<'slow' | 'normal' | 'fast' | 'instant'>('normal');
+    const [gameplayTab, setGameplayTab] = useState<'match' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors'>('match');
 
     // --- THEMING STATE ---
     const [activeTheme, setActiveTheme] = useState<{ primary: string, secondary: string, text: string } | null>(null);
@@ -2580,7 +2581,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
             case AppScreen.JOB_CENTRE: return <JobCentreScreen jobs={availableJobs} onApply={handleApplyForJob} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen interview={interview} isLoading={isLoading} error={error} jobOffer={jobOffer} onAnswerSubmit={handleJobInterviewAnswer} onFinish={(acc) => { if(acc && interview) initializeGame(interview.teamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
             case AppScreen.TRANSFERS: return <TransfersScreen targets={transferMarket} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
-            case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={handlePlayerTalkFinish} />;
+            case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={handleFinishPlayerTalk} clubBudget={userTeam ? { balance: userTeam.balance, transferBudget: userTeam.transferBudget, weeklyWageBill: userTeam.weeklyWageBill } : undefined} />;
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;
                 return (
@@ -2589,31 +2590,181 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
                         {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
                         <div className="lg:col-span-3">
-                            <TeamDetails team={userTeam} onTacticChange={handleTacticChange} onNavigateToTransfers={() => setAppScreen(AppScreen.SCOUTING)} onNavigateToNews={()=>setAppScreen(AppScreen.NEWS_FEED)} onNavigateToTransferCenter={() => setAppScreen(AppScreen.TRANSFER_CENTER)} onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')} onToggleStarter={handleToggleStarter} onSwapPlayers={handleSwapPlayers} gameState={gameState} subsUsed={matchState?.subsUsed?.home || 0} onSubstitute={handleSubstitute} onReorderPlayers={handleReorderPlayers} onResign={handleResign} onNavigateToHonors={() => setAppScreen(AppScreen.HONORS_BOARD)} />
-                        </div>
-                        <div className="lg:col-span-6">
-                            <MatchView 
-                                fixture={currentFixture} 
-                                weeklyResults={weeklyResults} 
-                                matchState={matchState} 
+                            <TeamDetails 
+                                team={userTeam} 
+                                onTacticChange={handleTacticChange} 
+                                onNavigateToTransfers={() => setGameplayTab('scouting')} 
+                                onNavigateToNews={() => setGameplayTab('news')} 
+                                onNavigateToTransferCenter={() => setGameplayTab('transfers')} 
+                                onStartContractTalk={(player) => handleStartPlayerTalk(player, 'renewal')} 
+                                onToggleStarter={handleToggleStarter} 
+                                onSwapPlayers={handleSwapPlayers} 
                                 gameState={gameState} 
-                                onPlayFirstHalf={handleStartMatch} 
-                                onPlaySecondHalf={handleResumeMatch} 
-                                onPauseMatch={() => setGameState(GameState.PAUSED)}
-                                onSimulateSegment={handleSimulateSegment} 
-                                onNextMatch={handleAdvanceWeek} 
-                                error={error} 
-                                isSeasonOver={currentWeek > weeksInSeason} 
-                                userTeamName={userTeamName} 
-                                leagueTable={leagueTable} 
-                                isLoading={isLoading} 
-                                currentWeek={currentWeek} 
-                                teams={teams} 
-                                matchSpeed={matchSpeed}
-                                onMatchSpeedChange={setMatchSpeed}
+                                subsUsed={matchState?.subsUsed?.home || 0} 
+                                onSubstitute={handleSubstitute} 
+                                onReorderPlayers={handleReorderPlayers} 
+                                onResign={handleResign} 
+                                onNavigateToHonors={() => setGameplayTab('honors')} 
                             />
                         </div>
-                        <div className="lg:col-span-3"><LeagueTableView table={leagueTable} userTeamName={userTeamName} /></div>
+                        
+                        <div className="lg:col-span-9 flex flex-col gap-6">
+                            {/* PC Glassmorphic Navigation Tabs */}
+                            <div className="flex border-b border-gray-800 bg-gray-950/60 p-1.5 rounded-lg gap-2 shadow-inner border border-slate-800/40 backdrop-blur-md">
+                                <button onClick={() => setGameplayTab('match')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'match' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <span>🎮</span> Match Center
+                                </button>
+                                <button onClick={() => setGameplayTab('news')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'news' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <span>📰</span> Inbox Feed
+                                </button>
+                                <button onClick={() => setGameplayTab('scouting')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'scouting' || gameplayTab === 'scouting_market' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <span>🔍</span> Scout Network
+                                </button>
+                                <button onClick={() => setGameplayTab('transfers')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'transfers' ? 'bg-gradient-to-r from-green-700 to-emerald-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <span>🤝</span> Negotiations
+                                </button>
+                                <button onClick={() => setGameplayTab('honors')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'honors' ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <span>🏆</span> Trophy Room
+                                </button>
+                            </div>
+
+                            {/* Active Tab Panel */}
+                            {gameplayTab === 'match' && (
+                                <div className="grid grid-cols-1 lg:grid-cols-9 gap-6">
+                                    <div className="lg:col-span-6">
+                                        <MatchView 
+                                            fixture={currentFixture} 
+                                            weeklyResults={weeklyResults} 
+                                            matchState={matchState} 
+                                            gameState={gameState} 
+                                            onPlayFirstHalf={handleStartMatch} 
+                                            onPlaySecondHalf={handleResumeMatch} 
+                                            onPauseMatch={() => setGameState(GameState.PAUSED)}
+                                            onSimulateSegment={handleSimulateSegment} 
+                                            onNextMatch={handleAdvanceWeek} 
+                                            error={error} 
+                                            isSeasonOver={currentWeek > weeksInSeason} 
+                                            userTeamName={userTeamName} 
+                                            leagueTable={leagueTable} 
+                                            isLoading={isLoading} 
+                                            currentWeek={currentWeek} 
+                                            teams={teams} 
+                                            matchSpeed={matchSpeed}
+                                            onMatchSpeedChange={setMatchSpeed}
+                                        />
+                                    </div>
+                                    <div className="lg:col-span-3">
+                                        <LeagueTableView table={leagueTable} userTeamName={userTeamName} />
+                                    </div>
+                                </div>
+                            )}
+
+                            {gameplayTab === 'news' && (
+                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                    <NewsScreen news={news} onRiftDecision={handleRiftDecision} onJobOfferDecision={handleJobOfferDecision} onBack={() => setGameplayTab('match')} />
+                                </div>
+                            )}
+
+                            {gameplayTab === 'scouting' && (
+                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                    <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async (r, useReal) => { setIsLoading(true); const res = await scoutPlayers(r, useReal); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setGameplayTab('match')} onGoToTransfers={() => setGameplayTab('scouting_market')} />
+                                </div>
+                            )}
+
+                            {gameplayTab === 'scouting_market' && (
+                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                    <TransfersScreen targets={transferMarket} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setGameplayTab('scouting')} />
+                                </div>
+                            )}
+
+                            {gameplayTab === 'transfers' && (
+                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                    <TransferCenter
+                                        bids={incomingBids}
+                                        onAcceptBid={handleAcceptBid}
+                                        onRejectBid={handleRejectBid}
+                                        onDelegateBid={(bidId, summary) => {}}
+                                        onUpdateBid={handleUpdateBid}
+                                        onBack={() => setGameplayTab('match')}
+                                        squadPlayers={userTeam ? userTeam.players : []}
+                                    />
+                                </div>
+                            )}
+
+                            {gameplayTab === 'honors' && (
+                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                    <div className="text-center mb-8">
+                                        <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-widest bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">🏆 Trophy Room & Career Honors</h2>
+                                        <p className="text-gray-400 text-sm">Your permanent historical record of managerial accomplishments.</p>
+                                    </div>
+
+                                    {/* Silverware Summary Counts */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                                        {(() => {
+                                            const allTrophies = careerHistory.flatMap(entry => entry.trophies || []);
+                                            const counts = allTrophies.reduce((acc, t) => {
+                                                acc[t] = (acc[t] || 0) + 1;
+                                                return acc;
+                                            }, {} as Record<string, number>);
+
+                                            const trophyTypes = [
+                                                { key: 'World Cup Champion', label: 'World Cups', icon: '🌎' },
+                                                { key: 'Euro Champion', label: 'Euros', icon: '🇪🇺' },
+                                                { key: 'Premier League Champion', label: 'Premier Leagues', icon: '🦁' },
+                                                { key: 'La Liga Champion', label: 'La Liga Titles', icon: '🇪🇸' },
+                                                { key: 'Serie A Champion', label: 'Serie A Titles', icon: '🇮🇹' },
+                                                { key: 'Bundesliga Champion', label: 'Bundesligas', icon: '🇩🇪' },
+                                                { key: 'Ligue 1 Champion', label: 'Ligue 1 Titles', icon: '🇫🇷' },
+                                            ];
+
+                                            return trophyTypes.map(t => {
+                                                const count = counts[t.key] || 0;
+                                                return (
+                                                    <div key={t.key} className="bg-gray-800 border border-gray-700 p-4 rounded-lg text-center shadow-inner">
+                                                        <div className="text-3xl mb-1">{t.icon}</div>
+                                                        <div className="text-2xl font-mono font-black text-yellow-400">{count}</div>
+                                                        <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">{t.label}</div>
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
+                                    </div>
+
+                                    {/* Chronological Timeline */}
+                                    <div className="bg-gray-950/40 rounded-lg border border-gray-800 p-4">
+                                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Managerial Timeline</h3>
+                                        {careerHistory.length === 0 ? (
+                                            <div className="text-center p-8 text-gray-500 text-xs italic">
+                                                No completed campaigns on record yet. Complete your first season or tournament to build your legacy!
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {careerHistory.map((entry, idx) => (
+                                                    <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-gray-800/40 rounded border border-gray-800 hover:bg-gray-800/80 transition-colors">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="px-2 py-0.5 bg-yellow-950/80 border border-yellow-800/50 text-yellow-400 text-[10px] font-bold font-mono rounded">YEAR {entry.year}</span>
+                                                            <div>
+                                                                <h4 className="text-sm font-bold text-white">{entry.teamName}</h4>
+                                                                <p className="text-xs text-gray-400">{entry.league} &bull; Position: <span className="font-semibold text-gray-300">{entry.finalPosition}</span></p>
+                                                            </div>
+                                                        </div>
+                                                        {entry.trophies && entry.trophies.length > 0 && (
+                                                            <div className="mt-2 sm:mt-0 flex flex-wrap gap-1.5">
+                                                                {entry.trophies.map((t, tIdx) => (
+                                                                    <span key={tIdx} className="px-2 py-0.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-200 text-[10px] font-black uppercase rounded flex items-center gap-1">
+                                                                        🏆 {t}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         </main>
                     </div>
                 );
