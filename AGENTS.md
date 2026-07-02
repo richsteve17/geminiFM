@@ -33,3 +33,9 @@ When opening a PR, include:
 ## Configuration & Secrets
 Create a `.env` file with `VITE_GEMINI_API_KEY=...` for AI features. Keep secrets out of
 git and prefer local environment files.
+
+## Simulation & Career Progression Rules
+- **Infinite Cycle Math**: Never use hardcoded year values for tournament schedules or teammate rivalry checks. Use modulo arithmetic (e.g. `year % 4 === 2` for Euros, `year % 4 === 1` for World Cups) to support infinite seasons.
+- **Lineup & Availability Validations**: Match kickoff must be blocked if any starting player is marked as `Injured`, `Suspended`, or `SentOff`. Tactical report and efficiency scores must penalize starting unavailable players (e.g., `-20` points per player).
+- **Enforce In-Match Substitutions**: Mid-game swaps between starting XI and bench players must trigger an active substitution event logged on the match history, increment the `subsUsed` count, and enforce the FIFA-standard 5-substitution limit.
+- **Seasonal Statistics Archiving**: At the end of each season, current campaign player stats (Appearances, Goals, Clean Sheets, Ratings) must be archived into the player's permanent `history` list before current stats are reset for the next season, preserving year-over-year records for informed scouting.

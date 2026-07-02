@@ -171,11 +171,13 @@ const TacticsBoard: React.FC<TacticsBoardProps> = ({ assignments, formation, onS
                         style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
                     >
                         {/* Jersey / Circle */}
-                        <div className={`w-10 h-10 rounded-full border-2 flex flex-col items-center justify-center shadow-lg ${colorClass}`}>
-                            <span className="text-[10px] font-black leading-none">{player ? player.rating : role}</span>
+                        <div className={`w-10 h-10 rounded-full border-2 flex flex-col items-center justify-center shadow-lg relative ${colorClass}`} style={{ boxShadow: '0 4px 6px -1px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3)' }}>
+                            <span className="text-[10px] font-black leading-none z-10">{player ? player.rating : role}</span>
                             {player && (
-                                <span className="text-[8px] font-bold leading-none opacity-80">{player.position}</span>
+                                <span className="text-[8px] font-bold leading-none opacity-80 z-10">{player.position}</span>
                             )}
+                            {/* 3D Glossy bubble highlight */}
+                            <div className="absolute top-[2px] left-[2px] w-[10px] h-[6px] bg-white/35 rounded-full pointer-events-none" style={{ borderRadius: '50% 50% 40% 40%' }} />
                         </div>
 
                         {/* Name Label */}

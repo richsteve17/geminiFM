@@ -12,6 +12,8 @@ import type {
     ContractTerms,
     ContractBonusType,
     PlayerPosition,
+    RiftSeverity,
+    RiftScope,
 } from '../types';
 
 let _ai: GoogleGenAI | null = null;
@@ -38,9 +40,8 @@ export const ai = {
     }
 };
 
-// Models configuration
-const MODEL_TEXT = 'gemini-3-flash-preview'; 
-const MODEL_SEARCH = 'gemini-3-flash-preview'; 
+const MODEL_TEXT = 'gemini-2.5-flash'; 
+const MODEL_SEARCH = 'gemini-2.5-flash'; 
 const MODEL_TTS = 'gemini-2.5-flash-preview-tts'; 
 const MODEL_VIDEO = 'veo-3.1-fast-generate-preview'; 
 
@@ -53,13 +54,34 @@ const RPM_SHORTS = 0.03; // $0.03 per 1k views
 
 // --- CACHE LAYER ---
 const mediaCache = new Map<string, string | AudioBuffer>();
-const FREE_MODE = ["1", "true", "yes", "on"].includes(
-    String(
-        import.meta.env.VITE_FREE_MODE ||
-        (typeof process !== "undefined" ? process.env.FREE_MODE || process.env.VITE_FREE_MODE : "")
-    ).toLowerCase()
-);
-export const isFreeModeEnabled = () => FREE_MODE;
+const getInitialFlag = (key: string, defaultVal: boolean): boolean => {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(key);
+        if (saved !== null) {
+            return saved === 'true';
+        }
+    }
+    return defaultVal;
+};
+
+let paidAudioState = getInitialFlag('GFM_PAID_AUDIO', false);
+let paidVideoState = getInitialFlag('GFM_PAID_VIDEO', false);
+
+export const isPaidAudioEnabled = () => paidAudioState;
+export const setPaidAudioEnabled = (val: boolean) => {
+    paidAudioState = val;
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('GFM_PAID_AUDIO', String(val));
+    }
+};
+
+export const isPaidVideoEnabled = () => paidVideoState;
+export const setPaidVideoEnabled = (val: boolean) => {
+    paidVideoState = val;
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('GFM_PAID_VIDEO', String(val));
+    }
+};
 
 // --- MEDIA HELPERS ---
 
@@ -326,16 +348,33 @@ export const scoutPlayers = async (request: string, useRealWorld: boolean = fals
             contractExpires: 3, 
             isStarter: false, 
             condition: 100,
-            currentClub: p.currentClub || "Free Agent"
+            stamina: p.stamina ?? Math.floor(Math.random() * 31) + 65, // Random stamina between 65 and 95
+            currentClub: p.currentClub || "Free Agent",
+            potential: p.potential ?? Math.min(100, p.rating + Math.floor(Math.random() * 15)),
+            growthRate: p.growthRate ?? (p.age < 23 ? 1.2 : p.age > 30 ? 0.5 : 1.0),
+            form: p.form ?? 0
         }));
     } catch (e) { 
         console.error("Scouting Error", e);
         return []; 
     }
 };
-
 export const playMatchCommentary = async (text: string, eventId: number) => {
-    if (FREE_MODE) {
+    if (!isPaidAudioEnabled()) {
+        if ('speechSynthesis' in window) {
+            try {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.15; // standard excitement rate
+                utterance.pitch = 1.0;
+                const voices = window.speechSynthesis.getVoices();
+                const engVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+                if (engVoice) utterance.voice = engVoice;
+                window.speechSynthesis.speak(utterance);
+            } catch (e) {
+                console.error("Browser speech synthesis failed in free mode:", e);
+            }
+        }
         return;
     }
     const cacheKey = `tts-${eventId}`;
@@ -401,7 +440,7 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
 };
 
 export const generateReplayVideo = async (description: string, eventId: number, format: 'landscape' | 'portrait' = 'landscape'): Promise<string | null> => {
-    if (FREE_MODE) {
+    if (!isPaidVideoEnabled()) {
         return null;
     }
     const cacheKey = `video-${eventId}-${format}`;
@@ -454,18 +493,54 @@ export const generatePressConference = async (context: string): Promise<string[]
              model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
         });
         return JSON.parse(cleanJson(response.text)).questions;
-    } catch (e) { return ["How do you feel?", "What's next?"]; }
+    } catch (e) { 
+        console.warn("Press Conference generation failed, using rich local engine:", e);
+        const lower = context.toLowerCase();
+        let q1 = "How do you evaluate your team's tactical discipline in today's performance?";
+        let q2 = "There seemed to be some critical defensive lapses. What adjustments will you make in training?";
+        let q3 = "With key fixtures coming up, how will you manage player fatigue and rotations?";
+
+        if (lower.includes("win") || lower.includes("victory") || lower.includes("won")) {
+            q1 = "An outstanding victory today! What do you think was the turning point in the match?";
+            q2 = "Your team showed incredible chemistry. How do you keep this momentum going into next week?";
+            q3 = "The fans are ecstatic. Do you believe this performance proves you can challenge for the title?";
+        } else if (lower.includes("loss") || lower.includes("defeat") || lower.includes("lost")) {
+            q1 = "A tough defeat today. Where do you feel the game plan fell apart?";
+            q2 = "The board and fans are growing concerned about recent form. How do you respond to the pressure?";
+            q3 = "We saw some players looking fatigued. Do you regret not making substitutions earlier?";
+        } else if (lower.includes("draw") || lower.includes("tied")) {
+            q1 = "You share the points today. Do you view this as a point gained or two points dropped?";
+            q2 = "It was a close tactical battle in midfield. How did you react to their tactical adjustments?";
+            q3 = "Both sides had chances to win it late. What was missing to secure all three points?";
+        }
+
+        return [q1, q2, q3];
+    }
 };
 
-export const getInterviewQuestions = async (teamName: string, personality: string, league: string) => {
+export const getInterviewQuestions = async (teamName: string, personality: string, league: string, team?: Team) => {
+    let richContext = '';
+    if (team) {
+        richContext = `
+        Club Details:
+        - Prestige: ${team.prestige}/100
+        - Financial Balance: $${team.balance.toLocaleString()}
+        - Objectives: ${JSON.stringify(team.objectives)}
+        - Current Squad Size: ${team.players.length} players
+        - Current Tactics: Formation: ${team.tactic?.formation || '4-4-2'}, Mentality: ${team.tactic?.mentality || 'Balanced'}
+        `;
+    }
     const prompt = `
     You are the ${personality} Chairman of ${teamName} (${league}). 
-    You are interviewing a new manager.
-    Generate 3 TOUGH, SPECIFIC questions based on the club's status and your personality.
+    You are interviewing a new manager candidate.
+    ${richContext}
+    Generate 3 TOUGH, SPECIFIC questions based on the club's status, objectives, tactical profile, and your personality.
+    
     RULES:
     1. Do NOT ask generic "What are your tactics?" questions.
-    2. If personality is 'Moneyball', ask about youth stats or resale value.
-    3. If 'Ambitious', ask about big signings.
+    2. If personality is 'Moneyball', ask about youth development, stats, or selling players for profit.
+    3. If 'Ambitious', ask about challenging for trophies, big signings, or pressure.
+    4. Focus on the club's specific objectives and financial situation.
     
     Return JSON: { "questions": ["string", "string", "string"] }
     `;
@@ -478,12 +553,70 @@ export const getInterviewQuestions = async (teamName: string, personality: strin
         });
         return JSON.parse(cleanJson(response.text)).questions;
     } catch (e) {
-        return ["What is your philosophy?", "How will you handle the pressure?", "What are your wage demands?"];
+        console.warn("Chairman Interview generation failed, using rich local engine:", e);
+        const lowerPersonality = personality.toLowerCase();
+        if (lowerPersonality.includes("moneyball")) {
+            return [
+                `As the chairman of ${teamName}, I believe in stats. How will you use player metrics to build a competitive roster on a budget?`,
+                "We need to maximize our resources. What is your stance on selling key stars if a massive bid comes in?",
+                "Our youth academy is vital. How will you integrate and develop young players into the starting XI?"
+            ];
+        } else if (lowerPersonality.includes("ambitious")) {
+            return [
+                `We want trophies at ${teamName}. How will you handle the massive expectations and pressure to win immediately?`,
+                "If we back you financially, what high-profile signings or profile upgrades will you prioritize?",
+                "The fans expect beautiful, attacking football. Can you guarantee results while playing an attractive style?"
+            ];
+        } else {
+            return [
+                `What is your core tactical philosophy, and how will you adapt it to the current squad at ${teamName}?`,
+                `Our board objective is clear. What steps will you take in your first 100 days to ensure we hit it?`,
+                "How do you plan to handle player contract renewals and manage wage inflation in the dressing room?"
+            ];
+        }
     }
 };
 
-export const evaluateInterview = async (teamName: string, qs: string[], ans: string[], p: string) => {
-    const prompt = `Evaluate interview for ${teamName}. JSON: { "offer": boolean, "reasoning": "string" }`;
+export const evaluateInterview = async (
+    teamName: string,
+    qs: string[],
+    ans: string[],
+    p: string,
+    team?: Team,
+    standingsText?: string,
+    managerTactics?: string,
+    pastPromises?: string
+) => {
+    let richContext = '';
+    if (team) {
+        richContext = `
+        Club Details:
+        - Prestige: ${team.prestige}/100
+        - Financial Balance: $${team.balance.toLocaleString()}
+        - Objectives: ${JSON.stringify(team.objectives)}
+        - Current Tactics: Formation: ${team.tactic?.formation || '4-4-2'}, Mentality: ${team.tactic?.mentality || 'Balanced'}
+        `;
+    }
+    const qAndAPairs = qs.map((q, i) => `Question: ${q}\nAnswer: ${ans[i] || "No answer"}`).join("\n\n");
+    const prompt = `You are the chairman of ${teamName} with a personality described as "${p}".
+${richContext}
+${standingsText ? `Current Standings:\n${standingsText}\n` : ''}
+${managerTactics ? `Candidate's Current Tactics:\n${managerTactics}\n` : ''}
+${pastPromises ? `Candidate's Active Promises:\n${pastPromises}\n` : ''}
+
+Evaluate the manager's job interview based on the following questions and answers:
+
+${qAndAPairs}
+
+Decide whether to offer them the job. Return a JSON object with:
+- "offer": boolean (true if they should get the job, false otherwise)
+- "reasoning": a string explaining your decision, written in the voice/tone of a ${p} chairman.
+
+Response must be valid JSON matching:
+{
+  "offer": boolean,
+  "reasoning": string
+}`;
     try {
         const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
@@ -627,6 +760,9 @@ export const evaluatePlayerTalk = async (
     const safeOffer = normalizeOffer(player, context, offer);
     const preferredLength = getPreferredLengthRange(player.personality);
     const bonusType = safeOffer.bonusType;
+    const label = bonusTypeLabel(bonusType);
+
+    // Compute expected/baseline values for mock calculation & fallback
     const personalityMultiplier: Record<Player['personality'], number> = {
         Ambitious: 1.2,
         Loyal: 0.95,
@@ -672,7 +808,87 @@ export const evaluatePlayerTalk = async (
         financePenalty;
 
     const promises = extractPromisesFromAnswers(answers);
-    const label = bonusTypeLabel(bonusType);
+
+    const prompt = `You are evaluating a player contract negotiation in a football management simulator.
+Player Info:
+- Name: ${player.name}
+- Position: ${player.position}
+- Current Rating: ${player.rating} (Potential: ${player.potential})
+- Age: ${player.age}
+- Personality: ${player.personality}
+- Current Wage: $${player.wage.toLocaleString()}/week
+
+Club Details:
+- Name: ${team.name}
+- Current League: ${team.league}
+- Financial Balance: $${team.balance.toLocaleString()}
+- Objectives: ${JSON.stringify(team.objectives)}
+- Manager's Current Tactics: Formation: ${team.tactic.formation}, Mentality: ${team.tactic.mentality}
+- Active Promises: ${JSON.stringify(team.activePromises)}
+
+Negotiation Context:
+- Type: ${context} (new transfer or contract renewal)
+
+Offered Terms:
+- Wage Offered: $${safeOffer.wage.toLocaleString()}/week
+- Contract Length: ${safeOffer.length} years (Expected range for this player: ${preferredLength.min} to ${preferredLength.max} years)
+- Signing Bonus: $${safeOffer.signingBonus.toLocaleString()}
+- Performance Bonus: $${safeOffer.performanceBonus.toLocaleString()} (${label})
+
+Conversation History (Questions asked by the manager, and player's answers):
+${questions.map((q, i) => `Question: ${q}\nAnswer: ${answers[i] || 'No answer'}`).join('\n\n')}
+
+Evaluating using mathematical baseline score (for your reference):
+- Mathematical Score is: ${totalScore.toFixed(3)}. Typically >= 1.02 is accepted, >= 0.76 is a counter-offer, below that is rejected.
+- Expected baseline wage: $${expectedWage.toLocaleString()}/week
+- Expected signing bonus: $${expectedSigningBonus.toLocaleString()}
+- Expected performance bonus: $${expectedPerformanceBonus.toLocaleString()}
+
+Evaluate the offer. If the decision is 'counter', you MUST provide a reasonable 'counterOffer' object in JSON reflecting the player's demands. If 'accepted' or 'rejected', the counterOffer field should be null or omitted.
+Also, analyze the answers and extract any specific promises/guarantees the manager made to the player. Return these in the 'extractedPromises' list.
+
+Return JSON response with the following format:
+{
+  "decision": "accepted" | "counter" | "rejected",
+  "reasoning": "A statement from the player explaining their decision, written in their voice reflecting personality.",
+  "counterOffer": {
+    "wage": number,
+    "length": number,
+    "signingBonus": number,
+    "performanceBonus": number,
+    "bonusType": "goal" | "cleanSheet" | "appearance"
+  } | null,
+  "extractedPromises": ["string"]
+}`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        const parsedResult = JSON.parse(cleanJson(response.text));
+        
+        if (parsedResult && (parsedResult.decision === 'accepted' || parsedResult.decision === 'counter' || parsedResult.decision === 'rejected')) {
+            const decision = parsedResult.decision;
+            const reasoning = parsedResult.reasoning || '';
+            const extractedPromises = Array.isArray(parsedResult.extractedPromises) ? parsedResult.extractedPromises : promises;
+            
+            let counterOffer: ContractTerms | undefined = undefined;
+            if (decision === 'counter' && parsedResult.counterOffer) {
+                counterOffer = normalizeOffer(player, context, parsedResult.counterOffer);
+            }
+            
+            return {
+                decision,
+                reasoning,
+                counterOffer,
+                extractedPromises
+            };
+        }
+    } catch (e) {
+        console.warn("Gemini evaluation failed, falling back to local simulation:", e);
+    }
 
     if (totalScore >= 1.02 && wageScore >= 0.88) {
         return {
@@ -854,6 +1070,157 @@ export const generateSocialPost = async (description: string, teamName: string, 
             sound: "Viral Sound",
             estimatedEarnings: "$3.00 (+$2.91 Net)",
             comments: []
+        };
+    }
+};
+
+export interface TournamentRivalryResult {
+    riftSeverity: RiftSeverity;
+    duration: number;
+    reason: string;
+    affectedScope: RiftScope;
+}
+
+export const getTeammateTournamentRivalry = async (
+    playerA: { name: string; personality: string; nationality: string },
+    playerB: { name: string; personality: string; nationality: string },
+    competition: 'World Cup' | 'Euros' | 'Copa America' | 'Qualifier' | 'Friendly',
+    round: 'Final' | 'Semi Final' | 'Quarter Final' | 'Round of 16' | 'Group Stage',
+    result: 'won' | 'lost' | 'draw',
+    involvement: 'scorer' | 'assist-or-save' | 'full-match' | 'minimal'
+): Promise<TournamentRivalryResult> => {
+    const prompt = `
+You are a football psychology AI. Assess the rift between two club teammates who faced each other in an international tournament.
+
+Player A: ${playerA.name} (${playerA.personality}, ${playerA.nationality}) — they LOST this match.
+Player B: ${playerB.name} (${playerB.personality}, ${playerB.nationality}) — they WON this match.
+Competition: ${competition}
+Round: ${round}
+Player A's involvement: ${involvement}
+
+PERSONALITY RULES (apply strictly):
+- Leader / Professional: Separates club from country. Even a World Cup Final defeat = mild, short rift.
+- Volatile: Loss amplifies the rift significantly. Even low-stakes losses can cause flare-ups.
+- Mercenary: Image-driven. A big-stage loss = brand damage. May extend rift to ALL players from the rival nation (affectedScope: "nation-wide"), not just Player B.
+- Ambitious: A club teammate winning what they lost creates jealousy — they may demand to be clear first choice.
+- Young Prospect: May idolise opponent and take it lightly, or be devastated — use context to decide.
+- Loyal: Most forgiving. Rift is suppressed easily.
+
+SEVERITY MATRIX:
+- Competition weight: World Cup highest, Euros/Copa America high, Qualifier/Friendly very low
+- Round weight: Final > Semi > Quarter > R16 > Group Stage
+- Involvement weight: Scorer of decider = maximum; assist/save = high; full match = low; minimal = minimal (0-2 weeks)
+
+Return JSON:
+{
+    "riftSeverity": "none" | "minor" | "moderate" | "serious",
+    "duration": number (weeks, 0–16),
+    "reason": "string (one vivid sentence explaining the rift)",
+    "affectedScope": "direct" | "nation-wide"
+}
+If result is 'draw' or involvement is 'minimal' and competition is low-stakes, riftSeverity should be "none" or "minor".
+`;
+    try {
+        const ai = getAIInstance();
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { riftSeverity: 'none', duration: 0, reason: 'No significant rift.', affectedScope: 'direct' };
+    }
+};
+
+export interface PostTournamentMoraleResult {
+    morale: 'Winner' | 'FiredUp' | 'Disappointed';
+    message: string;
+    durationWeeks: number;
+}
+
+export const getPlayerPostTournamentMorale = async (
+    player: { name: string; personality: string },
+    result: 'won' | 'lost' | 'group-exit',
+    competition: string,
+    round: string
+): Promise<PostTournamentMoraleResult> => {
+    const prompt = `
+You are a football psychology AI. Determine the post-tournament morale effect for a player returning to their club.
+
+Player: ${player.name} (Personality: ${player.personality})
+Tournament: ${competition}, exited at: ${round}
+Result: ${result}
+
+RULES:
+- Mercenary who WON a major tournament: massive ego boost, returns demanding more playing time. morale: "Winner", high duration (8-12 weeks).
+- Leader who LOST: recovers quickly, professional. morale: "Disappointed", low duration (1-3 weeks).
+- Volatile who LOST: deeply affected, morale "Disappointed", moderate duration (4-8 weeks).
+- Ambitious who LOST a final to a club teammate: jealousy, morale "FiredUp" but edgy, moderate duration.
+- Young Prospect who WON: thrilled, morale "FiredUp", moderate duration.
+- Loyal who WON: quietly pleased, morale "Winner", low-moderate duration.
+
+Return JSON:
+{
+    "morale": "Winner" | "FiredUp" | "Disappointed",
+    "message": "string (one sentence flavour text for the squad feed)",
+    "durationWeeks": number (1–12)
+}
+`;
+    try {
+        const ai = getAIInstance();
+        const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return { morale: 'Disappointed', message: `${player.name} returns from international duty.`, durationWeeks: 2 };
+    }
+};
+
+export interface ClubNegotiationResult {
+    decision: 'accepted' | 'rejected' | 'counter';
+    counterFee?: number;
+    response: string;
+}
+
+export const negotiateTransferBid = async (
+    player: Player,
+    buyingClub: string,
+    offeredFee: number,
+    userMessage: string,
+    history: { sender: 'manager' | 'director'; message: string }[]
+): Promise<ClubNegotiationResult> => {
+    const formattedHistory = history.map(h => `${h.sender === 'manager' ? 'You (Manager)' : `${buyingClub} Director`}: "${h.message}"`).join('\n');
+    const prompt = `
+You are the Director of Football for ${buyingClub} negotiating to buy ${player.name} (${player.position}, age ${player.age}, rating ${player.rating}) from the manager's club.
+We originally offered $${offeredFee.toLocaleString()}.
+The manager has just sent you this message: "${userMessage}"
+
+Conversation History:
+${formattedHistory}
+
+Decide whether to accept the manager's counter-offer/reasoning, reject it entirely, or counter-offer with a new fee.
+RULES:
+1. Be realistic and stay in character. If the manager asks for way too much (e.g. >1.5x market value of $${(player.marketValue || 0).toLocaleString()}), reject it.
+2. If the manager makes a reasonable case or minor increase (e.g., +10%), you can accept or counter slightly below.
+3. If you make a counter-offer, specify "decision": "counter" and set "counterFee" as a number.
+4. Keep the character voice strong and unhinged/realistic depending on the club (e.g. Real Madrid/Levy/etc.).
+
+Return JSON:
+{
+    "decision": "accepted" | "counter" | "rejected",
+    "counterFee": number (if countering, otherwise null),
+    "response": "A message explaining your response in your character voice."
+}
+`;
+    try {
+        const ai = getAIInstance();
+        const response = await ai.models.generateContent({ 
+            model: MODEL_TEXT, 
+            contents: prompt, 
+            config: { responseMimeType: "application/json" } 
+        });
+        return JSON.parse(cleanJson(response.text));
+    } catch (e) {
+        return {
+            decision: 'counter',
+            counterFee: Math.round(offeredFee * 1.1),
+            response: "We can go slightly higher, but let's meet in the middle."
         };
     }
 };

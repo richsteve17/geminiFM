@@ -46,6 +46,17 @@ const TransfersScreen: React.FC<TransfersScreenProps> = ({ targets, onApproachPl
                                 <p className="text-sm text-gray-400">
                                     Wage: <span className="font-semibold text-gray-300">${player.wage.toLocaleString()}/wk</span>
                                 </p>
+                                {player.stats && player.stats.appearances > 0 && (
+                                    <p 
+                                        className="text-xs text-blue-400 font-mono mt-1 cursor-help"
+                                        title={player.history && player.history.length > 0 
+                                            ? `Career History:\n` + player.history.map(h => `Year ${h.year} (${h.teamName}): ${h.appearances} Apps, ${h.goals} Goals, ${h.cleanSheets} CS, ★${h.averageRating}`).join('\n') 
+                                            : "No past season history."
+                                        }
+                                    >
+                                        Apps: {player.stats.appearances} | Goals: {player.stats.goals} | CS: {player.stats.cleanSheets} | Rating: ★{player.stats.averageRating}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <div className="flex items-center mt-4 sm:mt-0">

@@ -19,6 +19,7 @@ interface TeamDetailsProps {
     onTacticChange: (tactic: Partial<Tactic>) => void;
     onNavigateToTransfers: () => void;
     onNavigateToNews: () => void;
+    onNavigateToTransferCenter?: () => void;
     onStartContractTalk: (player: Player) => void;
     onToggleStarter: (playerName: string) => void;
     onSwapPlayers?: (p1: Player, p2: Player) => void;
@@ -26,6 +27,8 @@ interface TeamDetailsProps {
     subsUsed: number;
     onSubstitute: (playerIn: Player, playerOut: Player) => void;
     onReorderPlayers?: (players: Player[]) => void;
+    onResign?: () => void;
+    onNavigateToHonors?: () => void;
 }
 
 const getPositionColor = (position: string) => {
@@ -50,7 +53,7 @@ const getPersonalityBadgeColor = (p: PlayerPersonality) => {
     }
 }
 
-const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onStartContractTalk, onToggleStarter, onSwapPlayers, gameState, subsUsed, onSubstitute, onReorderPlayers }) => {
+const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onNavigateToTransferCenter, onStartContractTalk, onToggleStarter, onSwapPlayers, gameState, subsUsed, onSubstitute, onReorderPlayers, onResign, onNavigateToHonors }) => {
     const [view, setView] = useState<'squad' | 'tactics' | 'finance'>('tactics'); 
     const [showContracts, setShowContracts] = useState(false);
     
@@ -105,11 +108,30 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
     };
 
     const swapByName = (sourceName: string, targetName: string) => {
-        if (sourceName === targetName || !onSwapPlayers) return;
-        const sourcePlayer = team.players.find(p => p.name === sourceName);
-        const targetPlayer = team.players.find(p => p.name === targetName);
-        if (!sourcePlayer || !targetPlayer) return;
-        onSwapPlayers(sourcePlayer, targetPlayer);
+        if (sourceName === targetName) return;
+        const p1 = team.players.find(p => p.name === sourceName);
+        const p2 = team.players.find(p => p.name === targetName);
+        if (!p1 || !p2) return;
+
+        if (isMatchLive) {
+            const isP1Starter = p1.isStarter;
+            const isP2Starter = p2.isStarter;
+
+            if (isP1Starter !== isP2Starter) {
+                if (subsUsed >= 5) {
+                    alert("Tactical Error: You have already used all 5 substitutions!");
+                    return;
+                }
+                const playerIn = isP1Starter ? p2 : p1;
+                const playerOut = isP1Starter ? p1 : p2;
+                onSubstitute(playerIn, playerOut);
+                return;
+            }
+        }
+
+        if (onSwapPlayers) {
+            onSwapPlayers(p1, p2);
+        }
     };
 
     // Handle List View Interaction (Swap Mode)
@@ -146,6 +168,19 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
             }
             if (eff.type === 'BadChemistry') {
                 effects.push(<span key={`c-${i}`} className="text-xs" title={`Chemistry Rift with ${eff.with}`}><BrokenLinkIcon className="w-3 h-3 text-orange-500 inline" /></span>);
+            }
+            if (eff.type === 'InternationalRift') {
+                const color = eff.severity === 'serious' ? 'text-red-500' : eff.severity === 'moderate' ? 'text-orange-500' : 'text-yellow-500';
+                effects.push(
+                    <span key={`ir-${i}`} className="text-xs" title={`International Rift (${eff.severity}) with ${eff.with}: ${eff.message}`}>
+                        <BrokenLinkIcon className={`w-3 h-3 ${color} inline`} />
+                    </span>
+                );
+            }
+            if (eff.type === 'TeammateBond') {
+                effects.push(
+                    <span key={`tb-${i}`} className="text-xs" title={`Teammate Bond with ${eff.with}: ${eff.message}`}>🤝</span>
+                );
             }
         });
 
@@ -206,12 +241,26 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                         <span className={`text-[9px] font-bold px-1.5 rounded border ${player.condition > 80 ? 'text-green-400 border-green-800 bg-green-900/30' : player.condition > 60 ? 'text-yellow-400 border-yellow-800 bg-yellow-900/30' : 'text-red-400 border-red-800 bg-red-900/30'} uppercase tracking-wider`}>
                             {player.condition}% FIT
                         </span>
+                        <span className="text-[9px] font-bold px-1.5 rounded border text-blue-400 border-blue-800 bg-blue-900/30 uppercase tracking-wider" title="Stamina (affects how slowly player tires during match)">
+                            STA: {player.stamina ?? (player.age < 22 ? 80 : player.age > 30 ? 65 : 75) + (player.personality === 'Professional' ? 5 : 0)}
+                        </span>
                         {!isNationalTeam && (
                             <span className="text-[9px] text-gray-500">
                                 {player.contractExpires === 0 ? <span className="text-red-400 font-bold">Expiring!</span> : `${player.contractExpires}y`} · ${player.wage.toLocaleString()}/wk
                                 {player.contractIncentives && player.contractIncentives.performanceBonus > 0 && (
                                     <> · +${player.contractIncentives.performanceBonus.toLocaleString()}/{player.contractIncentives.bonusType === 'goal' ? 'goal' : player.contractIncentives.bonusType === 'cleanSheet' ? 'CS' : 'app'}</>
                                 )}
+                            </span>
+                        )}
+                        {player.stats && player.stats.appearances > 0 && (
+                            <span 
+                                className="text-[9px] font-semibold text-blue-300 bg-blue-900/20 px-1.5 py-0.5 border border-blue-800 rounded uppercase tracking-wider whitespace-nowrap cursor-help"
+                                title={player.history && player.history.length > 0 
+                                    ? `Career History:\n` + player.history.map(h => `Year ${h.year} (${h.teamName}): ${h.appearances} Apps, ${h.goals} Goals, ${h.cleanSheets} CS, ★${h.averageRating}`).join('\n') 
+                                    : "No past season history."
+                                }
+                            >
+                                Apps: {player.stats.appearances} · Goals: {player.stats.goals} · CS: {player.stats.cleanSheets} · ★{player.stats.averageRating}
                             </span>
                         )}
                     </div>
@@ -418,14 +467,33 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavig
                                 <p className="text-[10px] text-center text-gray-500 pt-1 italic">...and {team.players.length - 5} others</p>
                             </div>
                         </div>
+
+                        {onResign && (
+                            <button 
+                                onClick={() => {
+                                    if (confirm("Are you sure you want to resign from your club? Your manager reputation will drop slightly.")) {
+                                        onResign();
+                                    }
+                                }}
+                                className="w-full py-2 bg-red-750 hover:bg-red-700 text-white font-bold rounded text-[10px] uppercase tracking-wider transition-colors shadow border border-red-800"
+                            >
+                                Resign from Club
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-700">
-                <button onClick={onNavigateToNews} className="p-2.5 bg-gray-700 hover:bg-gray-600 rounded text-[10px] font-black flex items-center justify-center gap-1.5"><NewspaperIcon className="w-3.5 h-3.5" /> NEWS</button>
-                <button onClick={onNavigateToTransfers} disabled={isNationalTeam} className={`p-2.5 rounded text-[10px] font-black flex items-center justify-center gap-1.5 uppercase tracking-tighter ${isNationalTeam ? 'bg-gray-700 opacity-50 cursor-not-allowed' : 'bg-blue-900 hover:bg-blue-800 text-blue-100'}`}>
-                    <ArrowsRightLeftIcon className="w-3.5 h-3.5" /> {isNationalTeam ? 'Selection' : 'Scouting'}
+            <div className="grid grid-cols-4 gap-1 mt-2 pt-2 border-t border-gray-700">
+                <button onClick={onNavigateToNews} className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-[9px] font-black flex flex-col items-center justify-center gap-1"><NewspaperIcon className="w-4 h-4" /> NEWS</button>
+                <button onClick={onNavigateToTransfers} disabled={isNationalTeam} className={`p-2 rounded text-[9px] font-black flex flex-col items-center justify-center gap-1 uppercase tracking-tighter ${isNationalTeam ? 'bg-gray-700 opacity-50 cursor-not-allowed' : 'bg-blue-900 hover:bg-blue-800 text-blue-100'}`}>
+                    <ArrowsRightLeftIcon className="w-4 h-4" /> {isNationalTeam ? 'Selection' : 'Scout'}
+                </button>
+                <button onClick={onNavigateToTransferCenter} disabled={isNationalTeam} className={`p-2 rounded text-[9px] font-black flex flex-col items-center justify-center gap-1 uppercase tracking-tighter ${isNationalTeam ? 'bg-gray-700 opacity-50 cursor-not-allowed' : 'bg-green-950/80 hover:bg-green-900/90 text-green-200 border border-green-800/80'}`}>
+                    <BriefcaseIcon className="w-4 h-4" /> Bids
+                </button>
+                <button onClick={onNavigateToHonors} className="p-2 bg-amber-950/80 hover:bg-amber-900/90 text-amber-200 border border-amber-800/80 rounded text-[9px] font-black flex flex-col items-center justify-center gap-1 uppercase tracking-tighter">
+                    <span className="text-sm">🏆</span> Cabinets
                 </button>
             </div>
         </div>

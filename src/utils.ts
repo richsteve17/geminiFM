@@ -95,6 +95,56 @@ export const analyzeTactics = (starters: Player[], formation: Formation): Tactic
         });
     }
 
+    // Check for serious chemistry rifts or bad chemistry between any two starters
+    const feudWarnings = new Set<string>();
+    for (let i = 0; i < starters.length; i++) {
+        const pA = starters[i];
+        for (let j = i + 1; j < starters.length; j++) {
+            const pB = starters[j];
+            const pAHasRiftWithB = (pA.effects || []).some(e => 
+                (e.type === 'InternationalRift' && e.severity === 'serious' && e.with === pB.name) ||
+                (e.type === 'BadChemistry' && e.with === pB.name)
+            );
+            const pBHasRiftWithA = (pB.effects || []).some(e => 
+                (e.type === 'InternationalRift' && e.severity === 'serious' && e.with === pA.name) ||
+                (e.type === 'BadChemistry' && e.with === pA.name)
+            );
+
+            if (pAHasRiftWithB || pBHasRiftWithA) {
+                const warningKey = [pA.name, pB.name].sort().join(" vs ");
+                if (!feudWarnings.has(warningKey)) {
+                    feudWarnings.add(warningKey);
+                    efficiencyScore -= 30;
+                    feedback.push(`⚠️ Feud Alert: ${pA.name} and ${pB.name} have a serious rift and refuse to cooperate on the pitch!`);
+                }
+            }
+
+            const pAHasBondWithB = (pA.effects || []).some(e => e.type === 'TeammateBond' && e.with === pB.name);
+            const pBHasBondWithA = (pB.effects || []).some(e => e.type === 'TeammateBond' && e.with === pA.name);
+            if (pAHasBondWithB || pBHasBondWithA) {
+                const bondKey = [pA.name, pB.name].sort().join(" bond ");
+                if (!feudWarnings.has(bondKey)) {
+                    feudWarnings.add(bondKey);
+                    efficiencyScore += 5;
+                }
+            }
+        }
+    }
+
+    // Check for unavailable players (Injured, Suspended, SentOff) in the starting lineup
+    starters.forEach(p => {
+        if (p.status.type === 'Injured') {
+            efficiencyScore -= 20;
+            feedback.push(`⚠️ Selection Error: ${p.name} is injured and cannot take the pitch!`);
+        } else if (p.status.type === 'Suspended') {
+            efficiencyScore -= 20;
+            feedback.push(`⚠️ Selection Error: ${p.name} is suspended and cannot take the pitch!`);
+        } else if (p.status.type === 'SentOff') {
+            efficiencyScore -= 20;
+            feedback.push(`⚠️ Selection Error: ${p.name} has been sent off!`);
+        }
+    });
+
     // General Balance Check
     if (efficiencyScore < 50) feedback.push("The team looks confused by this shape.");
     else if (efficiencyScore < 80) feedback.push("Some square pegs in round holes.");
@@ -258,4 +308,110 @@ export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals:
         if (Math.random() < baseChance - (ratingDiff * 0.02)) awayGoals++;
     }
     return { homeGoals, awayGoals };
+};
+
+export const calculatePlayerDevelopment = (player: Player, matchPerformance: number = 0): Player => {
+    let { rating, age, potential, growthRate, form } = player;
+
+    if (potential === undefined) {
+        potential = Math.min(99, rating + Math.floor(Math.random() * 10) + 5);
+    }
+    if (growthRate === undefined) {
+        growthRate = player.personality === 'Young Prospect' ? 0.6 : 0.4;
+    }
+    if (form === undefined) {
+        form = 50;
+    }
+
+    // Update form based on match performance (simple model)
+    form = Math.max(0, Math.min(100, form + (matchPerformance * 10) - 5)); // Performance can be -1 to 1
+
+    // Age-based development/decline
+    if (age < 23) {
+        growthRate += 0.05; // Young players develop faster
+    } else if (age > 30) {
+        growthRate -= 0.05; // Older players decline
+    }
+    growthRate = Math.max(0.1, Math.min(1, growthRate)); // Keep growth rate within reasonable bounds
+
+    // Calculate potential rating change
+    const potentialRatingChange = (potential - rating) * (growthRate / 10);
+
+    // Apply development/decline
+    rating += potentialRatingChange;
+
+    // Apply form influence (temporary boost/reduction)
+    rating += (form - 50) / 100; 
+
+    // Ensure rating stays within bounds (e.g., 1-100)
+    rating = Math.max(1, Math.min(100, rating));
+
+    return { ...player, rating: Math.round(rating), growthRate, form: Math.round(form) };
+};
+
+export const ensureTeamAndPlayerFields = (teams: Record<string, Team>): Record<string, Team> => {
+    const updatedTeams: Record<string, Team> = {};
+    for (const teamName in teams) {
+        const team = teams[teamName];
+        
+        // computed weeklyWageBill
+        const computedWeeklyWageBill = team.players.reduce((sum, p) => sum + (p.wage || 0), 0);
+        const weeklyWageBill = team.weeklyWageBill !== undefined ? team.weeklyWageBill : computedWeeklyWageBill;
+        
+        // weeklyBroadcastRevenue
+        let weeklyBroadcastRevenue = team.weeklyBroadcastRevenue;
+        if (weeklyBroadcastRevenue === undefined) {
+            switch (team.league) {
+                case 'Premier League':
+                    weeklyBroadcastRevenue = 1500000;
+                    break;
+                case 'La Liga':
+                    weeklyBroadcastRevenue = 1000000;
+                    break;
+                case 'Serie A':
+                    weeklyBroadcastRevenue = 800000;
+                    break;
+                case 'Bundesliga':
+                    weeklyBroadcastRevenue = 900000;
+                    break;
+                case 'Ligue 1':
+                    weeklyBroadcastRevenue = 700000;
+                    break;
+                case 'Championship':
+                    weeklyBroadcastRevenue = 300000;
+                    break;
+                case 'MLS':
+                    weeklyBroadcastRevenue = 200000;
+                    break;
+                default:
+                    weeklyBroadcastRevenue = 100000;
+                    break;
+            }
+        }
+        
+        // matchDayRevenue
+        const matchDayRevenue = team.matchDayRevenue !== undefined ? team.matchDayRevenue : (team.prestige || 1) * 15000;
+        
+        // players potential, growthRate, form
+        const players = team.players.map(p => {
+            const potential = p.potential !== undefined ? p.potential : Math.min(99, p.rating + Math.floor(Math.random() * 10) + 5);
+            const growthRate = p.growthRate !== undefined ? p.growthRate : (p.personality === 'Young Prospect' ? 0.6 : 0.4);
+            const form = p.form !== undefined ? p.form : 50;
+            return {
+                ...p,
+                potential,
+                growthRate,
+                form
+            };
+        });
+        
+        updatedTeams[teamName] = {
+            ...team,
+            weeklyWageBill,
+            weeklyBroadcastRevenue,
+            matchDayRevenue,
+            players
+        };
+    }
+    return updatedTeams;
 };

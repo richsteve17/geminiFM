@@ -34,13 +34,21 @@ const renderDot = (
     x: number,
     y: number,
     colorClass: string,
-    ringClass: string
+    glowColor: string
 ) => (
     <div
         key={key}
-        className={`absolute w-4 h-4 rounded-full border border-white/70 ${colorClass} ${ringClass} shadow-[0_0_6px_rgba(0,0,0,0.35)]`}
-        style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
-    />
+        className={`absolute w-5 h-5 rounded-full border border-white/90 ${colorClass} flex items-center justify-center`}
+        style={{ 
+            left: `${x}%`, 
+            top: `${y}%`, 
+            transform: 'translate(-50%, -50%)',
+            boxShadow: `0 3px 5px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.45), 0 0 8px ${glowColor}`
+        }}
+    >
+        {/* Glossy top-left highlight reflect */}
+        <div className="absolute top-[2px] left-[2px] w-[6px] h-[3px] bg-white/60 pointer-events-none" style={{ borderRadius: '50% 50% 40% 40%' }} />
+    </div>
 );
 
 const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamName, lastEvent }) => {
@@ -123,12 +131,20 @@ const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamN
             )}
 
             <div className="absolute inset-0">
-                {homeDots.map((dot, idx) => renderDot(`h-${idx}`, dot.x, dot.y, 'bg-rose-500', 'ring-rose-300/40'))}
-                {awayDots.map((dot, idx) => renderDot(`a-${idx}`, dot.x, dot.y, 'bg-sky-500', 'ring-sky-300/40'))}
+                {homeDots.map((dot, idx) => renderDot(`h-${idx}`, dot.x, dot.y, 'bg-gradient-to-br from-rose-400 via-rose-500 to-rose-700', 'rgba(244,63,94,0.4)'))}
+                {awayDots.map((dot, idx) => renderDot(`a-${idx}`, dot.x, dot.y, 'bg-gradient-to-br from-sky-400 via-sky-500 to-sky-700', 'rgba(14,165,233,0.4)'))}
                 <div
-                    className="absolute w-2.5 h-2.5 rounded-full bg-white border border-gray-100 shadow-[0_0_8px_rgba(255,255,255,0.85)] transition-all duration-700 ease-out"
-                    style={{ left: `${ball.x}%`, top: `${ball.y}%`, transform: 'translate(-50%, -50%)' }}
-                />
+                    className="absolute w-3.5 h-3.5 rounded-full bg-gradient-to-br from-white via-slate-100 to-slate-200 border border-slate-400 transition-all duration-700 ease-out"
+                    style={{ 
+                        left: `${ball.x}%`, 
+                        top: `${ball.y}%`, 
+                        transform: 'translate(-50%, -50%)',
+                        boxShadow: '0 3px 5px rgba(0,0,0,0.6), inset 0 -1.5px 2.5px rgba(0,0,0,0.35), 0 0 6px rgba(255,255,255,0.7)'
+                    }}
+                >
+                    {/* Ball gloss point */}
+                    <div className="absolute top-[1.5px] left-[1.5px] w-[3px] h-[2px] bg-white/80" style={{ borderRadius: '50% 50% 40% 40%' }} />
+                </div>
             </div>
 
             <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] font-bold text-white/85 uppercase tracking-wider">

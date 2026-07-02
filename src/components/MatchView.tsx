@@ -8,7 +8,7 @@ import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 import { ShareIcon } from './icons/ShareIcon';
 import { MusicalNoteIcon } from './icons/MusicalNoteIcon';
 import { TOUCHLINE_SHOUTS } from '../constants';
-import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getContextAwareShouts, processTouchlineInteraction, generateSocialPost, isFreeModeEnabled, type SocialPostData } from '../services/geminiService';
+import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getContextAwareShouts, processTouchlineInteraction, generateSocialPost, isPaidAudioEnabled, isPaidVideoEnabled, type SocialPostData } from '../services/geminiService';
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 import AtmosphereWidget from './AtmosphereWidget';
@@ -41,7 +41,8 @@ export default function MatchView({
     userTeamName, teams, isLoading, currentWeek, error, isSeasonOver,
     onPauseMatch, matchSpeed, onMatchSpeedChange
 }: MatchViewProps) {
-    const isFreeMode = isFreeModeEnabled();
+    const isPaidAudio = isPaidAudioEnabled();
+    const isPaidVideo = isPaidVideoEnabled();
     
     const feedRef = useRef<HTMLDivElement>(null);
     const lastEventCountRef = useRef(0);
@@ -172,16 +173,12 @@ export default function MatchView({
     };
 
     const handlePlayAudio = async (event: MatchEvent) => {
-        if (isFreeMode) {
-            setMediaError("Free mode: audio commentary is disabled.");
-            return;
-        }
         setPlayingAudioId(event.id);
         setMediaError(null);
         const commentary = `${event.minute}th minute. ${event.description}`;
         try {
             await playMatchCommentary(commentary, event.id);
-            setTimeout(() => setPlayingAudioId(null), 5000); 
+            setTimeout(() => setPlayingAudioId(null), 6000); 
         } catch (e) {
             setMediaError("Audio unavailable.");
             setPlayingAudioId(null);
@@ -189,8 +186,8 @@ export default function MatchView({
     };
 
     const handleGenerateVideo = async (event: MatchEvent, format: 'landscape' | 'portrait') => {
-        if (isFreeMode) {
-            setMediaError("Free mode: replay and clip generation are disabled.");
+        if (!isPaidVideo) {
+            setMediaError("Replay videos are disabled. Toggle paid video on to use.");
             return;
         }
         setGeneratingVideoId(event.id);
@@ -244,13 +241,13 @@ export default function MatchView({
                 </div>
                 {event.type === 'goal' && (
                     <div className="flex gap-2 mr-2 flex-shrink-0">
-                        <button onClick={() => handlePlayAudio(event)} disabled={isFreeMode || playingAudioId === event.id} className={`p-1 rounded hover:bg-gray-700 transition-colors ${playingAudioId === event.id ? 'text-green-400 animate-pulse' : 'text-gray-500'} ${isFreeMode ? 'opacity-50 cursor-not-allowed' : ''}`} title={isFreeMode ? "Disabled in free mode" : "Listen"}>
+                        <button onClick={() => handlePlayAudio(event)} disabled={playingAudioId === event.id} className={`p-1 rounded hover:bg-gray-700 transition-colors ${playingAudioId === event.id ? 'text-green-400 animate-pulse' : 'text-gray-500'}`} title="Listen">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 1 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z" /></svg>
                         </button>
-                        <button onClick={() => handleGenerateVideo(event, 'landscape')} disabled={isFreeMode || generatingVideoId === event.id} className={`p-1 rounded hover:bg-gray-700 transition-colors ${generatingVideoId === event.id ? 'text-yellow-400 animate-spin' : 'text-gray-500'} ${isFreeMode ? 'opacity-50 cursor-not-allowed' : ''}`} title={isFreeMode ? "Disabled in free mode" : "Replay"}>
+                        <button onClick={() => handleGenerateVideo(event, 'landscape')} disabled={!isPaidVideo || generatingVideoId === event.id} className={`p-1 rounded hover:bg-gray-700 transition-colors ${generatingVideoId === event.id ? 'text-yellow-400 animate-spin' : 'text-gray-500'} ${!isPaidVideo ? 'opacity-50 cursor-not-allowed' : ''}`} title={!isPaidVideo ? "Video disabled in settings" : "Replay"}>
                             {generatingVideoId === event.id ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M4.5 4.5a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h8.25a3 3 0 0 0 3-3v-9a3 3 0 0 0-3-3H4.5ZM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06Z" /></svg>}
                         </button>
-                        <button onClick={() => handleGenerateVideo(event, 'portrait')} disabled={isFreeMode || generatingVideoId === event.id} className={`p-1 rounded hover:bg-purple-900/50 transition-colors ${generatingVideoId === event.id ? 'text-purple-400 animate-spin' : 'text-purple-400 hover:text-purple-300'} ${isFreeMode ? 'opacity-50 cursor-not-allowed' : ''}`} title={isFreeMode ? "Disabled in free mode" : "Clip It"}>
+                        <button onClick={() => handleGenerateVideo(event, 'portrait')} disabled={!isPaidVideo || generatingVideoId === event.id} className={`p-1 rounded hover:bg-purple-900/50 transition-colors ${generatingVideoId === event.id ? 'text-purple-400 animate-spin' : 'text-purple-400 hover:text-purple-300'} ${!isPaidVideo ? 'opacity-50 cursor-not-allowed' : ''}`} title={!isPaidVideo ? "Video disabled in settings" : "Clip It"}>
                             <DevicePhoneMobileIcon className="w-4 h-4" />
                         </button>
                     </div>
@@ -342,7 +339,13 @@ export default function MatchView({
                     </div>
                      <h3 className="text-base sm:text-xl lg:text-2xl font-bold w-1/3 text-left text-white truncate px-1 sm:px-2">{fixture?.awayTeam}</h3>
                 </div>
-                {isFreeMode && <div className="text-center text-amber-300 text-xs mt-2 font-semibold">Free mode enabled: audio and replay/clip generation are disabled.</div>}
+                {(!isPaidAudio || !isPaidVideo) && (
+                    <div className="text-center text-slate-400 text-[10px] mt-2 font-bold uppercase tracking-wider">
+                        {!isPaidAudio && "🔊 Free Speech Engine Active"}
+                        {!isPaidAudio && !isPaidVideo && " · "}
+                        {!isPaidVideo && "🎥 3D Replay Videos Disabled"}
+                    </div>
+                )}
                 {mediaError && <div className="text-center text-red-400 text-xs mt-2 animate-pulse font-bold">{mediaError}</div>}
             </div>
 

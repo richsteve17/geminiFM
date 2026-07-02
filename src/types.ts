@@ -13,6 +13,8 @@ export enum AppScreen {
     PLAYER_TALK,
     PLAYER_NEGOTIATION,
     NEWS_FEED,
+    TRANSFER_CENTER,
+    HONORS_BOARD,
 }
 
 export type GameMode = 'Club' | 'WorldCup' | 'ChampionsLeague';
@@ -29,7 +31,9 @@ export type PlayerStatus =
 export type PlayerEffect = 
     | { type: 'PostTournamentMorale'; morale: 'Winner' | 'FiredUp' | 'Disappointed'; message: string; until: number }
     | { type: 'BadChemistry'; with: string; message: string; until: number }
-    | { type: 'PromiseBroken'; message: string; until: number };
+    | { type: 'PromiseBroken'; message: string; until: number }
+    | { type: 'InternationalRift'; severity: 'minor' | 'moderate' | 'serious' | 'mild'; with: string; message: string; until: number }
+    | { type: 'TeammateBond'; with: string; message: string; until: number };
 
 export type PlayerPosition = 
     | 'GK' 
@@ -47,12 +51,35 @@ export interface ContractTerms {
     bonusType: ContractBonusType;
 }
 
+export interface PlayerStats {
+    appearances: number;
+    goals: number;
+    assists: number;
+    cleanSheets: number;
+    yellowCards: number;
+    redCards: number;
+    averageRating: number;
+    ratingSum: number;
+}
+
+export interface HistoricalSeasonStats {
+    year: number;
+    teamName: string;
+    appearances: number;
+    goals: number;
+    cleanSheets: number;
+    averageRating: number;
+}
+
 export interface Player {
   name: string;
   position: PlayerPosition;
   rating: number;
   age: number;
   nationality: string;
+  potential: number; // 0-100, how good they can become
+  growthRate: number; // Modifier for development speed
+  form: number; // Current form based on recent performance, affects rating temporarily
   personality: PlayerPersonality;
   wage: number;
   status: PlayerStatus;
@@ -68,6 +95,10 @@ export interface Player {
     bonusType: ContractBonusType;
   };
   condition: number; // 0 to 100
+  stamina?: number; // 0-100, affects how slowly they tire during a match
+  transferRequested?: boolean;
+  stats?: PlayerStats;
+  history?: HistoricalSeasonStats[];
 }
 
 export type Formation = '4-4-2' | '4-3-3' | '5-3-2' | '3-5-2' | '4-2-3-1' | '4-5-1';
@@ -98,8 +129,12 @@ export interface Team {
   chairmanPersonality: ChairmanPersonality;
   group?: string;
   balance: number; 
+  weeklyWageBill: number;
+  matchDayRevenue: number;
+  transferBudget: number;
   objectives: string[];
   activePromises: PromiseData[]; // MEMORY SYSTEM
+  weeklyBroadcastRevenue: number;
   colors?: { // Dynamic Theming
       primary: string;
       secondary: string;
@@ -135,6 +170,7 @@ export interface Fixture {
   isKnockout?: boolean;
   aggregateScore?: string;
   firstLegScore?: string;
+  penaltyWinner?: 'home' | 'away';
 }
 
 export interface LeagueTableEntry {
@@ -213,6 +249,7 @@ export interface PlayerTalk {
     context: 'transfer' | 'renewal';
     teammates?: string[];
     negotiationHistory: { offer: ContractTerms, response: string }[];
+    contractOffer?: { wage: number; duration: number; };
 }
 
 export interface NegotiationResult {
@@ -227,7 +264,17 @@ export interface NewsItem {
     week: number;
     title: string;
     body: string;
-    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance' | 'promise-broken';
+    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance' | 'promise-broken' | 'serious-rift' | 'teammate-bond' | 'job-offer';
+    riftDecision?: {
+        riftPlayerA: string;
+        riftPlayerB: string;
+        choice?: 'bench-a' | 'bench-b' | 'risk-it';
+        resultEffect?: string;
+    };
+    jobOfferDecision?: {
+        teamName: string;
+        choice?: 'accept' | 'decline';
+    };
 }
 
 export interface ExperienceLevel {
@@ -236,4 +283,23 @@ export interface ExperienceLevel {
     description: string;
     prestigeCap: number;
     prestigeMin: number;
+}
+
+export interface TransferBid {
+    id: string;
+    player: Player;
+    buyingClub: string;
+    offeredFee: number;
+    marketValue: number;
+    weeksPending: number;
+    history: { sender: 'manager' | 'director'; message: string }[];
+    status: 'pending' | 'accepted' | 'rejected' | 'negotiating';
+}
+
+export interface CareerHistoryEntry {
+    year: number;
+    teamName: string;
+    league: string;
+    finalPosition: string;
+    trophies: string[];
 }

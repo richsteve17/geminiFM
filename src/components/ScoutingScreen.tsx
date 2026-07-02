@@ -132,6 +132,17 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                                 <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Rating: <span className="text-white font-bold">{player.rating}</span></span>
                                 {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Wage: <span className="text-white font-bold">${player.wage.toLocaleString()}/wk</span></span>}
                                 {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Value: <span className="text-white font-bold">${(player.marketValue || player.wage * 100).toLocaleString()}</span></span>}
+                                {player.stats && player.stats.appearances > 0 && (
+                                    <span 
+                                        className="bg-blue-900/50 border border-blue-800 px-2 py-1 rounded text-blue-300 font-mono cursor-help"
+                                        title={player.history && player.history.length > 0 
+                                            ? `Career History:\n` + player.history.map(h => `Year ${h.year} (${h.teamName || 'Club'}): ${h.appearances} Apps, ${h.goals} Goals, ${h.cleanSheets} CS, ★${h.averageRating}`).join('\n') 
+                                            : "No past season history."
+                                        }
+                                    >
+                                        Apps: {player.stats.appearances} | Goals: {player.stats.goals} | CS: {player.stats.cleanSheets} | Rating: ★{player.stats.averageRating}
+                                    </span>
+                                )}
                             </div>
                         </div>
 

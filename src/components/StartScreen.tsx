@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { FootballIcon } from './icons/FootballIcon';
 import { BriefcaseIcon } from './icons/BriefcaseIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
 import { TEAMS } from '../constants';
+import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled } from '../services/geminiService';
 
 interface StartScreenProps {
     onSelectTeam: () => void;
@@ -14,7 +14,21 @@ interface StartScreenProps {
 
 const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect }) => {
     const [showDevlog, setShowDevlog] = useState(false);
-    const [selectedTeam, setSelectedTeam] = useState<string>('Manchester City'); // Default to a team so selector isn't empty
+    const [selectedTeam, setSelectedTeam] = useState<string>('Manchester City');
+    const [paidAudio, setPaidAudio] = useState(isPaidAudioEnabled());
+    const [paidVideo, setPaidVideo] = useState(isPaidVideoEnabled());
+
+    const togglePaidAudio = () => {
+        const newVal = !paidAudio;
+        setPaidAudio(newVal);
+        setPaidAudioEnabled(newVal);
+    };
+
+    const togglePaidVideo = () => {
+        const newVal = !paidVideo;
+        setPaidVideo(newVal);
+        setPaidVideoEnabled(newVal);
+    };
 
     const handleTeamChange = (teamName: string) => {
         setSelectedTeam(teamName);
@@ -24,201 +38,281 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
         if (onThemeSelect) onThemeSelect(colors);
     };
 
-    // Helper to generate the 3 kit variations
     const getKits = (teamName: string) => {
         const team = TEAMS[teamName];
         if (!team || !team.colors) return [];
 
         const { primary, secondary, text, third: thirdColor } = team.colors;
 
-        // Kit 1: Primary (Standard)
-        const prim = {
-            name: 'PRIMARY',
-            bg: primary,
-            border: secondary,
-            text: text,
-            accent: secondary
-        };
-
-        // Kit 2: Secondary (Flipped or Secondary based)
-        const sec = {
-            name: 'SECONDARY',
-            bg: secondary,
-            border: primary,
-            text: primary === '#FFFFFF' ? '#000000' : '#FFFFFF', // Simple contrast logic or assume secondary bg needs contrast
-            accent: primary
-        };
-
-        // Kit 3: Third (Explicit or Wild)
-        const thirdBg = thirdColor || '#1F2937'; // Default dark grey if missing
-        const thirdKit = {
-            name: 'THIRD',
-            bg: thirdBg,
-            border: text,
-            text: '#FFFFFF', // Usually third kits are dark/neon, white text safe
-            accent: primary
-        };
-
-        return [prim, sec, thirdKit];
+        return [
+            {
+                name: 'PRIMARY KIT',
+                bg: primary,
+                text: text,
+                accent: secondary
+            },
+            {
+                name: 'SECONDARY KIT',
+                bg: secondary,
+                text: primary === '#FFFFFF' ? '#000000' : '#FFFFFF',
+                accent: primary
+            },
+            {
+                name: 'THIRD KIT',
+                bg: thirdColor || '#1F2937',
+                text: '#FFFFFF',
+                accent: primary
+            }
+        ];
     };
 
     const currentKits = getKits(selectedTeam);
 
     return (
-        <div className="relative flex flex-col items-center justify-center min-h-[85vh] px-4 w-full max-w-7xl mx-auto overflow-hidden rounded-2xl bg-gray-900 border border-gray-800 shadow-2xl">
+        <div className="relative flex flex-col items-center justify-center min-h-[88vh] px-4 py-8 w-full max-w-7xl mx-auto overflow-hidden rounded-2xl bg-slate-950 border border-slate-800/80 shadow-2xl">
             
-            {/* --- ATMOSPHERE LAYER --- */}
-            <div className="absolute inset-0 pointer-events-none z-0 opacity-20" 
+            {/* --- FUTURISTIC GLOWING STADIUM PITCH BACKDROP --- */}
+            <div className="absolute inset-0 pointer-events-none z-0 opacity-15" 
                  style={{ 
-                     backgroundImage: 'linear-gradient(var(--team-secondary, rgba(0, 255, 127, 0.1)) 1px, transparent 1px), linear-gradient(90deg, var(--team-secondary, rgba(0, 255, 127, 0.1)) 1px, transparent 1px)', 
-                     backgroundSize: '40px 40px',
-                     transform: 'perspective(500px) rotateX(20deg) scale(1.5)'
+                     backgroundImage: 'linear-gradient(rgba(34, 197, 94, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 197, 94, 0.15) 1px, transparent 1px)', 
+                     backgroundSize: '50px 50px',
+                     transform: 'perspective(400px) rotateX(40deg) scale(1.6) translateY(-40px)'
                  }}>
             </div>
             
-            <div className="absolute inset-0 pointer-events-none z-0" 
-                 style={{ background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.15), rgba(0,0,0,0.15) 1px, transparent 1px, transparent 2px)' }}>
-            </div>
+            {/* Pitch Center Circle Line Visual */}
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] border-t-2 border-dashed border-emerald-500/20 rounded-t-full pointer-events-none z-0"></div>
+            
+            {/* Glowing Grass Aura */}
+            <div className="absolute bottom-0 inset-x-0 h-64 bg-gradient-to-t from-emerald-950/20 via-transparent to-transparent pointer-events-none z-0 blur-3xl"></div>
+            <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-950/10 rounded-full blur-3xl pointer-events-none z-0"></div>
 
-            <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(17,24,39,0.8)_80%)]"></div>
-
-            {/* --- CONTENT LAYER --- */}
-            <div className="z-10 text-center mb-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                <div className="flex justify-center mb-4 relative">
-                    <div className="relative">
-                        <FootballIcon className="w-24 h-24 text-[var(--team-secondary,rgb(34,197,94))] drop-shadow-[0_0_25px_var(--team-secondary,rgba(34,197,94,0.6))]" />
-                        <div className="absolute inset-0 bg-[var(--team-secondary,rgb(74,222,128))] blur-2xl opacity-20 animate-pulse"></div>
+            {/* --- HEADER TITLE SECTION --- */}
+            <div className="z-10 text-center mb-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <div className="flex justify-center mb-3">
+                    <div className="relative group">
+                        <div className="absolute inset-0 bg-emerald-500/30 rounded-full blur-xl scale-125 opacity-30 group-hover:opacity-50 transition-opacity"></div>
+                        <FootballIcon className="w-20 h-20 text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.5)] animate-spin-slow" />
                     </div>
                 </div>
                 
-                <h1 className="text-6xl md:text-8xl font-black text-white italic tracking-tighter drop-shadow-2xl mb-2">
-                    GEMINI <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--team-secondary,rgb(74,222,128))] via-[var(--team-primary,rgb(16,185,129))] to-[var(--team-secondary,rgb(21,128,61))]">FM '27</span>
+                <h1 className="text-5xl md:text-7xl font-black text-white italic tracking-tighter uppercase drop-shadow-lg mb-1">
+                    GEMINI <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500">FM '27</span>
                 </h1>
                 
-                <div className="flex items-center justify-center gap-4 text-xs font-mono tracking-widest text-[var(--team-secondary,rgb(74,222,128))] opacity-80 mb-8">
-                    <span>BUILD v2.7</span>
+                <div className="flex flex-wrap items-center justify-center gap-3 text-[10px] font-mono tracking-widest text-emerald-400 uppercase opacity-90 mb-6">
+                    <span className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-800/80 rounded">v3.0 Engine</span>
                     <span>•</span>
-                    <span>CREATOR ECONOMY LIVE</span>
+                    <span className="px-2 py-0.5 bg-blue-950/80 border border-blue-800/80 rounded text-blue-400">Gemini 2.5 Flash</span>
                     <span>•</span>
-                    <span>AUDIO-VISUAL</span>
+                    <span className="px-2 py-0.5 bg-amber-950/80 border border-amber-800/80 rounded text-amber-400">Trophy Cabinet Live</span>
                 </div>
 
-                <p className="text-lg md:text-xl text-gray-300 font-light max-w-2xl mx-auto leading-relaxed border-t border-b border-gray-700/50 py-4 bg-black/20 backdrop-blur-sm rounded-lg">
-                    The world's first <span className="text-white font-semibold">Deep Learning Sports Simulation</span>.<br/> 
-                    Turn your managerial career into a profitable content studio.
+                <p className="text-sm md:text-base text-slate-300 font-light max-w-xl mx-auto leading-relaxed border-t border-b border-slate-800/80 py-3 bg-slate-900/30 backdrop-blur-md rounded-lg shadow-inner">
+                    Experience deep-learning football management. Develop tactics, negotiate contracts, satisfy the board, and write your legend across infinite campaigns.
                 </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mb-12 z-10 px-4">
-                <button onClick={onStartWorldCup} className="group relative overflow-hidden bg-gray-800/60 backdrop-blur-sm border border-gray-600 rounded-xl p-6 text-left transition-all hover:bg-gray-700/80 hover:border-yellow-500 hover:shadow-[0_0_20px_rgba(234,179,8,0.2)] hover:-translate-y-1">
-                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <GlobeAltIcon className="w-24 h-24 text-yellow-500" />
+            {/* --- CARDS GRID NAVIGATION --- */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-5xl mb-10 z-10 px-4">
+                
+                {/* World Cup Card */}
+                <button 
+                    onClick={onStartWorldCup} 
+                    className="group relative overflow-hidden bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800 hover:border-emerald-500/50 rounded-xl p-5 text-left transition-all hover:shadow-[0_0_25px_rgba(52,211,153,0.15)] hover:-translate-y-1 duration-300"
+                >
+                    <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:scale-110 transition-all duration-300">
+                        <GlobeAltIcon className="w-20 h-20 text-emerald-500" />
                     </div>
                     <div className="relative z-10">
-                        <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mb-1 block">Quick Start</span>
-                        <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-yellow-400 transition-colors">WORLD CUP '26</h3>
-                        <p className="text-xs text-gray-400 leading-relaxed">Skip the grind. Take charge of a nation in the expanded 48-team tournament.</p>
+                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5 block">Tournament Mode</span>
+                        <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-emerald-300 transition-colors">WORLD CUP</h3>
+                        <p className="text-xs text-slate-400 leading-relaxed">Fast-paced international campaign. Take charge of a nation in the ultimate tournament.</p>
                     </div>
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
                 </button>
 
-                <button onClick={onSelectTeam} className="group relative overflow-hidden bg-gray-800/60 backdrop-blur-sm border border-gray-600 rounded-xl p-6 text-left transition-all hover:bg-gray-700/80 hover:border-[var(--team-secondary,rgb(34,197,94))] hover:shadow-[0_0_20px_var(--team-secondary,rgba(34,197,94,0.2))] hover:-translate-y-1 ring-1 ring-white/10">
-                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <FootballIcon className="w-24 h-24 text-[var(--team-secondary,rgb(34,197,94))]" />
+                {/* Club Manager Card */}
+                <button 
+                    onClick={onSelectTeam} 
+                    className="group relative overflow-hidden bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800 hover:border-amber-500/50 rounded-xl p-5 text-left transition-all hover:shadow-[0_0_25px_rgba(245,158,11,0.15)] hover:-translate-y-1 duration-300"
+                >
+                    <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:scale-110 transition-all duration-300">
+                        <FootballIcon className="w-20 h-20 text-amber-500" />
                     </div>
                     <div className="relative z-10">
-                        <span className="text-[10px] font-black text-[var(--team-secondary,rgb(34,197,94))] uppercase tracking-widest mb-1 block">Career Mode</span>
-                        <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-[var(--team-secondary,rgb(74,222,128))] transition-colors">CLUB MANAGER</h3>
-                        <p className="text-xs text-gray-400 leading-relaxed">The full experience. Domestic leagues, transfers, and the Swiss-Model Champions League.</p>
+                        <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1.5 block">Career Mode</span>
+                        <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-amber-300 transition-colors">CLUB CAREER</h3>
+                        <p className="text-xs text-slate-400 leading-relaxed">Select a club. Manage finances, scout wonderkids, and win league & European silverware.</p>
                     </div>
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-yellow-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
                 </button>
 
-                <button onClick={onStartUnemployed} className="group relative overflow-hidden bg-gray-800/60 backdrop-blur-sm border border-gray-600 rounded-xl p-6 text-left transition-all hover:bg-gray-700/80 hover:border-purple-500 hover:shadow-[0_0_20px_rgba(168,85,247,0.2)] hover:-translate-y-1">
-                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <BriefcaseIcon className="w-24 h-24 text-purple-500" />
+                {/* Unemployed / RTG Card */}
+                <button 
+                    onClick={onStartUnemployed} 
+                    className="group relative overflow-hidden bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800 hover:border-purple-500/50 rounded-xl p-5 text-left transition-all hover:shadow-[0_0_25px_rgba(168,85,247,0.15)] hover:-translate-y-1 duration-300"
+                >
+                    <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:scale-110 transition-all duration-300">
+                        <BriefcaseIcon className="w-20 h-20 text-purple-500" />
                     </div>
                     <div className="relative z-10">
-                        <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest mb-1 block">Hardcore</span>
-                        <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">ROAD TO GLORY</h3>
-                        <p className="text-xs text-gray-400 leading-relaxed">Start unemployed. No reputation. Face brutal interviews to get your first job.</p>
+                        <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1.5 block">Hardcore Mode</span>
+                        <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-purple-300 transition-colors">ROAD TO GLORY</h3>
+                        <p className="text-xs text-slate-400 leading-relaxed">Start unemployed with zero reputation. Apply for job vacancies and sit in tough interviews.</p>
                     </div>
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
                 </button>
             </div>
 
-            {/* Footer */}
-            <div className="z-10 w-full max-w-4xl text-center flex flex-col items-center">
+            {/* --- GRANULAR MEDIA API CONFIG SWITCHES --- */}
+            <div className="z-10 bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl shadow-lg mb-8 backdrop-blur-md max-w-xl w-full mx-4 flex flex-col gap-3">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center border-b border-slate-800 pb-2">AI API Cost & Settings Control</h4>
                 
-                {/* 3-Card Kit Selector */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-between">
+                    {/* Audio Toggle */}
+                    <div className="flex items-center justify-between gap-4 flex-1 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50">
+                        <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">🎙️ Paid AI Commentary</span>
+                            <span className="text-[8px] text-slate-500 uppercase mt-0.5">
+                                {paidAudio ? 'Gemini API Voices' : 'Local Browser TTS (Free)'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={togglePaidAudio}
+                            className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                paidAudio ? 'bg-emerald-500' : 'bg-slate-700'
+                            }`}
+                        >
+                            <span
+                                className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    paidAudio ? 'translate-x-4' : 'translate-x-0'
+                                }`}
+                            />
+                        </button>
+                    </div>
+
+                    {/* Video Toggle */}
+                    <div className="flex items-center justify-between gap-4 flex-1 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50">
+                        <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">🎥 Paid 3D Replay Video</span>
+                            <span className="text-[8px] text-slate-500 uppercase mt-0.5">
+                                {paidVideo ? 'Google Veo 3D Gen' : '2D Pitch Sim Only (Free)'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={togglePaidVideo}
+                            className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                paidVideo ? 'bg-emerald-500' : 'bg-slate-700'
+                            }`}
+                        >
+                            <span
+                                className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    paidVideo ? 'translate-x-4' : 'translate-x-0'
+                                }`}
+                            />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* --- TEAM KIT THEME SELECTOR & JERSEYS --- */}
+            <div className="z-10 w-full max-w-4xl text-center flex flex-col items-center">
                 {onThemeSelect && (
-                    <div className="mb-8 w-full animate-in fade-in slide-in-from-bottom-4">
+                    <div className="mb-6 w-full animate-in fade-in slide-in-from-bottom-4">
+                        
                         <div className="flex flex-col items-center mb-4">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Select Team to Preview</label>
-                            <div className="relative inline-block w-64 mb-4">
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Team UI Color Theme Previewer</label>
+                            <div className="relative inline-block w-64">
                                 <select 
                                     onChange={(e) => handleTeamChange(e.target.value)}
-                                    className="block appearance-none w-full bg-gray-800 border border-gray-600 hover:border-gray-500 px-4 py-2 pr-8 rounded shadow leading-tight focus:outline-none focus:shadow-outline text-gray-300 text-xs font-bold uppercase cursor-pointer"
+                                    className="block appearance-none w-full bg-slate-900 border border-slate-800 hover:border-slate-700 px-4 py-2 pr-8 rounded shadow text-slate-300 text-xs font-bold uppercase cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                     value={selectedTeam}
                                 >
                                     {Object.keys(TEAMS).sort().map(name => (
                                         <option key={name} value={name}>{name}</option>
                                     ))}
                                 </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
                                     <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Cards Container */}
+                        {/* Jersey kit Cards Container */}
                         <div className="flex flex-wrap justify-center gap-4">
-                            {currentKits.map((kit, index) => (
+                            {currentKits.map((kit) => (
                                 <button
                                     key={kit.name}
+                                    type="button"
                                     onClick={() => handleKitSelect({ primary: kit.bg, secondary: kit.accent, text: kit.text })}
-                                    className="relative w-32 h-40 rounded-xl shadow-lg transition-transform hover:scale-105 hover:shadow-xl group overflow-hidden border-2 border-transparent hover:border-white"
-                                    style={{ backgroundColor: kit.bg }}
+                                    className="relative w-36 h-48 bg-slate-900/50 border border-slate-800 rounded-xl shadow-lg transition-all hover:scale-105 hover:border-slate-600 group overflow-hidden flex flex-col items-center p-3"
                                 >
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-2">
-                                        <div className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-80" style={{ color: kit.text }}>
-                                            {kit.name}
-                                        </div>
-                                        <FootballIcon 
-                                            className="w-12 h-12 drop-shadow-md" 
-                                            style={{ color: kit.accent }} 
-                                        />
-                                        <div className="mt-2 text-[8px] font-bold px-2 py-1 rounded bg-black/20 backdrop-blur-sm" style={{ color: kit.text }}>
-                                            APPLY THEME
-                                        </div>
+                                    {/* Small badge label */}
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-3 block">{kit.name}</span>
+                                    
+                                    {/* Miniature Football Shirt Vector Silhouette */}
+                                    <div className="relative mb-3 flex-grow flex items-center justify-center">
+                                        <svg 
+                                            className="w-20 h-20 drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] transition-transform group-hover:scale-110 duration-300" 
+                                            viewBox="0 0 100 100" 
+                                            style={{ color: kit.bg }}
+                                        >
+                                            {/* jersey body */}
+                                            <path 
+                                                d="M 30,20 L 40,10 L 60,10 L 70,20 L 85,25 L 80,40 L 71,36 L 71,85 L 29,85 L 29,36 L 20,40 L 15,25 Z" 
+                                                fill="currentColor" 
+                                                stroke="#1e293b" 
+                                                strokeWidth="1.5"
+                                            />
+                                            {/* Sleeves stripe accent */}
+                                            <path d="M 15,25 L 20,40" stroke={kit.accent} strokeWidth="4" />
+                                            <path d="M 85,25 L 80,40" stroke={kit.accent} strokeWidth="4" />
+                                            {/* Collar collar outline */}
+                                            <path d="M 40,10 Q 50,22 60,10" fill="none" stroke={kit.accent} strokeWidth="4.5" />
+                                            {/* Center chest stripe or panel */}
+                                            <line x1="50" y1="22" x2="50" y2="85" stroke={kit.accent} strokeWidth="8" opacity="0.8" />
+                                        </svg>
+                                    </div>
+
+                                    <div className="w-full text-center text-[9px] font-bold py-1 rounded bg-slate-950 border border-slate-800 text-slate-400 group-hover:text-emerald-400 group-hover:border-emerald-500/50 transition-colors uppercase tracking-wider">
+                                        Apply Theme
                                     </div>
                                 </button>
                             ))}
                         </div>
-                        <p className="text-[9px] text-gray-500 mt-3 font-mono">Select a palette to update the Game UI Theme instantly.</p>
                     </div>
                 )}
 
+                {/* Developer / System Logs Console panel */}
                 <button 
+                    type="button"
                     onClick={() => setShowDevlog(!showDevlog)}
-                    className="text-[10px] font-bold text-gray-600 hover:text-[var(--team-secondary,rgb(74,222,128))] uppercase tracking-widest transition-colors"
+                    className="text-[9px] font-bold text-slate-500 hover:text-emerald-400 uppercase tracking-widest transition-colors mt-2"
                 >
-                    {showDevlog ? '[ Close System Logs ]' : '[ Open System Logs ]'}
+                    {showDevlog ? '[ Hide Server Logs ]' : '[ Show Server Logs ]'}
                 </button>
 
                 {showDevlog && (
-                    <div className="mt-6 bg-black/80 border border-gray-800 p-6 rounded-lg text-left max-h-48 overflow-y-auto font-mono text-xs w-full">
-                        <p className="text-green-500 mb-2">&gt; SYSTEM INITIALIZED</p>
-                        <p className="text-gray-400 mb-1">&gt; LOADING MODULE: GEMINI-3-FLASH-PREVIEW... OK</p>
-                        <p className="text-gray-400 mb-1">&gt; LOADING MODULE: VEO-3.1... OK</p>
+                    <div className="mt-4 bg-slate-950 border border-slate-900 p-5 rounded-lg text-left max-h-40 overflow-y-auto font-mono text-[10px] w-full text-slate-400 shadow-inner">
+                        <p className="text-emerald-500 mb-1.5">&gt; SYSTEM INITIALIZED</p>
+                        <p className="text-slate-500 mb-1">&gt; LOADING MODULE: GEMINI-2.5-FLASH... OK</p>
+                        <p className="text-slate-500 mb-1">&gt; LOADING MODULE: VEO-3.1... OK</p>
                         <p className="text-blue-400 mt-2">&gt; ECONOMIC AUDIT COMPLETE:</p>
-                        <ul className="list-disc list-inside text-gray-500 pl-2 mb-2">
+                        <ul className="list-disc list-inside text-slate-500 pl-1 mb-1.5">
                             <li>FIFA vs GFM Cost Crossover confirmed at Month 4.</li>
                             <li>Streamer Mode Profit Calculation enabled (Revenue - COGS).</li>
                             <li>Net Profit per Clip displayed in Viral Studio.</li>
                         </ul>
-                        <p className="text-blue-400 mt-2">&gt; PATCH NOTES v2.7:</p>
-                        <ul className="list-disc list-inside text-gray-500 pl-2">
-                            <li>Implemented 3-Way Kit Selector (Primary / Secondary / Unhinged Third).</li>
-                            <li>Removed legacy striping artifacts for cleaner UI.</li>
-                            <li>Updated Kit Palette keys for better accessibility.</li>
+                        <p className="text-blue-400 mt-2">&gt; PATCH NOTES v3.0:</p>
+                        <ul className="list-disc list-inside text-slate-500 pl-1">
+                            <li>Implemented permanent Trophy Room & Career Honors timeline dashboard.</li>
+                            <li>Added dynamic Board Objectives, Sacking Index pressure checks, and Resignations.</li>
+                            <li>Integrated weekly job poaching offers inside the News Feed.</li>
+                            <li>Added starting partner chemistry growth boosts (5% potential growth rate bonus).</li>
+                            <li>Migrated core text generation engines to low-overhead Gemini 2.5 Flash.</li>
                         </ul>
                     </div>
                 )}

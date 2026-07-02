@@ -72,3 +72,27 @@ The simulation core remains a hybrid system:
 *   **Swiss Model UCL:** A custom algorithm generates a 36-team league phase for the Champions League.
 *   **Chemistry Rifts:** Players can develop feuds (e.g., after playing against each other internationally), reducing team coherence.
 *   **Tactical Analysis:** The AI analyzes your formation for logical errors (e.g., playing a Striker in Goal) and warns you before kickoff.
+
+---
+
+## 👔 Career Honors & Mobility Update (New in v3.0)
+
+The v3.0 update completes the full career-mode loop with honors logging, contract poaches, and sacking dynamics.
+
+### 🏆 Career Honors & Trophy Room
+*   **Achievements Data Model:** Records Year, Managed Team, Tournament/League, Standing, and Trophies won.
+*   **Trophy Cabinet:** A dedicated screen displaying all trophies won (League, Champions League, World Cup, Euros) and final standings year-by-year with gold/silver trophy icons.
+*   **Access:** Enter the Trophy Room from the navigation footer on the squad manager dashboard.
+
+### 🏢 Board Evaluations & Dynamic Sackings
+*   **Position Targets:** Board expectations map to target positions (e.g., top 4, mid-table, avoid relegation).
+*   **Sacking Index:** Computes pressure based on final position deviation:
+    $$\text{Sacking Index} = (\text{Position Gap} \times 15) + (100 - \text{Manager Reputation}) \times 0.5$$
+    If the index crosses 65, or if you are relegated, you are immediately fired. Sacked managers have their reputation docked by 20% and must apply for lower-tier vacancies at the Job Centre.
+
+### 🚪 Resignations & Poaching Offers
+*   **Manual Resignation:** Added a "Resign from Club" button to the Finances panel to quit your job. Quitting reduces reputation by 10% and routes you to the Job Centre.
+*   **Weekly Poaching:** High-reputation managers have an 8% weekly chance to receive unsolicited job offers matching their prestige level directly in their News Feed, supporting mid-season transfers with automatic fixture matching.
+
+### ⚡ Gemini 3.5 Flash Integration
+*   All interactive elements (press conferences, job interviews, contract negotiations) utilize the state-of-the-art **Gemini 3.5 Flash** model with optimized configurations for zero reasoning-overhead, rendering answers in sub-second response times.

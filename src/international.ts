@@ -1,6 +1,6 @@
 
-import type { NationalTeam, Team, Player, PlayerPosition, PlayerPersonality, Formation, PlayerEffect } from './types';
-import { generateName } from './utils';
+import type { NationalTeam, Team, Player, PlayerPosition, PlayerPersonality, Formation, PlayerEffect, LeagueTableEntry, Fixture, TournamentStage } from './types';
+import { generateName, simulateQuickMatch } from './utils';
 
 // Helper for minor nations (background simulation only)
 const getGenericPlayer = (nationalityCode: string, flag: string, rating: number, position: PlayerPosition, isStarter: boolean = true): Player => ({
@@ -179,6 +179,60 @@ export const NATIONAL_TEAMS: NationalTeam[] = [
     { name: 'Colombia', countryCode: 'COL', prestige: 82, tactic: { formation: '4-3-3', mentality: 'Attacking' }, players: generateGenericSquad('🇨🇴', 81, 'ES') },
 ];
 
+export const EXTRA_EUROPEAN_TEAMS = [
+    { name: 'Denmark', flag: '🇩🇰', code: 'DEN', prestige: 82 },
+    { name: 'Switzerland', flag: '🇨🇭', code: 'SUI', prestige: 83 },
+    { name: 'Austria', flag: '🇦🇹', code: 'AUT', prestige: 81 },
+    { name: 'Turkey', flag: '🇹🇷', code: 'TUR', prestige: 82 },
+    { name: 'Poland', flag: '🇵🇱', code: 'POL', prestige: 79 },
+    { name: 'Hungary', flag: '🇭🇺', code: 'HUN', prestige: 78 },
+    { name: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', code: 'SCO', prestige: 77 },
+    { name: 'Czechia', flag: '🇨🇿', code: 'CZE', prestige: 79 },
+    { name: 'Serbia', flag: '🇷🇸', code: 'SRB', prestige: 79 },
+    { name: 'Romania', flag: '🇷🇴', code: 'ROU', prestige: 76 },
+    { name: 'Slovakia', flag: '🇸🇰', code: 'SVK', prestige: 76 },
+    { name: 'Slovenia', flag: '🇸🇮', code: 'SVN', prestige: 75 },
+    { name: 'Georgia', flag: '🇬🇪', code: 'GEO', prestige: 74 },
+    { name: 'Ukraine', flag: '🇺🇦', code: 'UKR', prestige: 80 },
+    { name: 'Albania', flag: '🇦🇱', code: 'ALB', prestige: 73 }
+];
+
+export const EXTRA_GLOBAL_TEAMS = [
+    { name: 'Senegal', flag: '🇸🇳', code: 'SEN', prestige: 82 },
+    { name: 'South Korea', flag: '🇰🇷', code: 'KOR', prestige: 81 },
+    { name: 'Australia', flag: '🇦🇺', code: 'AUS', prestige: 78 },
+    { name: 'Mexico', flag: '🇲🇽', code: 'MEX', prestige: 80 },
+    { name: 'Canada', flag: '🇨🇦', code: 'CAN', prestige: 78 },
+    { name: 'Nigeria', flag: '🇳🇬', code: 'NGA', prestige: 80 },
+    { name: 'Egypt', flag: '🇪🇬', code: 'EGY', prestige: 79 },
+    { name: 'Cameroon', flag: '🇨🇲', code: 'CMR', prestige: 77 },
+    { name: 'Algeria', flag: '🇩🇿', code: 'ALG', prestige: 78 },
+    { name: 'Ivory Coast', flag: '🇨🇮', code: 'CIV', prestige: 80 },
+    { name: 'Ghana', flag: '🇬🇭', code: 'GHA', prestige: 76 },
+    { name: 'Saudi Arabia', flag: '🇸🇦', code: 'KSA', prestige: 75 },
+    { name: 'Iran', flag: '🇮🇷', code: 'IRN', prestige: 76 },
+    { name: 'Chile', flag: '🇨🇱', code: 'CHI', prestige: 77 },
+    { name: 'Peru', flag: '🇵🇪', code: 'PER', prestige: 76 },
+    { name: 'Ecuador', flag: '🇪🇨', code: 'ECU', prestige: 80 },
+    { name: 'Costa Rica', flag: '🇨🇷', code: 'CRC', prestige: 74 },
+    { name: 'New Zealand', flag: '🇳🇿', code: 'NZL', prestige: 70 },
+    { name: 'South Africa', flag: '🇿🇦', code: 'RSA', prestige: 74 },
+    { name: 'Tunisia', flag: '🇹🇳', code: 'TUN', prestige: 75 },
+    { name: 'Wales', flag: '🏴󠁧󠁢󠁷󠁬󠁳󠁿', code: 'WAL', prestige: 78 },
+    { name: 'Sweden', flag: '🇸🇪', code: 'SWE', prestige: 81 },
+    { name: 'Norway', flag: '🇳🇴', code: 'NOR', prestige: 82 },
+    { name: 'Ireland', flag: '🇮🇪', code: 'IRL', prestige: 75 },
+    { name: 'Greece', flag: '🇬🇷', code: 'GRE', prestige: 78 },
+    { name: 'Iceland', flag: '🇮🇸', code: 'ISL', prestige: 73 },
+    { name: 'Finland', flag: '🇫🇮', code: 'FIN', prestige: 73 },
+    { name: 'Jamaica', flag: '🇯🇲', code: 'JAM', prestige: 74 },
+    { name: 'Panama', flag: '🇵🇦', code: 'PAN', prestige: 73 },
+    { name: 'Venezuela', flag: '🇻🇪', code: 'VEN', prestige: 76 },
+    { name: 'Paraguay', flag: '🇵🇾', code: 'PAR', prestige: 76 },
+    { name: 'China', flag: '🇨🇳', code: 'CHN', prestige: 68 },
+    { name: 'Mali', flag: '🇲🇱', code: 'MLI', prestige: 72 }
+];
+
 export const generateWorldCupStructure = (): Record<string, Team> => {
     const teams: Record<string, Team> = {};
     const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
@@ -205,13 +259,245 @@ export const generateWorldCupStructure = (): Record<string, Team> => {
                 chairmanPersonality: 'Football Federation',
                 prestige: Math.max(50, template.prestige - prestigeAdjustment), 
                 // Only top 6 teams get their Real Roster. Clones/Minor nations get generic.
-                players: (i === 0 && teamCounter < 6) ? template.players : generateGenericSquad(template.players[0].nationality, template.prestige - 5 - prestigeAdjustment, template.countryCode),
+                players: (i === 0 && teamCounter < 6) ? JSON.parse(JSON.stringify(template.players)) : generateGenericSquad(template.players[0].nationality, template.prestige - 5 - prestigeAdjustment, template.countryCode),
                 tactic: { ...template.tactic },
                 objectives: [],
-                activePromises: []
+                activePromises: [],
+                weeklyWageBill: 0,
+                matchDayRevenue: 0,
+                transferBudget: 0,
+                weeklyBroadcastRevenue: 0
             };
             teamCounter++;
         }
     });
     return teams;
 };
+
+export const generateEurosStructure = (): Record<string, Team> => {
+    const teams: Record<string, Team> = {};
+    const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+    
+    const europeanNames = ['England', 'France', 'Spain', 'Germany', 'Portugal', 'Netherlands', 'Italy', 'Belgium', 'Croatia'];
+    const baseEuroTeams = NATIONAL_TEAMS.filter(t => europeanNames.includes(t.name));
+    
+    const allEuroConfigs: Array<{ name: string; flag: string; code: string; prestige: number; isBase: boolean; template?: NationalTeam }> = [
+        ...baseEuroTeams.map(t => ({
+            name: t.name,
+            flag: t.players[0]?.nationality || '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+            code: t.countryCode,
+            prestige: t.prestige,
+            isBase: true,
+            template: t
+        })),
+        ...EXTRA_EUROPEAN_TEAMS.map(t => ({
+            name: t.name,
+            flag: t.flag,
+            code: t.code,
+            prestige: t.prestige,
+            isBase: false
+        }))
+    ];
+
+    allEuroConfigs.sort((a, b) => b.prestige - a.prestige);
+
+    let teamCounter = 0;
+    groupLetters.forEach(group => {
+        for (let i = 0; i < 4; i++) {
+            const config = allEuroConfigs[teamCounter];
+            if (!config) continue;
+
+            let players: Player[] = [];
+            let tactic = { formation: '4-3-3' as Formation, mentality: 'Balanced' as const };
+
+            if (config.isBase && config.template) {
+                players = JSON.parse(JSON.stringify(config.template.players));
+                tactic = { ...config.template.tactic };
+            } else {
+                players = generateGenericSquad(config.flag, config.prestige - 5, config.code);
+            }
+
+            teams[config.name] = {
+                name: config.name,
+                league: 'International',
+                balance: 0,
+                group,
+                chairmanPersonality: 'Football Federation',
+                prestige: config.prestige,
+                players,
+                tactic,
+                objectives: [],
+                activePromises: [],
+                weeklyWageBill: 0,
+                matchDayRevenue: 0,
+                transferBudget: 0,
+                weeklyBroadcastRevenue: 0
+            };
+            teamCounter++;
+        }
+    });
+
+    return teams;
+};
+
+export const generateExpandedWorldCupStructure = (): Record<string, Team> => {
+    const teams: Record<string, Team> = {};
+    const groupLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
+    
+    const allConfigs: Array<{ name: string; flag: string; code: string; prestige: number; isBase: boolean; template?: NationalTeam }> = [
+        ...NATIONAL_TEAMS.map(t => ({
+            name: t.name,
+            flag: t.players[0]?.nationality || '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+            code: t.countryCode,
+            prestige: t.prestige,
+            isBase: true,
+            template: t
+        })),
+        ...EXTRA_EUROPEAN_TEAMS.map(t => ({
+            name: t.name,
+            flag: t.flag,
+            code: t.code,
+            prestige: t.prestige,
+            isBase: false
+        })),
+        ...EXTRA_GLOBAL_TEAMS.map(t => ({
+            name: t.name,
+            flag: t.flag,
+            code: t.code,
+            prestige: t.prestige,
+            isBase: false
+        }))
+    ];
+
+    allConfigs.sort((a, b) => b.prestige - a.prestige);
+
+    let teamCounter = 0;
+    groupLetters.forEach(group => {
+        for (let i = 0; i < 4; i++) {
+            const config = allConfigs[teamCounter];
+            if (!config) continue;
+
+            let players: Player[] = [];
+            let tactic = { formation: '4-3-3' as Formation, mentality: 'Balanced' as const };
+
+            if (config.isBase && config.template) {
+                players = JSON.parse(JSON.stringify(config.template.players));
+                tactic = { ...config.template.tactic };
+            } else {
+                players = generateGenericSquad(config.flag, config.prestige - 5, config.code);
+            }
+
+            teams[config.name] = {
+                name: config.name,
+                league: 'International',
+                balance: 0,
+                group,
+                chairmanPersonality: 'Football Federation',
+                prestige: config.prestige,
+                players,
+                tactic,
+                objectives: [],
+                activePromises: [],
+                weeklyWageBill: 0,
+                matchDayRevenue: 0,
+                transferBudget: 0,
+                weeklyBroadcastRevenue: 0
+            };
+            teamCounter++;
+        }
+    });
+
+    return teams;
+};
+
+export const getGroupStandings = (table: LeagueTableEntry[], groups: string[]): Record<string, LeagueTableEntry[]> => {
+    const standings: Record<string, LeagueTableEntry[]> = {};
+    groups.forEach(g => {
+        const groupTeams = table.filter(t => t.group === g);
+        groupTeams.sort((a, b) => {
+            if (b.points !== a.points) return b.points - a.points;
+            if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+            return b.goalsFor - a.goalsFor;
+        });
+        standings[g] = groupTeams;
+    });
+    return standings;
+};
+
+export const extractAdvancingTeams = (
+    table: LeagueTableEntry[],
+    groups: string[],
+    numBestThird: number
+): { top2: string[], bestThird: string[] } => {
+    const standings = getGroupStandings(table, groups);
+    const top2: string[] = [];
+    const thirdPlaced: LeagueTableEntry[] = [];
+
+    groups.forEach(g => {
+        const sorted = standings[g];
+        if (sorted[0]) top2.push(sorted[0].teamName);
+        if (sorted[1]) top2.push(sorted[1].teamName);
+        if (sorted[2]) thirdPlaced.push(sorted[2]);
+    });
+
+    thirdPlaced.sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+        return b.goalsFor - a.goalsFor;
+    });
+
+    const bestThird = thirdPlaced.slice(0, numBestThird).map(t => t.teamName);
+    return { top2, bestThird };
+};
+
+export const generateSeededKnockoutRound = (
+    sortedTeams: string[],
+    week: number,
+    stage: TournamentStage
+): Fixture[] => {
+    const fixtures: Fixture[] = [];
+    const len = sortedTeams.length;
+    for (let i = 0; i < len / 2; i++) {
+        fixtures.push({
+            id: `ko_${stage}_${week}_${i}`,
+            week,
+            league: 'International',
+            homeTeam: sortedTeams[i],
+            awayTeam: sortedTeams[len - 1 - i],
+            played: false,
+            stage,
+            isKnockout: true
+        });
+    }
+    return fixtures;
+};
+
+export const sortQualifiedTeams = (
+    table: LeagueTableEntry[],
+    teamNames: string[]
+): string[] => {
+    const filtered = table.filter(t => teamNames.includes(t.teamName));
+    filtered.sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+        return b.goalsFor - a.goalsFor;
+    });
+    return filtered.map(t => t.teamName);
+};
+
+export const simulateKnockoutQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals: number, awayGoals: number, penaltyWinner?: 'home' | 'away', penaltyScore?: string } => {
+    let { homeGoals, awayGoals } = simulateQuickMatch(homeTeam, awayTeam);
+    if (homeGoals === awayGoals) {
+        // Resolve with shootout
+        const homePenalties = Math.floor(Math.random() * 5) + 3;
+        const awayPenalties = Math.random() < 0.5 ? homePenalties + 1 : homePenalties - 1;
+        return {
+            homeGoals,
+            awayGoals,
+            penaltyWinner: homePenalties > awayPenalties ? 'home' : 'away',
+            penaltyScore: `${homePenalties}-${awayPenalties}`
+        };
+    }
+    return { homeGoals, awayGoals };
+};
+
