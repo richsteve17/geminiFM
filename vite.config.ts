@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
+      // Required so assets load under https://richsteve17.github.io/geminiFM/
+      base: mode === 'production' ? '/geminiFM/' : '/',
       server: {
         port: 3000,
         host: '0.0.0.0',
