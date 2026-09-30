@@ -3,20 +3,29 @@ import { FootballIcon } from './icons/FootballIcon';
 import { BriefcaseIcon } from './icons/BriefcaseIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
 import { TEAMS } from '../constants';
-import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled } from '../services/geminiService';
+import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled, getPaidVoiceName, setPaidVoiceName } from '../services/geminiService';
 
 interface StartScreenProps {
     onSelectTeam: () => void;
     onStartUnemployed: () => void;
     onStartWorldCup: () => void;
     onThemeSelect?: (colors: { primary: string, secondary: string, text: string }) => void;
+    onContinue?: () => void;
+    hasSave?: boolean;
+    saveMetadata?: { teamName: string; week: number; year: number; } | null;
 }
 
-const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect }) => {
+const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect, onContinue, hasSave, saveMetadata }) => {
     const [showDevlog, setShowDevlog] = useState(false);
     const [selectedTeam, setSelectedTeam] = useState<string>('Manchester City');
     const [paidAudio, setPaidAudio] = useState(isPaidAudioEnabled());
     const [paidVideo, setPaidVideo] = useState(isPaidVideoEnabled());
+    const [paidVoice, setPaidVoice] = useState(getPaidVoiceName());
+
+    const handleVoiceChange = (voiceName: string) => {
+        setPaidVoice(voiceName);
+        setPaidVoiceName(voiceName);
+    };
 
     const togglePaidAudio = () => {
         const newVal = !paidAudio;
@@ -114,8 +123,39 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
             </div>
             
             {/* --- CARDS GRID NAVIGATION --- */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-5xl mb-10 z-10 px-4">
-                
+            <div className={`grid grid-cols-1 gap-5 w-full max-w-5xl mb-10 z-10 px-4 ${hasSave ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+
+                {/* Load Career Card — only shown when a save exists */}
+                {hasSave && onContinue && (
+                    <button
+                        onClick={onContinue}
+                        className="group relative overflow-hidden bg-slate-900/70 hover:bg-slate-900/90 border-2 border-cyan-600/60 hover:border-cyan-400 rounded-xl p-5 text-left transition-all hover:shadow-[0_0_35px_rgba(6,182,212,0.25)] hover:-translate-y-1 duration-300 md:col-span-2"
+                    >
+                        {/* Pulsing glow dot */}
+                        <span className="absolute top-3 right-3 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                        </span>
+                        <div className="relative z-10 flex items-center gap-5">
+                            <div className="text-4xl shrink-0">💾</div>
+                            <div className="flex-1">
+                                <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-1 block">Saved Career</span>
+                                <h3 className="text-xl font-extrabold text-white mb-1 group-hover:text-cyan-300 transition-colors">LOAD CAREER</h3>
+                                {saveMetadata ? (
+                                    <p className="text-xs text-slate-300 leading-relaxed">
+                                        <span className="font-bold text-white">{saveMetadata.teamName}</span>
+                                        {' · '}Year {saveMetadata.year}, Week {saveMetadata.week}
+                                    </p>
+                                ) : (
+                                    <p className="text-xs text-slate-400 leading-relaxed">Continue your last saved manager career.</p>
+                                )}
+                            </div>
+                            <div className="text-cyan-500 group-hover:translate-x-1 transition-transform text-2xl font-black">→</div>
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
+                    </button>
+                )}
+
                 {/* World Cup Card */}
                 <button 
                     onClick={onStartWorldCup} 
@@ -216,6 +256,27 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         </button>
                     </div>
                 </div>
+                
+                {/* Voice Selection Selector (Only relevant when Paid AI Commentary is Enabled) */}
+                {paidAudio && (
+                    <div className="flex items-center justify-between gap-4 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50 mt-2">
+                        <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">🗣️ Commentator Voice</span>
+                            <span className="text-[8px] text-slate-500 uppercase mt-0.5">Select Gemini native voice personality</span>
+                        </div>
+                        <select
+                            value={paidVoice}
+                            onChange={(e) => handleVoiceChange(e.target.value)}
+                            className="bg-slate-900 border border-slate-800 text-white rounded text-[10px] font-black uppercase px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 cursor-pointer"
+                        >
+                            <option value="Puck">Puck (Energetic Male)</option>
+                            <option value="Charon">Charon (Deep Male)</option>
+                            <option value="Fenrir">Fenrir (Powerful Male)</option>
+                            <option value="Aoede">Aoede (Clear Female)</option>
+                            <option value="Kore">Kore (Crisp Female)</option>
+                        </select>
+                    </div>
+                )}
             </div>
 
             {/* --- TEAM KIT THEME SELECTOR & JERSEYS --- */}

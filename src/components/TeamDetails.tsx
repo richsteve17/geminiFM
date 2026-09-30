@@ -1,499 +1,182 @@
-
-import React, { useState, useMemo } from 'react';
+import React from 'react';
 import { GameState } from '../types';
-import type { Team, Tactic, Formation, Mentality, PlayerEffect, Player, PlayerPersonality } from '../types';
-import { ChevronDownIcon } from './icons/ChevronDownIcon';
-import { ArrowsRightLeftIcon } from './icons/ArrowsRightLeftIcon';
+import type { Team, Fixture } from '../types';
+import { BriefcaseIcon } from './icons/BriefcaseIcon';
+import { UserGroupIcon } from './icons/UserGroupIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
 import { NewspaperIcon } from './icons/NewspaperIcon';
-import { FORMATIONS, MENTALITIES, CHAIRMAN_PERSONALITIES, PLAYER_PERSONALITIES } from '../constants';
-import { BrokenLinkIcon } from './icons/BrokenLinkIcon';
-import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
-import { UserGroupIcon } from './icons/UserGroupIcon';
-import { BriefcaseIcon } from './icons/BriefcaseIcon'; 
-import TacticsBoard from './TacticsBoard';
-import { analyzeTactics, TacticalAssignment, FORMATION_SLOTS } from '../utils';
 
 interface TeamDetailsProps {
     team: Team;
-    onTacticChange: (tactic: Partial<Tactic>) => void;
-    onNavigateToTransfers: () => void;
-    onNavigateToNews: () => void;
-    onNavigateToTransferCenter?: () => void;
-    onStartContractTalk: (player: Player) => void;
-    onToggleStarter: (playerName: string) => void;
-    onSwapPlayers?: (p1: Player, p2: Player) => void;
     gameState: GameState;
-    subsUsed: number;
-    onSubstitute: (playerIn: Player, playerOut: Player) => void;
-    onReorderPlayers?: (players: Player[]) => void;
+    managerReputation: number;
+    nextFixture: Fixture | null;
+    activeTab: 'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors';
+    onNavigateToTab: (tab: 'match' | 'tactics' | 'news' | 'scouting' | 'transfers' | 'honors') => void;
     onResign?: () => void;
-    onNavigateToHonors?: () => void;
 }
 
-const getPositionColor = (position: string) => {
-    switch (position) {
-        case 'GK': return 'bg-yellow-600 text-white';
-        case 'DEF': return 'bg-blue-600 text-white';
-        case 'MID': return 'bg-green-600 text-white';
-        case 'FWD': return 'bg-red-600 text-white';
-        default: return 'bg-gray-500 text-white';
-    }
-};
-
-const getPersonalityBadgeColor = (p: PlayerPersonality) => {
-    switch (p) {
-        case 'Ambitious': return 'text-purple-400 bg-purple-900/30 border-purple-800';
-        case 'Loyal': return 'text-blue-400 bg-blue-900/30 border-blue-800';
-        case 'Mercenary': return 'text-green-400 bg-green-900/30 border-green-800';
-        case 'Volatile': return 'text-red-400 bg-red-900/30 border-red-800';
-        case 'Leader': return 'text-yellow-400 bg-yellow-900/30 border-yellow-800';
-        case 'Young Prospect': return 'text-teal-400 bg-teal-900/30 border-teal-800';
-        default: return 'text-gray-400 bg-gray-800 border-gray-700';
-    }
-}
-
-const TeamDetails: React.FC<TeamDetailsProps> = ({ team, onTacticChange, onNavigateToTransfers, onNavigateToNews, onNavigateToTransferCenter, onStartContractTalk, onToggleStarter, onSwapPlayers, gameState, subsUsed, onSubstitute, onReorderPlayers, onResign, onNavigateToHonors }) => {
-    const [view, setView] = useState<'squad' | 'tactics' | 'finance'>('tactics'); 
-    const [showContracts, setShowContracts] = useState(false);
-    
-    // Board Selection State (for click-to-swap in Tactics View)
-    const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
-
-    // List Selection State (for click-to-swap in List View)
-    const [selectedListPlayer, setSelectedListPlayer] = useState<string | null>(null);
-    const [dragSourcePlayer, setDragSourcePlayer] = useState<string | null>(null);
-    const [dragOverPlayer, setDragOverPlayer] = useState<string | null>(null);
-
+const TeamDetails: React.FC<TeamDetailsProps> = ({
+    team,
+    gameState,
+    managerReputation,
+    nextFixture,
+    activeTab,
+    onNavigateToTab,
+    onResign
+}) => {
     const isNationalTeam = team.league === 'International';
-    const isMatchLive = gameState === GameState.PAUSED; 
+    const managerName = localStorage.getItem('gfm_manager_name') || 'Manager';
 
-    // Financial Calcs
+    const primaryColor = team.colors?.primary || '#333333';
+    const secondaryColor = team.colors?.secondary || '#666666';
+    const textColor = team.colors?.text || '#FFFFFF';
+
+    // Financial Snapshot
     const totalWageBill = team.players.reduce((sum, p) => sum + p.wage, 0);
-    const wageBudget = Math.floor(team.balance * 0.005) + totalWageBill;
-    // CRITICAL FIX: Use slice() to copy array before sort to prevent mutating state
-    const highestEarner = [...team.players].sort((a,b) => b.wage - a.wage)[0];
-    const averageWage = Math.floor(totalWageBill / team.players.length);
 
-    const playersWithContractIssues = !isNationalTeam ? team.players
-        .filter(p => p.contractExpires < 2)
-        .sort((a, b) => a.contractExpires - b.contractExpires) : [];
-
-    const starters = team.players.filter(p => p.isStarter);
-    const bench = team.players.filter(p => !p.isStarter);
-
-    // Run Tactical Analysis
-    const tacticalAnalysis = useMemo(() => analyzeTactics(starters, team.tactic.formation), [starters, team.tactic.formation]);
-
-    // Handle "Swap" on the board (Tactics View)
-    const handleSlotClick = (clickedSlotIndex: number) => {
-        if (selectedSlot === null) {
-            setSelectedSlot(clickedSlotIndex);
-        } else {
-            if (selectedSlot === clickedSlotIndex) {
-                setSelectedSlot(null);
-                return;
-            }
-            const currentStarters = [...starters];
-            if (currentStarters[selectedSlot] && currentStarters[clickedSlotIndex]) {
-                const temp = currentStarters[selectedSlot];
-                currentStarters[selectedSlot] = currentStarters[clickedSlotIndex];
-                currentStarters[clickedSlotIndex] = temp;
-                if (onReorderPlayers) {
-                     onReorderPlayers([...currentStarters, ...bench]);
-                }
-            }
-            setSelectedSlot(null);
-        }
-    };
-
-    const swapByName = (sourceName: string, targetName: string) => {
-        if (sourceName === targetName) return;
-        const p1 = team.players.find(p => p.name === sourceName);
-        const p2 = team.players.find(p => p.name === targetName);
-        if (!p1 || !p2) return;
-
-        if (isMatchLive) {
-            const isP1Starter = p1.isStarter;
-            const isP2Starter = p2.isStarter;
-
-            if (isP1Starter !== isP2Starter) {
-                if (subsUsed >= 5) {
-                    alert("Tactical Error: You have already used all 5 substitutions!");
-                    return;
-                }
-                const playerIn = isP1Starter ? p2 : p1;
-                const playerOut = isP1Starter ? p1 : p2;
-                onSubstitute(playerIn, playerOut);
-                return;
-            }
-        }
-
-        if (onSwapPlayers) {
-            onSwapPlayers(p1, p2);
-        }
-    };
-
-    // Handle List View Interaction (Swap Mode)
-    const handleListClick = (clickedPlayer: Player) => {
-        if (selectedListPlayer === null) {
-            // Select first player
-            setSelectedListPlayer(clickedPlayer.name);
-        } else {
-            if (selectedListPlayer === clickedPlayer.name) {
-                // Deselect
-                setSelectedListPlayer(null);
-            } else {
-                // Swap Action
-                swapByName(selectedListPlayer, clickedPlayer.name);
-                setSelectedListPlayer(null);
-            }
-        }
+    // Opponent Parser
+    let opponentName = 'No Match';
+    let isHome = true;
+    if (nextFixture) {
+        isHome = nextFixture.homeTeam === team.name;
+        opponentName = isHome ? nextFixture.awayTeam : nextFixture.homeTeam;
     }
-
-    const renderPlayerItem = (player: Player, isBench: boolean) => {
-        const personalityColor = getPersonalityBadgeColor(player.personality);
-        const isSelected = selectedListPlayer === player.name;
-        
-        // Effects & Status
-        const effects = [];
-        if (player.status.type === 'Injured') effects.push(<span key="inj" className="text-sm" title={`Injured (${player.status.weeks} wks)`}>🚑</span>);
-        if (player.status.type === 'Suspended') effects.push(<span key="sus" className="text-sm" title="Suspended">🟥</span>);
-        
-        player.effects.forEach((eff, i) => {
-            if (eff.type === 'PostTournamentMorale') {
-                if (eff.morale === 'FiredUp') effects.push(<span key={`m-${i}`} className="text-xs" title="Morale: Fired Up">🔥</span>);
-                if (eff.morale === 'Winner') effects.push(<span key={`m-${i}`} className="text-xs" title="Morale: Winner">🏆</span>);
-                if (eff.morale === 'Disappointed') effects.push(<span key={`m-${i}`} className="text-xs" title="Morale: Disappointed">😔</span>);
-            }
-            if (eff.type === 'BadChemistry') {
-                effects.push(<span key={`c-${i}`} className="text-xs" title={`Chemistry Rift with ${eff.with}`}><BrokenLinkIcon className="w-3 h-3 text-orange-500 inline" /></span>);
-            }
-            if (eff.type === 'InternationalRift') {
-                const color = eff.severity === 'serious' ? 'text-red-500' : eff.severity === 'moderate' ? 'text-orange-500' : 'text-yellow-500';
-                effects.push(
-                    <span key={`ir-${i}`} className="text-xs" title={`International Rift (${eff.severity}) with ${eff.with}: ${eff.message}`}>
-                        <BrokenLinkIcon className={`w-3 h-3 ${color} inline`} />
-                    </span>
-                );
-            }
-            if (eff.type === 'TeammateBond') {
-                effects.push(
-                    <span key={`tb-${i}`} className="text-xs" title={`Teammate Bond with ${eff.with}: ${eff.message}`}>🤝</span>
-                );
-            }
-        });
-
-        // Check if out of position (only relevant for starters list if we want to show it there too)
-        const assignment = !isBench ? tacticalAnalysis.assignments.find(a => a.player.name === player.name) : null;
-        const outOfPosition = assignment?.isOutOfPosition;
-
-        return (
-            <li
-                key={player.name}
-                draggable
-                onDragStart={(e) => {
-                    e.dataTransfer.setData('text/player-name', player.name);
-                    e.dataTransfer.effectAllowed = 'move';
-                    setDragSourcePlayer(player.name);
-                    setSelectedListPlayer(null);
-                }}
-                onDragOver={(e) => {
-                    e.preventDefault();
-                    if (dragSourcePlayer && dragSourcePlayer !== player.name) {
-                        setDragOverPlayer(player.name);
-                    }
-                }}
-                onDragLeave={() => {
-                    if (dragOverPlayer === player.name) setDragOverPlayer(null);
-                }}
-                onDrop={(e) => {
-                    e.preventDefault();
-                    const sourceName = e.dataTransfer.getData('text/player-name') || dragSourcePlayer;
-                    if (sourceName) swapByName(sourceName, player.name);
-                    setDragOverPlayer(null);
-                    setDragSourcePlayer(null);
-                }}
-                onDragEnd={() => {
-                    setDragOverPlayer(null);
-                    setDragSourcePlayer(null);
-                }}
-                onClick={() => handleListClick(player)}
-                className={`p-2 rounded border cursor-pointer flex items-center gap-2 transition-all group ${
-                dragOverPlayer === player.name ? 'ring-2 ring-blue-400 border-blue-400' :
-                isSelected ? 'bg-yellow-900/40 border-yellow-500 ring-1 ring-yellow-500' :
-                player.status.type === 'Injured' ? 'bg-red-900/30 border-red-500' :
-                isBench ? 'bg-gray-900/50 border-gray-700 hover:bg-gray-700 opacity-80 hover:opacity-100' :
-                'bg-gray-800 border-gray-700 hover:bg-gray-700'
-            }`}>
-                <span className={`w-8 h-6 text-[10px] font-black flex items-center justify-center rounded ${getPositionColor(player.position)}`}>{player.position}</span>
-                
-                <div className="flex-grow min-w-0">
-                    <div className="flex items-center gap-2">
-                        <p className={`text-xs font-bold truncate ${isSelected ? 'text-yellow-200' : 'text-gray-200'}`}>{player.name}</p>
-                        <div className="flex gap-1">{effects}</div>
-                        {outOfPosition && <span className="text-[10px] text-orange-400" title={`Playing as ${assignment?.formationRole}`}>⚠️</span>}
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-[9px] font-bold px-1.5 rounded border ${personalityColor} uppercase tracking-wider`}>
-                            {player.personality}
-                        </span>
-                        <span className={`text-[9px] font-bold px-1.5 rounded border ${player.condition > 80 ? 'text-green-400 border-green-800 bg-green-900/30' : player.condition > 60 ? 'text-yellow-400 border-yellow-800 bg-yellow-900/30' : 'text-red-400 border-red-800 bg-red-900/30'} uppercase tracking-wider`}>
-                            {player.condition}% FIT
-                        </span>
-                        <span className="text-[9px] font-bold px-1.5 rounded border text-blue-400 border-blue-800 bg-blue-900/30 uppercase tracking-wider" title="Stamina (affects how slowly player tires during match)">
-                            STA: {player.stamina ?? (player.age < 22 ? 80 : player.age > 30 ? 65 : 75) + (player.personality === 'Professional' ? 5 : 0)}
-                        </span>
-                        {!isNationalTeam && (
-                            <span className="text-[9px] text-gray-500">
-                                {player.contractExpires === 0 ? <span className="text-red-400 font-bold">Expiring!</span> : `${player.contractExpires}y`} · ${player.wage.toLocaleString()}/wk
-                                {player.contractIncentives && player.contractIncentives.performanceBonus > 0 && (
-                                    <> · +${player.contractIncentives.performanceBonus.toLocaleString()}/{player.contractIncentives.bonusType === 'goal' ? 'goal' : player.contractIncentives.bonusType === 'cleanSheet' ? 'CS' : 'app'}</>
-                                )}
-                            </span>
-                        )}
-                        {player.stats && player.stats.appearances > 0 && (
-                            <span 
-                                className="text-[9px] font-semibold text-blue-300 bg-blue-900/20 px-1.5 py-0.5 border border-blue-800 rounded uppercase tracking-wider whitespace-nowrap cursor-help"
-                                title={player.history && player.history.length > 0 
-                                    ? `Career History:\n` + player.history.map(h => `Year ${h.year} (${h.teamName}): ${h.appearances} Apps, ${h.goals} Goals, ${h.cleanSheets} CS, ★${h.averageRating}`).join('\n') 
-                                    : "No past season history."
-                                }
-                            >
-                                Apps: {player.stats.appearances} · Goals: {player.stats.goals} · CS: {player.stats.cleanSheets} · ★{player.stats.averageRating}
-                            </span>
-                        )}
-                    </div>
-                </div>
-                
-                {isSelected ? (
-                    <ArrowsRightLeftIcon className="w-4 h-4 text-yellow-400 animate-pulse" />
-                ) : (
-                    <span className={`text-sm font-black ${player.rating >= 85 ? 'text-yellow-400' : 'text-green-400'}`}>{player.rating}</span>
-                )}
-            </li>
-        );
-    };
 
     return (
-        <div className="bg-gray-800/50 rounded-lg shadow-lg p-4 border border-gray-700 flex flex-col h-full">
-            <div className="flex justify-between items-start mb-2">
-                <div>
-                    <h2 className="text-xl font-bold text-green-400">{team.name}</h2>
-                    {!isNationalTeam && (
-                        <p className="text-xs text-blue-400 font-mono font-bold uppercase">Balance: ${team.balance.toLocaleString()}</p>
-                    )}
-                </div>
-                <div className="flex bg-gray-900 rounded p-1 border border-gray-700 shadow-inner">
-                    <button onClick={() => setView('squad')} className={`p-1.5 rounded transition-all ${view === 'squad' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`} title="Squad List"><UserGroupIcon className="w-4 h-4" /></button>
-                    <button onClick={() => setView('tactics')} className={`p-1.5 rounded transition-all ${view === 'tactics' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`} title="Tactics Board"><GlobeAltIcon className="w-4 h-4" /></button>
-                    {!isNationalTeam && (
-                        <button onClick={() => setView('finance')} className={`p-1.5 rounded transition-all ${view === 'finance' ? 'bg-gray-700 text-green-400 shadow' : 'text-gray-500 hover:text-gray-400'}`} title="Finances"><BriefcaseIcon className="w-4 h-4" /></button>
-                    )}
+        <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-5 shadow-xl backdrop-blur-md flex flex-col h-full gap-5">
+            {/* Identity & Logo Jersey */}
+            <div className="flex items-center gap-4 border-b border-gray-700/50 pb-4">
+                <svg viewBox="0 0 100 100" className="w-14 h-14 drop-shadow-md flex-shrink-0">
+                    <path d="M 15,30 L 0,40 L 10,55 L 25,45 Z" fill={secondaryColor} stroke={primaryColor} strokeWidth="1" />
+                    <path d="M 85,30 L 100,40 L 90,55 L 75,45 Z" fill={secondaryColor} stroke={primaryColor} strokeWidth="1" />
+                    <path d="M 25,25 L 75,25 L 75,85 L 25,85 Z" fill={primaryColor} />
+                    <path d="M 40,25 L 40,85 M 50,25 L 50,85 M 60,25 L 60,85" stroke={secondaryColor} strokeWidth="4" opacity="0.4" />
+                    <path d="M 40,25 L 50,35 L 60,25" fill="none" stroke={textColor} strokeWidth="2" />
+                </svg>
+                <div className="min-w-0">
+                    <h2 className="text-lg font-black text-white truncate leading-tight">{team.name}</h2>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{team.league}</p>
                 </div>
             </div>
 
-            {view !== 'finance' && (
-                <>
-                    <div className="mb-4">
-                        <div className="bg-gray-900/50 p-2 rounded border border-gray-700 group relative">
-                            <p className="text-xs font-bold text-gray-300">{team.chairmanPersonality}</p>
-                            <div className="hidden group-hover:block absolute top-full left-0 right-0 z-50 bg-black border border-gray-600 p-2 text-[10px] text-white rounded mt-1 shadow-2xl w-64">
-                                {CHAIRMAN_PERSONALITIES[team.chairmanPersonality]}
-                            </div>
-                        </div>
+            {/* Manager Profile card */}
+            <div className="bg-gray-900/40 border border-gray-800 p-3.5 rounded-lg flex flex-col gap-2">
+                <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-500 uppercase font-black">Manager</span>
+                    <span className="text-xs font-bold text-white truncate max-w-[120px]">{managerName}</span>
+                </div>
+                <div>
+                    <div className="flex justify-between items-center text-[10px] mb-1">
+                        <span className="text-slate-500 uppercase font-black">Reputation</span>
+                        <span className="text-emerald-400 font-mono font-bold">{managerReputation}%</span>
                     </div>
+                    <div className="w-full h-1.5 bg-gray-950 rounded-full overflow-hidden border border-gray-850">
+                        <div 
+                            className="h-full bg-gradient-to-r from-emerald-600 to-teal-500 transition-all duration-300"
+                            style={{ width: `${managerReputation}%` }}
+                        ></div>
+                    </div>
+                </div>
 
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                        <div>
-                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Formation</label>
-                            <select value={team.tactic.formation} onChange={e => onTacticChange({ formation: e.target.value as Formation })} className="w-full bg-gray-700 text-xs rounded p-2 border border-gray-600 focus:ring-1 focus:ring-green-500 outline-none">
-                                {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter">Style</label>
-                            <select value={team.tactic.mentality} onChange={e => onTacticChange({ mentality: e.target.value as Mentality })} className="w-full bg-gray-700 text-xs rounded p-2 border border-gray-600 focus:ring-1 focus:ring-green-500 outline-none">
-                                {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                        </div>
+                {onResign && (
+                    <button 
+                        onClick={() => {
+                            if (confirm("Are you sure you want to resign? Your manager reputation will suffer!")) {
+                                onResign();
+                            }
+                        }}
+                        className="w-full mt-1.5 py-1.5 bg-red-950/30 hover:bg-red-950/60 border border-red-900/30 text-red-400 text-[9px] font-black rounded-md uppercase tracking-wider transition-colors"
+                    >
+                        Resign position
+                    </button>
+                )}
+            </div>
+
+            {/* Next Match Summary */}
+            {nextFixture && (
+                <div className="bg-gray-900/40 border border-gray-800 p-3.5 rounded-lg flex flex-col gap-1.5">
+                    <div className="flex justify-between items-center border-b border-gray-800 pb-1.5 mb-1">
+                        <span className="text-[10px] text-slate-500 uppercase font-black">Next Match</span>
+                        <span className="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-[8px] font-black rounded font-mono">WEEK {nextFixture.week}</span>
                     </div>
-                </>
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-300 font-bold">vs {opponentName}</span>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">{isHome ? '🏠 HOME' : '✈️ AWAY'}</span>
+                    </div>
+                </div>
             )}
 
-            {/* View Content */}
-            <div className="flex-grow overflow-y-auto pr-1">
-                {view === 'tactics' && (
-                    <div>
-                        <TacticsBoard 
-                            assignments={tacticalAnalysis.assignments} 
-                            formation={team.tactic.formation} 
-                            onSlotClick={handleSlotClick} 
-                            onSlotSwap={(fromIndex, toIndex) => {
-                                if (fromIndex === toIndex) return;
-                                const currentStarters = [...starters];
-                                if (!currentStarters[fromIndex] || !currentStarters[toIndex]) return;
-                                const temp = currentStarters[fromIndex];
-                                currentStarters[fromIndex] = currentStarters[toIndex];
-                                currentStarters[toIndex] = temp;
-                                if (onReorderPlayers) {
-                                    onReorderPlayers([...currentStarters, ...bench]);
-                                }
-                                setSelectedSlot(null);
-                            }}
-                            selectedSlotIndex={selectedSlot}
-                        />
-                        
-                        {/* Tactical Report Panel */}
-                        <div className="mt-4 bg-gray-900/80 rounded border border-gray-700 p-3">
-                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tactical Report</h4>
-                                <span className={`text-xs font-black ${tacticalAnalysis.score > 80 ? 'text-green-400' : tacticalAnalysis.score > 50 ? 'text-yellow-400' : 'text-red-500'}`}>
-                                    {tacticalAnalysis.score}% Efficiency
-                                </span>
-                            </div>
-                            <div className="space-y-1">
-                                {tacticalAnalysis.feedback.length > 0 ? (
-                                    tacticalAnalysis.feedback.map((msg, i) => (
-                                        <p key={i} className="text-[10px] text-gray-300 flex items-start gap-1">
-                                            <span>•</span> {msg}
-                                        </p>
-                                    ))
-                                ) : (
-                                    <p className="text-[10px] text-gray-500 italic">No issues detected.</p>
-                                )}
-                            </div>
-                        </div>
+            {/* Finances */}
+            {!isNationalTeam && (
+                <div className="bg-gray-900/40 border border-gray-800 p-3.5 rounded-lg flex flex-col gap-2">
+                    <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-slate-500 uppercase font-black">Balance</span>
+                        <span className="text-emerald-400 font-mono font-bold">${team.balance.toLocaleString()}</span>
                     </div>
-                )} 
+                    <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-slate-500 uppercase font-black">Wage Bill</span>
+                        <span className="text-slate-300 font-mono font-medium">${totalWageBill.toLocaleString()}/wk</span>
+                    </div>
+                </div>
+            )}
+
+            {/* Sidebar Navigation Shortcut Buttons */}
+            <div className="mt-auto flex flex-col gap-1.5 border-t border-gray-700/50 pt-4">
+                <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest pl-1 mb-1">Console Navigation</span>
                 
-                {view === 'squad' && (
-                    <div className="space-y-4">
-                        <p className="text-[10px] text-gray-500 -mt-1">Drag and drop to switch players. Tap still works.</p>
-                        {/* Swap Mode Indicator */}
-                        {selectedListPlayer && (
-                            <div className="bg-blue-900/50 border border-blue-500 p-2 rounded text-center animate-pulse mb-2">
-                                <p className="text-xs font-bold text-blue-200 uppercase tracking-widest">Select target to swap</p>
-                                <button onClick={() => setSelectedListPlayer(null)} className="text-[10px] text-blue-400 underline mt-1">Cancel</button>
-                            </div>
-                        )}
-
-                        <div>
-                            <div className="flex justify-between items-center mb-1 pl-1">
-                                <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Starting XI ({starters.length}/11)</p>
-                                {isMatchLive && <span className="text-[10px] text-blue-400 font-bold uppercase">SUBS: {subsUsed}/5</span>}
-                            </div>
-                            
-                            {!isNationalTeam && playersWithContractIssues.length > 0 && gameState === GameState.PRE_MATCH && (
-                                <button 
-                                    onClick={() => setShowContracts(!showContracts)}
-                                    className="w-full mb-2 flex justify-between items-center text-[10px] font-bold bg-red-900/40 text-red-200 border border-red-800 p-1.5 rounded hover:bg-red-900/60 transition-colors"
-                                >
-                                    <span className="flex items-center"><DocumentCheckIcon className="w-3 h-3 mr-1" /> {playersWithContractIssues.length} Contracts Expiring</span>
-                                    <ChevronDownIcon className={`w-3 h-3 transition-transform ${showContracts ? 'rotate-180' : ''}`} />
-                                </button>
-                            )}
-                            
-                            {showContracts && (
-                                <div className="mb-2 space-y-1">
-                                    {playersWithContractIssues.map(player => (
-                                        <div key={`con-${player.name}`} className="flex justify-between items-center p-1.5 rounded bg-red-900/20 border border-red-900/50">
-                                            <span className="text-xs font-bold text-red-300">{player.name}</span>
-                                            <button onClick={() => onStartContractTalk(player)} className="text-[9px] font-bold bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded">RENEW</button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <ul className="space-y-1">
-                                {starters.map(p => renderPlayerItem(p, false))}
-                            </ul>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 pl-1">Bench ({bench.length})</p>
-                            <ul className="space-y-1">
-                                {bench.map(p => renderPlayerItem(p, true))}
-                            </ul>
-                        </div>
-                    </div>
-                )}
-
-                {view === 'finance' && (
-                    <div className="space-y-4 pt-2">
-                        {/* Wage Budget Summary */}
-                        <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
-                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Weekly Wage Budget</h4>
-                            <div className="flex justify-between items-end mb-1">
-                                <span className={`text-2xl font-mono font-bold ${totalWageBill > wageBudget ? 'text-red-400' : 'text-green-400'}`}>
-                                    ${totalWageBill.toLocaleString()}
-                                </span>
-                                <span className="text-sm text-gray-500 font-mono mb-1"> / ${wageBudget.toLocaleString()}</span>
-                            </div>
-                            <div className="w-full h-2 bg-gray-900 rounded-full overflow-hidden">
-                                <div 
-                                    className={`h-full ${totalWageBill > wageBudget ? 'bg-red-500' : 'bg-green-500'}`} 
-                                    style={{ width: `${Math.min((totalWageBill / wageBudget) * 100, 100)}%` }}
-                                ></div>
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-2">
-                                {totalWageBill > wageBudget ? '⚠️ You are overspending. Board confidence is falling.' : '✅ You are within financial fair play limits.'}
-                            </p>
-                        </div>
-
-                        {/* Salary Context */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
-                                <p className="text-[10px] text-gray-500 uppercase">Squad Average</p>
-                                <p className="text-lg font-bold text-white">${averageWage.toLocaleString()}</p>
-                            </div>
-                            <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
-                                <p className="text-[10px] text-gray-500 uppercase">Highest Earner</p>
-                                <p className="text-lg font-bold text-yellow-400">${highestEarner?.wage.toLocaleString()}</p>
-                                <p className="text-[10px] text-gray-400 truncate">{highestEarner?.name}</p>
-                            </div>
-                        </div>
-
-                        {/* Contract Status Overview */}
-                        <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
-                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Payroll Distribution</h4>
-                            <div className="space-y-1">
-                                { /* CRITICAL FIX: Use .slice() to copy array before sorting to avoid mutating state */ }
-                                {team.players.slice().sort((a,b) => b.wage - a.wage).slice(0, 5).map(p => (
-                                    <div key={p.name} className="flex justify-between items-center text-xs border-b border-gray-800 pb-1 last:border-0">
-                                        <span className="text-gray-300">{p.name}</span>
-                                        <span className="font-mono text-gray-400">${p.wage.toLocaleString()}</span>
-                                    </div>
-                                ))}
-                                <p className="text-[10px] text-center text-gray-500 pt-1 italic">...and {team.players.length - 5} others</p>
-                            </div>
-                        </div>
-
-                        {onResign && (
-                            <button 
-                                onClick={() => {
-                                    if (confirm("Are you sure you want to resign from your club? Your manager reputation will drop slightly.")) {
-                                        onResign();
-                                    }
-                                }}
-                                className="w-full py-2 bg-red-750 hover:bg-red-700 text-white font-bold rounded text-[10px] uppercase tracking-wider transition-colors shadow border border-red-800"
-                            >
-                                Resign from Club
-                            </button>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            <div className="grid grid-cols-4 gap-1 mt-2 pt-2 border-t border-gray-700">
-                <button onClick={onNavigateToNews} className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-[9px] font-black flex flex-col items-center justify-center gap-1"><NewspaperIcon className="w-4 h-4" /> NEWS</button>
-                <button onClick={onNavigateToTransfers} disabled={isNationalTeam} className={`p-2 rounded text-[9px] font-black flex flex-col items-center justify-center gap-1 uppercase tracking-tighter ${isNationalTeam ? 'bg-gray-700 opacity-50 cursor-not-allowed' : 'bg-blue-900 hover:bg-blue-800 text-blue-100'}`}>
-                    <ArrowsRightLeftIcon className="w-4 h-4" /> {isNationalTeam ? 'Selection' : 'Scout'}
+                <button 
+                    onClick={() => onNavigateToTab('match')} 
+                    className={`w-full py-2 px-3 text-left rounded-lg text-xs font-bold transition-all flex items-center gap-2.5 ${
+                        activeTab === 'match' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/45'
+                    }`}
+                >
+                    <span>🎮</span> Match Center
                 </button>
-                <button onClick={onNavigateToTransferCenter} disabled={isNationalTeam} className={`p-2 rounded text-[9px] font-black flex flex-col items-center justify-center gap-1 uppercase tracking-tighter ${isNationalTeam ? 'bg-gray-700 opacity-50 cursor-not-allowed' : 'bg-green-950/80 hover:bg-green-900/90 text-green-200 border border-green-800/80'}`}>
-                    <BriefcaseIcon className="w-4 h-4" /> Bids
+
+                <button 
+                    onClick={() => onNavigateToTab('tactics')} 
+                    className={`w-full py-2 px-3 text-left rounded-lg text-xs font-bold transition-all flex items-center gap-2.5 ${
+                        activeTab === 'tactics' ? 'bg-gradient-to-r from-yellow-600 to-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/45'
+                    }`}
+                >
+                    <span>📋</span> Roster & Tactics
                 </button>
-                <button onClick={onNavigateToHonors} className="p-2 bg-amber-950/80 hover:bg-amber-900/90 text-amber-200 border border-amber-800/80 rounded text-[9px] font-black flex flex-col items-center justify-center gap-1 uppercase tracking-tighter">
-                    <span className="text-sm">🏆</span> Cabinets
+
+                <button 
+                    onClick={() => onNavigateToTab('news')} 
+                    className={`w-full py-2 px-3 text-left rounded-lg text-xs font-bold transition-all flex items-center gap-2.5 ${
+                        activeTab === 'news' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/45'
+                    }`}
+                >
+                    <span>📰</span> Inbox Feed
+                </button>
+
+                <button 
+                    onClick={() => onNavigateToTab('scouting')} 
+                    className={`w-full py-2 px-3 text-left rounded-lg text-xs font-bold transition-all flex items-center gap-2.5 ${
+                        activeTab === 'scouting' || activeTab === 'scouting_market' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/45'
+                    }`}
+                >
+                    <span>🔍</span> Scout Network
+                </button>
+
+                <button 
+                    onClick={() => onNavigateToTab('transfers')} 
+                    className={`w-full py-2 px-3 text-left rounded-lg text-xs font-bold transition-all flex items-center gap-2.5 ${
+                        activeTab === 'transfers' ? 'bg-gradient-to-r from-green-700 to-emerald-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/45'
+                    }`}
+                >
+                    <span>🤝</span> Negotiations
+                </button>
+
+                <button 
+                    onClick={() => onNavigateToTab('honors')} 
+                    className={`w-full py-2 px-3 text-left rounded-lg text-xs font-bold transition-all flex items-center gap-2.5 ${
+                        activeTab === 'honors' ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/45'
+                    }`}
+                >
+                    <span>🏆</span> Trophy Room
                 </button>
             </div>
         </div>

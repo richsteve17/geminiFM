@@ -83,6 +83,26 @@ export const setPaidVideoEnabled = (val: boolean) => {
     }
 };
 
+const getInitialString = (key: string, defaultVal: string): string => {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(key);
+        if (saved !== null) {
+            return saved;
+        }
+    }
+    return defaultVal;
+};
+
+let paidVoiceState = getInitialString('GFM_PAID_VOICE', 'Puck');
+
+export const getPaidVoiceName = () => paidVoiceState;
+export const setPaidVoiceName = (val: string) => {
+    paidVoiceState = val;
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('GFM_PAID_VOICE', val);
+    }
+};
+
 // --- MEDIA HELPERS ---
 
 const cleanJson = (text?: string) => (text || "").replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -368,8 +388,16 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
                 utterance.rate = 1.15; // standard excitement rate
                 utterance.pitch = 1.0;
                 const voices = window.speechSynthesis.getVoices();
-                const engVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
-                if (engVoice) utterance.voice = engVoice;
+                
+                // Prioritize high-quality natural sounding English voices (Siri, Google, Samantha, Premium, Daniel)
+                const engVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Siri') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Premium') || v.name.includes('Natural')))
+                    || voices.find(v => v.lang.startsWith('en') && v.name.includes('Daniel'))
+                    || voices.find(v => v.lang.startsWith('en'))
+                    || voices[0];
+                    
+                if (engVoice) {
+                    utterance.voice = engVoice;
+                }
                 window.speechSynthesis.speak(utterance);
             } catch (e) {
                 console.error("Browser speech synthesis failed in free mode:", e);
@@ -398,7 +426,7 @@ export const playMatchCommentary = async (text: string, eventId: number) => {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {
                     voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: 'Fenrir' },
+                        prebuiltVoiceConfig: { voiceName: getPaidVoiceName() },
                     },
                 },
             },
@@ -515,6 +543,127 @@ export const generatePressConference = async (context: string): Promise<string[]
         }
 
         return [q1, q2, q3];
+    }
+};
+
+export interface PressConferenceReport {
+    headline: string;
+    article: string;
+    mediaTone: 'positive' | 'negative' | 'neutral' | 'sensationalist';
+    reputationChange: number;
+    squadFormChange: number;
+    newspaperName: string;
+}
+
+export const evaluatePressConference = async (
+    history: { q: string, a: string }[],
+    resultContext: string
+): Promise<PressConferenceReport> => {
+    const prompt = `You are a sports editor. Evaluate this post-match press conference:
+Result Context: ${resultContext}
+Interview Q&A:
+${history.map(item => `Journalist: "${item.q}"\nManager: "${item.a}"`).join('\n')}
+
+Analyze the tone of the manager's responses.
+Generate:
+1. A realistic sports newspaper headline (max 10 words).
+2. A short newspaper article analyzing the comments (2-3 sentences).
+3. The media tone: "positive" (supportive), "negative" (critical), "neutral", or "sensationalist" (dramatic).
+4. reputationChange: integer between -10 and +10 (how this affects manager reputation).
+5. squadFormChange: integer between -5 and +5 (positive answers praising squad increase form, criticizing players decrease it).
+6. newspaperName: Choose a realistic sports news outlet (e.g. "The Daily Pitch", "World Football Athletic", "Sky Sports News", "La Gazzetta dello Sport", "L'Équipe").
+
+Response MUST be JSON format:
+{
+  "headline": "headline here",
+  "article": "article text here",
+  "mediaTone": "positive" | "negative" | "neutral" | "sensationalist",
+  "reputationChange": 3,
+  "squadFormChange": 1,
+  "newspaperName": "name here"
+}`;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
+        });
+        const report: PressConferenceReport = JSON.parse(cleanJson(response.text));
+        report.reputationChange = Math.max(-10, Math.min(10, report.reputationChange || 0));
+        report.squadFormChange = Math.max(-5, Math.min(5, report.squadFormChange || 0));
+        return report;
+    } catch (e) {
+        console.warn("Press Conference evaluation failed, using rich local engine:", e);
+        const combinedAnswers = history.map(h => h.a.toLowerCase()).join(' ');
+        
+        let headline = "Manager Speaks Out After Match";
+        let article = "The manager faced the press and answered questions about the team's performance. The media will be watching how the squad responds in the next match.";
+        let mediaTone: 'positive' | 'negative' | 'neutral' | 'sensationalist' = 'neutral';
+        let reputationChange = 0;
+        let squadFormChange = 0;
+        const newspaperName = resultContext.toLowerCase().includes("champions league") ? "World Football Athletic" : "The Daily Pitch";
+
+        const hasPraise = combinedAnswers.includes("great") || combinedAnswers.includes("proud") || combinedAnswers.includes("excellent") || combinedAnswers.includes("love") || combinedAnswers.includes("good") || combinedAnswers.includes("brilliant") || combinedAnswers.includes("work");
+        const hasBlame = combinedAnswers.includes("poor") || combinedAnswers.includes("blame") || combinedAnswers.includes("fault") || combinedAnswers.includes("referee") || combinedAnswers.includes("bad") || combinedAnswers.includes("mistake");
+        const hasExcuse = combinedAnswers.includes("unlucky") || combinedAnswers.includes("pitch") || combinedAnswers.includes("tired") || combinedAnswers.includes("stamina");
+
+        if (resultContext.toLowerCase().includes("won") || resultContext.toLowerCase().includes("win")) {
+            if (hasPraise) {
+                headline = "Victorious Manager Praises Team Spirit!";
+                article = "Following a brilliant win, the manager expressed deep pride in the squad's performance. Team chemistry looks at an all-time high.";
+                mediaTone = 'positive';
+                reputationChange = 3;
+                squadFormChange = 2;
+            } else {
+                headline = "Manager Demands More Despite Victory";
+                article = "Even in victory, the manager remained cautious, urging players to stay focused. A professional tone that the board will likely appreciate.";
+                mediaTone = 'neutral';
+                reputationChange = 1;
+                squadFormChange = 0;
+            }
+        } else if (resultContext.toLowerCase().includes("lost") || resultContext.toLowerCase().includes("defeat")) {
+            if (hasBlame) {
+                headline = "Manager Slams Squad After Defeat!";
+                article = "A tense press conference saw the manager publicly criticize individual errors. Critics suggest this outburst could harm locker room morale.";
+                mediaTone = 'sensationalist';
+                reputationChange = -3;
+                squadFormChange = -2;
+            } else if (hasExcuse) {
+                headline = "Manager Blames Bad Luck for Lost Points";
+                article = "Deflecting blame, the manager pointed to unfortunate decisions and pitch conditions. Fans are debating whether the excuses hold weight.";
+                mediaTone = 'negative';
+                reputationChange = -1;
+                squadFormChange = -1;
+            } else {
+                headline = "Under Fire: Manager Promises Reaction After Loss";
+                article = "Accepting responsibility for the poor result, the manager promised key adjustments in training. The board is giving them space to react.";
+                mediaTone = 'neutral';
+                reputationChange = 1;
+                squadFormChange = 1;
+            }
+        } else {
+            if (hasPraise) {
+                headline = "Glass Half Full: Manager Sees Positives in Draw";
+                article = "Focusing on the positives, the manager highlighted the team's combativeness. A solid base to build upon for the next fixture.";
+                mediaTone = 'positive';
+                reputationChange = 1;
+                squadFormChange = 1;
+            } else {
+                headline = "Frustration Boils Over After Stalemate";
+                article = "Struggling to find the breakthrough, the manager expressed clear disappointment in the final third quality. Training adjustments are expected.";
+                mediaTone = 'negative';
+                reputationChange = -1;
+                squadFormChange = -1;
+            }
+        }
+
+        return {
+            headline,
+            article,
+            mediaTone,
+            reputationChange,
+            squadFormChange,
+            newspaperName
+        };
     }
 };
 
@@ -696,33 +845,112 @@ const extractPromisesFromAnswers = (answers: string[]) => {
     return [...new Set(promises)].slice(0, 3);
 };
 
+const generateLocalPlayerTalkQuestions = (
+    player: Player,
+    team: Team,
+    context: 'transfer' | 'renewal'
+): string[] => {
+    const isVeteran = player.age >= 32;
+    const isStar = player.rating >= 85;
+    const isProspect = player.personality === 'Young Prospect';
+    const isAmbitious = player.personality === 'Ambitious';
+    const isLeader = player.personality === 'Leader';
+    const isLoyal = player.personality === 'Loyal';
+    
+    const bonusType = getBonusTypeForPosition(player.position);
+    const bonusLabel = bonusTypeLabel(bonusType);
+    
+    let q1 = '';
+    let q2 = '';
+    let q3 = '';
+    let q4 = '';
+    
+    // Q1: Ambition & Context
+    if (context === 'transfer') {
+        q1 = `Why should a player of my quality choose to leave my current project to join ${team.name} right now?`;
+    } else {
+        if (isVeteran && isStar) {
+            q1 = `Virgil is ${player.age} and remains a premier talent, but he does not have the luxury of a 'rebuilding phase'—what specific, world-class reinforcements are guaranteed in your window to ensure he is lifting trophies within the next two seasons?`;
+        } else if (isProspect) {
+            q1 = `As a rising talent, I need to know how committing to a long-term renewal aligns with my ambition to play at the highest level. What project milestones can you guarantee?`;
+        } else {
+            q1 = `${player.name} is open to renewal talks, but I need to understand your long-term plan. What is your vision for ${team.name} over the next three seasons?`;
+        }
+    }
+    
+    // Q2: Role & Formation
+    if (isProspect) {
+        q2 = `How exactly do you plan to give me regular first-team opportunities instead of leaving me on the bench in your ${team.tactic.formation} setup?`;
+    } else if (isStar) {
+        q2 = `As a key star, how will you build the tactical system around my strengths in your ${team.tactic.formation} formation?`;
+    } else {
+        q2 = `What specific role do you envision for me as a ${player.position} in your ${team.tactic.formation} system?`;
+    }
+    
+    // Q3: Ambition & Objectives
+    const obj = team.objectives?.[0] || 'challenge for silverware';
+    if (isAmbitious) {
+        q3 = `Your board objective is "${obj}". Do you realistically have the depth and ambition to win trophies, or are we just making up the numbers?`;
+    } else if (isLoyal) {
+        q3 = `I want to build a legacy with the fans here. How will you ensure the squad keeps a competitive core so we can fight for objectives like "${obj}" together?`;
+    } else {
+        q3 = `The board objective is "${obj}". How does my presence in the starting XI help you deliver that target?`;
+    }
+    
+    // Q4: Squad chemistry / team hierarchy
+    if (isLeader) {
+        q4 = `As one of the senior figures in the dressing room, how will you ensure my influence and leadership are respected in squad decisions?`;
+    } else if (isProspect) {
+        q4 = `What guarantees of mentorship and individual training focus will I receive to help me reach my full potential?`;
+    } else {
+        q4 = `What can you promise about squad status, playing time, and my position in the team hierarchy?`;
+    }
+    
+    // Q5: The Financials
+    const q5 = `We are ready for numbers. What are your weekly wage, signing bonus, and ${bonusLabel} terms?`;
+    
+    return [q1, q2, q3, q4, q5];
+};
+
 export const getPlayerTalkQuestions = async (
     player: Player,
     team: Team,
     context: 'transfer' | 'renewal'
 ): Promise<string[]> => {
-    const objective = team.objectives?.[0] || 'push the club forward this season';
+    const fallback = generateLocalPlayerTalkQuestions(player, team, context);
+    const objectivesStr = team.objectives && team.objectives.length > 0
+        ? team.objectives.map(o => `"${o}"`).join(', ')
+        : 'none';
     const bonusType = getBonusTypeForPosition(player.position);
-    const fallback = [
-        context === 'transfer'
-            ? `You are pitching ${team.name} to ${player.name}. Why should they leave ${player.currentClub || 'their current club'} for your project right now?`
-            : `${player.name} is open to renewal talks. What role will you guarantee over the next season?`,
-        `How exactly will you use ${player.name} as a ${player.position} in your ${team.tactic.formation} setup?`,
-        `What can you promise about starts, competition, and long-term growth at ${team.name}?`,
-        `The board objective is "${objective}". How does signing this deal help you deliver that target?`,
-        `We are ready for numbers. What are your weekly wage, signing bonus, and ${bonusTypeLabel(bonusType)} terms?`,
-    ];
 
     const prompt = `
     You are the player's AGENT in football contract talks.
-    Context: ${context}. Club: ${team.name}. Player: ${player.name} (${player.position}, ${player.personality}).
+    
+    Context Details:
+    - Negotiation Context: ${context} (transfer or contract renewal)
+    - Club: ${team.name} (Prestige: ${team.prestige}/100, Objectives: ${objectivesStr})
+    - Player Name: ${player.name}
+    - Position: ${player.position}
+    - Age: ${player.age} years old
+    - Quality Rating: ${player.rating} OVR (85+ is world-class, 80-84 is excellent, 75-79 is solid squad player)
+    - Current Wage: $${player.wage.toLocaleString()}/week
+    - Personality: ${player.personality} (e.g. Leader, Ambitious, Mercenary, Young Prospect, Loyal, Volatile)
+    
     Generate exactly 5 negotiation questions addressed to the MANAGER.
+    
+    Guidelines based on player profile:
+    - If the player is a veteran (age >= 32) and highly rated (OVR >= 85), they want immediate success, silverware guarantees, and respect, with no time for a rebuilding phase.
+    - If they are a Young Prospect, they want clear developmental guarantees and playing time, not sitting on the bench.
+    - If they are Ambitious, they want assurances of Champions League or league trophy contention.
+    - If they are a Leader, they want respect, key roles in the squad, and long-term security.
+    - If they are a Mercenary, they focus heavily on the financial package.
+    - Adjust the tone based on the player's personality (e.g., Leaders are professional but demanding, Volatile players are direct and demanding, Loyal players are warmer but want appreciation).
 
     Hard rules:
     1. Questions must be manager-facing (use "you/your club"), never first-person player roleplay.
-    2. Keep first 4 questions focused on role, ambitions, starts, project fit.
+    2. Keep first 4 questions focused on role, ambitions, starts, project fit, or specific contextual worries.
     3. 5th question must ask for weekly wage + signing bonus + ${bonusTypeLabel(bonusType)}.
-    4. One sentence per question, no fluff.
+    4. One sentence per question, no fluff. Make them highly contextual and immersive.
 
     Return JSON: { "questions": ["q1", "q2", "q3", "q4", "q5"] }
     `;
@@ -740,7 +968,7 @@ export const getPlayerTalkQuestions = async (
             .filter(Boolean)
             .map((q: string) => (q.endsWith('?') ? q : `${q}?`));
 
-        if (cleaned.length === 5 && cleaned.every((q: string) => /you|your/i.test(q))) {
+        if (cleaned.length === 5) {
             return cleaned;
         }
         return fallback;
