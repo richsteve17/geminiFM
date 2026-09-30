@@ -1,6 +1,8 @@
 
 # ⚽ AI Football Manager
 
+[![Live](https://img.shields.io/badge/Live-GitHub%20Pages-2ea44f?logo=github&logoColor=white)](https://richsteve17.github.io/geminiFM/)
+
 A next-generation football management simulation powered by AI.
 
 > **Current Build:** v3.0 (The "Trophy Room & Manager Mobility" Update)
