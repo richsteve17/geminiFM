@@ -29,5 +29,6 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": ["client", "node_modules", "dist"]
 }

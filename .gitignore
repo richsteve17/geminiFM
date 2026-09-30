@@ -1,4 +1,20 @@
-# Logs
+# Dependencies
+node_modules
+**/node_modules
+.pnpm-store/
+
+# Build outputs
+dist
+dist-ssr
+build/
+*.dist
+
+# Environment variables
+.env
+.env.*
+*.local
+
+# Logs and runtime data
 logs
 *.log
 npm-debug.log*
@@ -6,21 +22,61 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+pids
+*.pid
+*.seed
+*.pid.lock
+*.bak
+coverage/
+*.lcov
+.nyc_output
 
-node_modules
-dist
-dist-ssr
-*.local
-.env
-.env.*
-
-# Editor directories and files
-.vscode/*
+# Editor and operating system files
+.vscode/
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
+*.swp
+*.swo
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Tool caches and temporary artifacts
+*.tsbuildinfo
+.npm
+.eslintcache
+.cache
+.parcel-cache
+.next
+.nuxt
+.out
+.storybook-out
+tmp/
+temp/
+*.tgz
+.yarn-integrity
+.node_repl_history
+jspm_packages/
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.webdev/
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Platform-generated files
+client/public/__manus__/version.json
