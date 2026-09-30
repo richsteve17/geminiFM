@@ -1,160 +1,113 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import * as THREE from 'three';
 import { FootballIcon } from './icons/FootballIcon';
 import type { MatchEvent } from '../types';
 
 interface PitchViewProps {
-    momentum: number; // -10 to +10
+    momentum: number;
     homeTeamName: string;
     awayTeamName: string;
     lastEvent: MatchEvent | null;
+    currentMinute?: number;
 }
 
-type Dot = { x: number; y: number };
+type Point = { x: number; z: number };
 
-const HOME_SHAPE: Dot[] = [
-    { x: 10, y: 50 }, // GK
-    { x: 23, y: 18 }, { x: 24, y: 37 }, { x: 24, y: 63 }, { x: 23, y: 82 },
-    { x: 40, y: 24 }, { x: 43, y: 50 }, { x: 40, y: 76 },
-    { x: 57, y: 33 }, { x: 57, y: 67 },
-    { x: 72, y: 50 },
+const HOME_SHAPE: Point[] = [
+    { x: -9.2, z: 0 },
+    { x: -6.9, z: -4.1 }, { x: -6.4, z: -1.4 }, { x: -6.4, z: 1.4 }, { x: -6.9, z: 4.1 },
+    { x: -2.9, z: -3.2 }, { x: -2.4, z: 0 }, { x: -2.9, z: 3.2 },
+    { x: 1.1, z: -2.1 }, { x: 1.1, z: 2.1 }, { x: 4.2, z: 0 },
 ];
 
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const shortName = (name: string) => name.split(/\s+/).map(part => part[0] || '').join('').slice(0, 3).toUpperCase();
+const worldPoint = (x: number, y: number): Point => ({ x: (x - 50) * 0.2, z: (y - 50) * 0.12 });
 
-const shortName = (name: string) =>
-    name
-        .split(/\s+/)
-        .map((part) => part[0] || '')
-        .join('')
-        .slice(0, 2)
-        .toUpperCase();
+function CameraRig() {
+    const { camera } = useThree();
+    useFrame(({ clock }) => {
+        camera.position.x = Math.sin(clock.getElapsedTime() * 0.08) * 1.2;
+        camera.lookAt(0, 0, 0);
+    });
+    return null;
+}
 
-const renderDot = (
-    key: string,
-    x: number,
-    y: number,
-    colorClass: string,
-    glowColor: string
-) => (
-    <div
-        key={key}
-        className={`absolute w-5 h-5 rounded-full border border-white/90 ${colorClass} flex items-center justify-center`}
-        style={{ 
-            left: `${x}%`, 
-            top: `${y}%`, 
-            transform: 'translate(-50%, -50%)',
-            boxShadow: `0 3px 5px rgba(0,0,0,0.6), inset 0 -2px 4px rgba(0,0,0,0.45), 0 0 8px ${glowColor}`
-        }}
-    >
-        {/* Glossy top-left highlight reflect */}
-        <div className="absolute top-[2px] left-[2px] w-[6px] h-[3px] bg-white/60 pointer-events-none" style={{ borderRadius: '50% 50% 40% 40%' }} />
-    </div>
-);
+function PlayerToken({ position, color, index, attacking }: { position: Point; color: string; index: number; attacking: boolean }) {
+    const ref = useRef<THREE.Group>(null);
+    useFrame(({ clock }) => {
+        if (!ref.current) return;
+        ref.current.position.y = 0.18 + Math.sin(clock.getElapsedTime() * 1.7 + index) * 0.018;
+        ref.current.rotation.y = attacking ? 0.1 : -0.1;
+    });
+    return (
+        <group ref={ref} position={[position.x, 0.18, position.z]}>
+            <mesh castShadow><cylinderGeometry args={[0.22, 0.27, 0.36, 12]} /><meshStandardMaterial color={color} metalness={0.2} roughness={0.45} /></mesh>
+            <mesh position={[0, 0.28, 0]}><sphereGeometry args={[0.12, 10, 10]} /><meshStandardMaterial color="#f4d6b3" roughness={0.9} /></mesh>
+        </group>
+    );
+}
 
-const PitchView: React.FC<PitchViewProps> = ({ momentum, homeTeamName, awayTeamName, lastEvent }) => {
-    const [phase, setPhase] = useState(0);
-    const [isGoalAnim, setIsGoalAnim] = useState(false);
-    const [animTeam, setAnimTeam] = useState<'home' | 'away' | null>(null);
+function Ball({ target }: { target: Point }) {
+    const ref = useRef<THREE.Mesh>(null);
+    useFrame(() => {
+        if (!ref.current) return;
+        ref.current.position.lerp(new THREE.Vector3(target.x, 0.22, target.z), 0.08);
+        ref.current.rotation.x += 0.05;
+        ref.current.rotation.z += 0.04;
+    });
+    return <mesh ref={ref} position={[target.x, 0.22, target.z]} castShadow><sphereGeometry args={[0.16, 16, 16]} /><meshStandardMaterial color="#f8fafc" roughness={0.38} metalness={0.08} /></mesh>;
+}
 
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setPhase((prev) => prev + 1);
-        }, 800);
-        return () => clearInterval(timer);
-    }, []);
-
-    useEffect(() => {
-        if (lastEvent?.type === 'goal') {
-            setIsGoalAnim(true);
-            setAnimTeam(lastEvent.teamName === homeTeamName ? 'home' : 'away');
-            const timer = setTimeout(() => {
-                setIsGoalAnim(false);
-                setAnimTeam(null);
-            }, 2800);
-            return () => clearTimeout(timer);
-        }
-    }, [lastEvent, homeTeamName]);
-
-    const homeDots = useMemo(() => {
-        return HOME_SHAPE.map((dot, idx) => {
-            const swayX = Math.sin((phase + idx) * 0.7) * 1.2;
-            const swayY = Math.cos((phase + idx) * 0.9) * 1.4;
-            const pressShift = (momentum / 10) * 2.8;
-            return {
-                x: clamp(dot.x + swayX + pressShift, 6, 94),
-                y: clamp(dot.y + swayY, 10, 90),
-            };
-        });
-    }, [phase, momentum]);
-
-    const awayDots = useMemo(() => {
-        return HOME_SHAPE.map((dot, idx) => {
-            const mirroredX = 100 - dot.x;
-            const swayX = Math.sin((phase + idx + 3) * 0.75) * 1.2;
-            const swayY = Math.cos((phase + idx + 4) * 0.9) * 1.4;
-            const pressShift = (-momentum / 10) * 2.8;
-            return {
-                x: clamp(mirroredX + swayX + pressShift, 6, 94),
-                y: clamp(dot.y + swayY, 10, 90),
-            };
-        });
-    }, [phase, momentum]);
-
-    const ball = useMemo(() => {
-        const driftX = Math.sin(phase * 0.6) * 3.2;
-        const driftY = Math.cos(phase * 0.8) * 6.2;
-        const momentumPush = momentum * 1.85;
-        return {
-            x: clamp(50 + driftX + momentumPush, 8, 92),
-            y: clamp(50 + driftY, 12, 88),
-        };
-    }, [phase, momentum]);
+function StadiumScene({ momentum, lastEvent }: { momentum: number; lastEvent: MatchEvent | null }) {
+    const target = lastEvent?.pitchX !== undefined && lastEvent?.pitchY !== undefined
+        ? worldPoint(lastEvent.pitchX, lastEvent.pitchY)
+        : { x: Math.max(-4, Math.min(4, momentum * 0.42)), z: 0 };
+    const shift = Math.max(-1.5, Math.min(1.5, momentum * 0.12));
+    const home = HOME_SHAPE.map(point => ({ x: Math.max(-9.5, Math.min(9.5, point.x + shift)), z: point.z }));
+    const away = HOME_SHAPE.map(point => ({ x: Math.max(-9.5, Math.min(9.5, -point.x + shift)), z: point.z }));
 
     return (
-        <div className="relative w-full aspect-[16/9] max-h-[300px] rounded-lg overflow-hidden border-2 border-emerald-900 shadow-inner bg-gradient-to-b from-emerald-700 via-emerald-800 to-emerald-900 select-none mx-auto">
-            <div className="absolute inset-0 opacity-35 pointer-events-none bg-[linear-gradient(0deg,rgba(255,255,255,0.06)_0,rgba(255,255,255,0.06)_10%,transparent_10%,transparent_20%,rgba(255,255,255,0.06)_20%,rgba(255,255,255,0.06)_30%,transparent_30%,transparent_40%,rgba(255,255,255,0.06)_40%,rgba(255,255,255,0.06)_50%,transparent_50%,transparent_60%,rgba(255,255,255,0.06)_60%,rgba(255,255,255,0.06)_70%,transparent_70%,transparent_80%,rgba(255,255,255,0.06)_80%,rgba(255,255,255,0.06)_90%,transparent_90%,transparent_100%)]" />
-            <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute top-0 bottom-0 left-1/2 w-[2px] bg-white/75" />
-                <div className="absolute top-1/2 left-1/2 w-24 h-24 border-2 border-white/70 rounded-full -translate-x-1/2 -translate-y-1/2" />
-                <div className="absolute top-[34%] bottom-[34%] left-0 w-[16%] border-r-2 border-y-2 border-white/70" />
-                <div className="absolute top-[34%] bottom-[34%] right-0 w-[16%] border-l-2 border-y-2 border-white/70" />
-            </div>
-
-            {isGoalAnim && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/65 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
-                    <div className="text-center">
-                        <FootballIcon className="w-16 h-16 text-white mx-auto mb-2 animate-bounce" />
-                        <h2 className="text-4xl font-black text-white uppercase tracking-tight">GOAL</h2>
-                        <p className="text-xl text-emerald-300 font-bold">{animTeam === 'home' ? homeTeamName : awayTeamName}</p>
-                    </div>
-                </div>
-            )}
-
-            <div className="absolute inset-0">
-                {homeDots.map((dot, idx) => renderDot(`h-${idx}`, dot.x, dot.y, 'bg-gradient-to-br from-rose-400 via-rose-500 to-rose-700', 'rgba(244,63,94,0.4)'))}
-                {awayDots.map((dot, idx) => renderDot(`a-${idx}`, dot.x, dot.y, 'bg-gradient-to-br from-sky-400 via-sky-500 to-sky-700', 'rgba(14,165,233,0.4)'))}
-                <div
-                    className="absolute w-3.5 h-3.5 rounded-full bg-gradient-to-br from-white via-slate-100 to-slate-200 border border-slate-400 transition-all duration-700 ease-out"
-                    style={{ 
-                        left: `${ball.x}%`, 
-                        top: `${ball.y}%`, 
-                        transform: 'translate(-50%, -50%)',
-                        boxShadow: '0 3px 5px rgba(0,0,0,0.6), inset 0 -1.5px 2.5px rgba(0,0,0,0.35), 0 0 6px rgba(255,255,255,0.7)'
-                    }}
-                >
-                    {/* Ball gloss point */}
-                    <div className="absolute top-[1.5px] left-[1.5px] w-[3px] h-[2px] bg-white/80" style={{ borderRadius: '50% 50% 40% 40%' }} />
-                </div>
-            </div>
-
-            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] font-bold text-white/85 uppercase tracking-wider">
-                <span>{shortName(awayTeamName)}</span>
-                <span>Pressure Tilt {momentum > 0 ? `+${momentum}` : momentum}</span>
-                <span>{shortName(homeTeamName)}</span>
-            </div>
-        </div>
+        <>
+            <color attach="background" args={["#030712"]} />
+            <fog attach="fog" args={["#030712", 16, 34]} />
+            <ambientLight intensity={0.7} />
+            <directionalLight position={[5, 13, 5]} intensity={2.6} castShadow />
+            <pointLight position={[-8, 7, -5]} color="#4fd1c5" intensity={18} distance={18} />
+            <pointLight position={[8, 7, 5]} color="#d4a72c" intensity={12} distance={17} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow><planeGeometry args={[22, 14]} /><meshStandardMaterial color="#0d6b48" roughness={0.78} /></mesh>
+            <mesh position={[0, 0.016, 0]}><boxGeometry args={[0.055, 0.025, 14]} /><meshBasicMaterial color="#d7ffe8" /></mesh>
+            <mesh position={[-7.95, 0.016, 0]}><boxGeometry args={[4.1, 0.025, 7.1]} /><meshBasicMaterial color="#d7ffe8" wireframe /></mesh>
+            <mesh position={[7.95, 0.016, 0]}><boxGeometry args={[4.1, 0.025, 7.1]} /><meshBasicMaterial color="#d7ffe8" wireframe /></mesh>
+            <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[1.2, 1.27, 48]} /><meshBasicMaterial color="#d7ffe8" /></mesh>
+            <mesh position={[-10.95, 0.55, 0]}><boxGeometry args={[0.08, 1.1, 2.5]} /><meshStandardMaterial color="#e5e7eb" emissive="#64748b" /></mesh>
+            <mesh position={[10.95, 0.55, 0]}><boxGeometry args={[0.08, 1.1, 2.5]} /><meshStandardMaterial color="#e5e7eb" emissive="#64748b" /></mesh>
+            {home.map((point, index) => <PlayerToken key={`home-${index}`} position={point} color="#fb3f62" index={index} attacking={momentum > 0} />)}
+            {away.map((point, index) => <PlayerToken key={`away-${index}`} position={point} color="#2cb9f2" index={index + 20} attacking={momentum < 0} />)}
+            <Ball target={target} />
+            <CameraRig />
+        </>
     );
-};
+}
 
-export default PitchView;
+export default function PitchView({ momentum, homeTeamName, awayTeamName, lastEvent, currentMinute = 0 }: PitchViewProps) {
+    const [goalTeam, setGoalTeam] = useState<string | null>(null);
+    useEffect(() => {
+        if (lastEvent?.type !== 'goal') return;
+        setGoalTeam(lastEvent.teamName || homeTeamName);
+        const timer = window.setTimeout(() => setGoalTeam(null), 2600);
+        return () => window.clearTimeout(timer);
+    }, [lastEvent, homeTeamName]);
 
+    const scoreCue = useMemo(() => lastEvent?.scoreAfter || '0-0', [lastEvent]);
+    return (
+        <section className="relative w-full aspect-[16/9] max-h-[350px] rounded-lg overflow-hidden border border-emerald-950 shadow-2xl bg-slate-950 select-none mx-auto" aria-label="3D match broadcast pitch">
+            <Canvas shadows camera={{ position: [0, 16, 16], fov: 43 }} dpr={[1, 1.75]}><StadiumScene momentum={momentum} lastEvent={lastEvent} /></Canvas>
+            <div className="absolute inset-x-0 top-0 p-2 flex items-start justify-between bg-gradient-to-b from-black/75 to-transparent pointer-events-none text-[10px] font-black tracking-widest uppercase text-white">
+                <span>{shortName(homeTeamName)}</span><span className="rounded bg-black/70 px-2 py-1 text-emerald-300">{currentMinute}' · {scoreCue}</span><span>{shortName(awayTeamName)}</span>
+            </div>
+            <div className="absolute bottom-2 left-2 rounded bg-black/65 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white/85 pointer-events-none">Pressure Tilt {momentum > 0 ? `+${momentum}` : momentum}</div>
+            {goalTeam && <div className="absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-[1px] animate-in fade-in duration-200 pointer-events-none"><div className="text-center"><FootballIcon className="w-14 h-14 text-white mx-auto mb-1 animate-bounce" /><h2 className="text-4xl font-black text-white uppercase tracking-tight">Goal</h2><p className="text-lg text-emerald-300 font-bold">{goalTeam}</p></div></div>}
+        </section>
+    );
+}

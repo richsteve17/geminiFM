@@ -369,7 +369,7 @@ export default function MatchView({
 
                 {gameState !== GameState.PRE_MATCH && (
                     <div className={`${mobilePanel === 'pitch' ? 'block' : 'hidden'} sm:block flex-shrink-0 mb-2 sm:mb-4`}>
-                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events?.[matchState.events.length-1] || null} />
+                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events?.[matchState.events.length-1] || null} currentMinute={matchState?.currentMinute || 0} />
                     </div>
                 )}
                 

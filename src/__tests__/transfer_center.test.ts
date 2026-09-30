@@ -188,11 +188,15 @@ describe('Transfer Center & Delegation Logic Tests', () => {
                     createDummyPlayer('Sold Player', 'ST', 80, 25),
                     createDummyPlayer('Remaining Player', 'GK', 82, 28)
                 ],
+                tactic: { formation: '4-4-2', mentality: 'Balanced', instructions: [] },
                 tactics: { formation: '4-4-2', mentality: 'Balanced', instructions: [] },
                 balance: 50000000, // €50M
                 weeklyWageBill: 1000000,
                 weeklyBroadcastRevenue: 500000,
                 matchDayRevenue: 400000,
+                chairmanPersonality: 'Traditionalist',
+                objectives: [],
+                activePromises: [],
                 history: []
             };
 

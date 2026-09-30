@@ -1,14 +1,15 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
-import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ContractTerms } from './types';
+import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ContractTerms, TransferBid, CareerHistoryEntry, LeagueTier, PlayerEffect } from './types';
 import { AppScreen, GameState } from './types';
+import { hashSeed, simulateDeterministicShootout } from './engine/matchEngine';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
 import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, evaluatePressConference, PressConferenceReport, getInternationalBreakSummary, getTeammateTournamentRivalry } from './services/geminiService';
-import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS, calculatePlayerDevelopment } from './utils';
+import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS, calculatePlayerDevelopment, ensureTeamAndPlayerFields } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
 import JobCentreScreen from './components/JobCentreScreen';
@@ -45,6 +46,8 @@ const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
 const SIMULATION_CHUNK_MINUTES = 10; 
 const CLEAN_SHEET_POSITIONS = new Set(['GK', 'LB', 'CB', 'RB', 'LWB', 'RWB']);
 
+const deterministicUnit = (...parts: Array<string | number>) => hashSeed(parts.join('|')) / 0xFFFFFFFF;
+
 const convertNationalTeam = (nt: NationalTeam): Team => ({
     name: nt.name,
     league: 'International',
@@ -54,8 +57,12 @@ const convertNationalTeam = (nt: NationalTeam): Team => ({
     chairmanPersonality: 'Traditionalist',
     group: nt.group,
     balance: 0,
+    weeklyWageBill: 0,
+    matchDayRevenue: 0,
+    transferBudget: 0,
     objectives: nt.objectives || [],
-    activePromises: []
+    activePromises: [],
+    weeklyBroadcastRevenue: 0,
 });
 
 export default function App() {
@@ -73,7 +80,7 @@ export default function App() {
     const [currentWeek, setCurrentWeek] = useState(1);
     const [weeksInSeason, setWeeksInSeason] = useState(38); 
     const [teams, setTeams] = useState<Record<string, Team>>(() => {
-        const hydrated = { ...allTeams };
+        const hydrated = ensureTeamAndPlayerFields(structuredClone(allTeams));
         Object.keys(hydrated).forEach(tName => {
             hydrated[tName].players = hydrated[tName].players.map(p => {
                 const baseStamina = p.stamina ?? (p.age < 22 ? 80 : p.age > 30 ? 65 : 75) + (p.personality === 'Professional' ? 5 : 0);
@@ -126,7 +133,7 @@ export default function App() {
     const [careerHistory, setCareerHistory] = useState<CareerHistoryEntry[]>([]);
     
     const [matchSpeed, setMatchSpeed] = useState<'slow' | 'normal' | 'fast' | 'instant'>('normal');
-    const [gameplayTab, setGameplayTab] = useState<'match' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors'>('match');
+    const [gameplayTab, setGameplayTab] = useState<'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors'>('match');
 
     // --- THEMING STATE ---
     const [activeTheme, setActiveTheme] = useState<{ primary: string, secondary: string, text: string } | null>(null);
@@ -194,12 +201,14 @@ export default function App() {
                         }
                         if (currentFixture.isKnockout && currentPlaybackMinute >= 120) {
                             if (matchState.homeScore === matchState.awayScore) {
-                                const homePenalties = Math.floor(Math.random() * 5) + 3;
-                                const awayPenalties = Math.random() < 0.5 ? homePenalties + 1 : homePenalties - 1;
-                                const penWinner = homePenalties > awayPenalties ? 'home' : 'away';
+                                const { homePenalties, awayPenalties, penaltyWinner: penWinner } = simulateDeterministicShootout(
+                                    teams[currentFixture.homeTeam],
+                                    teams[currentFixture.awayTeam],
+                                    `${currentFixture.id}|${matchState.simulationSeed ?? 0}`
+                                );
                                 
                                 const penaltyEvent: MatchEvent = {
-                                    id: Date.now(),
+                                    id: hashSeed(`${matchState.simulationSeed ?? 0}|120|shootout`),
                                     minute: 120,
                                     type: 'commentary',
                                     description: `The match is decided by a penalty shootout! Shootout ends: ${currentFixture.homeTeam} ${homePenalties}-${awayPenalties} ${currentFixture.awayTeam}.`
@@ -289,6 +298,8 @@ export default function App() {
                                     : 'The play develops without a clear chance.',
                                 scoreAfter: typeof event?.scoreAfter === 'string' ? event.scoreAfter : undefined,
                                 cardType: event?.cardType === 'yellow' || event?.cardType === 'red' ? event.cardType : undefined,
+                                pitchX: Number.isFinite(Number(event?.pitchX)) ? Math.max(0, Math.min(100, Number(event.pitchX))) : undefined,
+                                pitchY: Number.isFinite(Number(event?.pitchY)) ? Math.max(0, Math.min(100, Number(event.pitchY))) : undefined,
                             };
                         });
 
@@ -385,7 +396,8 @@ export default function App() {
             const stateToSave = {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
-                managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory
+                managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory,
+                matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute
             };
             localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
             logger.success("Game Saved Successfully!");
@@ -398,11 +410,12 @@ export default function App() {
             const stateToSave = {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
-                managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory
+                managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory,
+                matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute
             };
             localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
         }
-    }, [currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory]);
+    }, [currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory, matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute]);
 
     const handleQuit = () => {
         setAppScreen(AppScreen.START_SCREEN);
@@ -410,8 +423,8 @@ export default function App() {
         setMatchState(null);
         setUserTeamName(null);
         setCareerHistory([]);
-        setTeams(allTeams); 
-        setTransferMarket(TRANSFER_TARGETS); 
+        setTeams(ensureTeamAndPlayerFields(structuredClone(allTeams)));
+        setTransferMarket(TRANSFER_TARGETS);
         setIncomingBids([]);
         setCurrentYear(1);
         setInternationalTournament(null);
@@ -458,6 +471,15 @@ export default function App() {
                 setNews(parsed.news);
                 setWeeklyResults(parsed.weeklyResults);
                 setGameState(parsed.gameState);
+                const restoredMatchState = parsed.matchState || null;
+                setMatchState(restoredMatchState);
+                setPendingEvents(Array.isArray(parsed.pendingEvents) ? parsed.pendingEvents : []);
+                setCurrentPlaybackMinute(Number.isFinite(parsed.currentPlaybackMinute)
+                    ? parsed.currentPlaybackMinute
+                    : restoredMatchState?.currentMinute || 0);
+                setSimulationTargetMinute(Number.isFinite(parsed.simulationTargetMinute)
+                    ? parsed.simulationTargetMinute
+                    : restoredMatchState?.currentMinute || 0);
                 setManagerReputation(parsed.managerReputation || 50);
                 if (parsed.transferMarket) setTransferMarket(parsed.transferMarket);
                 if (parsed.incomingBids) setIncomingBids(parsed.incomingBids);
@@ -888,7 +910,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         const simulated: Fixture[] = [];
         const winners: string[] = [];
         koFixtures.forEach(f => {
-            const res = simulateKnockoutQuickMatch(teamsRecord[f.homeTeam], teamsRecord[f.awayTeam]);
+            const res = simulateKnockoutQuickMatch(teamsRecord[f.homeTeam], teamsRecord[f.awayTeam], f.id);
             simulated.push({
                 ...f,
                 played: true,
@@ -952,7 +974,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         };
 
         const simulatedFixtures = intFixtures.map(f => {
-            const res = simulateQuickMatch(intTeams[f.homeTeam], intTeams[f.awayTeam]);
+            const res = simulateQuickMatch(intTeams[f.homeTeam], intTeams[f.awayTeam], f.id);
             updateIntTeam(intTable, f.homeTeam, res.homeGoals, res.awayGoals);
             updateIntTeam(intTable, f.awayTeam, res.awayGoals, res.homeGoals);
             return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` };
@@ -1381,11 +1403,11 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         const nextFixtures = fixtures.map(f => {
             if (f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName) {
                 if (f.isKnockout) {
-                    const res = simulateKnockoutQuickMatch(teams[f.homeTeam], teams[f.awayTeam]);
+                    const res = simulateKnockoutQuickMatch(teams[f.homeTeam], teams[f.awayTeam], f.id);
                     results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner });
                     return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner };
                 } else {
-                    const res = simulateQuickMatch(teams[f.homeTeam], teams[f.awayTeam]);
+                    const res = simulateQuickMatch(teams[f.homeTeam], teams[f.awayTeam], f.id);
                     results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
                     updateTeam(updatedTable, f.homeTeam, res.homeGoals, res.awayGoals);
                     updateTeam(updatedTable, f.awayTeam, res.awayGoals, res.homeGoals);
@@ -1747,7 +1769,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                 },
                 ...prevNews
             ].slice(0, 1000));
-            logger.warning(`Transfer request submitted by ${pName} at ${userTeamName}.`);
+            logger.warn(`Transfer request submitted by ${pName} at ${userTeamName}.`);
         });
 
         // --- Increment pending weeks on current bids and filter expired ones ---
@@ -1870,7 +1892,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                     if (f.week === currentWeek && f.league !== 'International') {
                         const homeTeam = newTeams[f.homeTeam];
                         if (homeTeam) {
-                            const matchDayRev = homeTeam.matchDayRevenue || Math.round(homeTeam.prestige * 30000 + (Math.random() * 50000 - 25000));
+                            const matchDayRev = homeTeam.matchDayRevenue || Math.round(homeTeam.prestige * 30000 + (deterministicUnit(f.id, 'matchday-revenue') * 50000 - 25000));
                             homeTeam.matchDayRevenue = matchDayRev;
                             homeTeam.balance += matchDayRev;
                         }
@@ -1897,7 +1919,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                             if (aG === 0 && ['GK', 'CB', 'LB', 'RB'].includes(p.position)) {
                                 stats.cleanSheets++;
                             }
-                            let rating = 6.0 + Math.random() * 2.0;
+                            let rating = 6.0 + deterministicUnit(f.id, p.name, 'home-rating') * 2.0;
                             if (aG === 0) rating += 0.8;
                             if (hG > aG) rating += 0.5;
                             else if (hG < aG) rating -= 0.5;
@@ -1915,7 +1937,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                             if (hG === 0 && ['GK', 'CB', 'LB', 'RB'].includes(p.position)) {
                                 stats.cleanSheets++;
                             }
-                            let rating = 6.0 + Math.random() * 2.0;
+                            let rating = 6.0 + deterministicUnit(f.id, p.name, 'away-rating') * 2.0;
                             if (hG === 0) rating += 0.8;
                             if (aG > hG) rating += 0.5;
                             else if (aG < hG) rating -= 0.5;
@@ -1977,7 +1999,9 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                             if (hG > 0) {
                                 const scorersPool = homeStarters.filter(p => ['ST', 'CF', 'LW', 'RW', 'AM', 'LM', 'RM', 'CM'].includes(p.position));
                                 for (let i = 0; i < hG; i++) {
-                                    const scorer = scorersPool.length ? scorersPool[Math.floor(Math.random() * scorersPool.length)] : homeStarters[Math.floor(Math.random() * homeStarters.length)];
+                                    const pool = scorersPool.length ? scorersPool : homeStarters;
+                                    const scorer = pool[Math.floor(deterministicUnit(f.id, 'home-scorer', i) * pool.length)];
+                                    if (!scorer) continue;
                                     const stats = scorer.stats || { appearances: 0, goals: 0, assists: 0, cleanSheets: 0, yellowCards: 0, redCards: 0, averageRating: 0, ratingSum: 0 };
                                     stats.goals++;
                                     stats.ratingSum += 1.5;
@@ -1988,7 +2012,9 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                             if (aG > 0) {
                                 const scorersPool = awayStarters.filter(p => ['ST', 'CF', 'LW', 'RW', 'AM', 'LM', 'RM', 'CM'].includes(p.position));
                                 for (let i = 0; i < aG; i++) {
-                                    const scorer = scorersPool.length ? scorersPool[Math.floor(Math.random() * scorersPool.length)] : awayStarters[Math.floor(Math.random() * awayStarters.length)];
+                                    const pool = scorersPool.length ? scorersPool : awayStarters;
+                                    const scorer = pool[Math.floor(deterministicUnit(f.id, 'away-scorer', i) * pool.length)];
+                                    if (!scorer) continue;
                                     const stats = scorer.stats || { appearances: 0, goals: 0, assists: 0, cleanSheets: 0, yellowCards: 0, redCards: 0, averageRating: 0, ratingSum: 0 };
                                     stats.goals++;
                                     stats.ratingSum += 1.5;
@@ -2011,7 +2037,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                     let updatedPlayer = p;
                     
                     if (isClub) {
-                        const performanceFactor = p.isStarter ? (Math.random() * 1.0 - 0.5) : 0;
+                        const performanceFactor = p.isStarter ? (deterministicUnit(currentYear, nextW, teamName, p.name, 'development') - 0.5) : 0;
                         // Partnership synergy growth bonus if they share a TeammateBond with another starter on the field
                         let bondBoost = 0;
                         const hasBondWithStarter = (p.effects || []).some(e => e.type === 'TeammateBond' && team.players.some(op => op.name === e.with && op.isStarter));
@@ -2026,7 +2052,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                     const activeEffects = (updatedPlayer.effects || []).filter(e => e.until > nextW);
                     const expiredRifts = (updatedPlayer.effects || []).filter(e => e.until <= nextW && e.type === 'InternationalRift');
                     expiredRifts.forEach(r => {
-                        logger.info(`Tension has cooled down between ${updatedPlayer.name} and ${r.with}.`);
+                        if (r.type === 'InternationalRift') logger.info(`Tension has cooled down between ${updatedPlayer.name} and ${r.with}.`);
                     });
 
                     return {
@@ -2113,7 +2139,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         }
 
         setError(null);
-        setMatchState({ currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off." });
+        setMatchState({ currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off.", simulationSeed: hashSeed(`${currentFixture.id}|${currentWeek}|${currentFixture.homeTeam}|${currentFixture.awayTeam}`), sessionId: `${currentFixture.id}-${Date.now()}` });
         setGameState(GameState.PLAYING); 
         setCurrentPlaybackMinute(0);
         setSimulationTargetMinute(0);

@@ -1,28 +1,19 @@
-import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import path from 'node:path';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
-    return {
-      // Required so assets load under https://richsteve17.github.io/geminiFM/
-      base: mode === 'production' ? '/geminiFM/' : '/',
-      server: {
-        port: 3000,
+export default defineConfig({
+    base: '/',
+    server: {
+        port: Number(process.env.PORT || 3000),
         host: '0.0.0.0',
-      },
-      plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY),
-        'process.env.VITE_GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY),
-        'process.env.FREE_MODE': JSON.stringify(env.FREE_MODE || env.VITE_FREE_MODE || ''),
-        'process.env.VITE_FREE_MODE': JSON.stringify(env.VITE_FREE_MODE || env.FREE_MODE || '')
-      },
-      resolve: {
+        strictPort: true,
+    },
+    plugins: [react()],
+    resolve: {
         alias: {
-          '@': path.resolve(__dirname, '.'),
-        }
-      }
-    };
+            '@': path.resolve(import.meta.dirname, '.'),
+            '@shared': path.resolve(import.meta.dirname, 'shared'),
+        },
+    },
 });

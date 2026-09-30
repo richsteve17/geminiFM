@@ -1,6 +1,7 @@
 
 import type { NationalTeam, Team, Player, PlayerPosition, PlayerPersonality, Formation, PlayerEffect, LeagueTableEntry, Fixture, TournamentStage } from './types';
 import { generateName, simulateQuickMatch } from './utils';
+import { simulateDeterministicShootout } from './engine/matchEngine';
 
 // Helper for minor nations (background simulation only)
 const getGenericPlayer = (nationalityCode: string, flag: string, rating: number, position: PlayerPosition, isStarter: boolean = true): Player => ({
@@ -308,7 +309,7 @@ export const generateEurosStructure = (): Record<string, Team> => {
             if (!config) continue;
 
             let players: Player[] = [];
-            let tactic = { formation: '4-3-3' as Formation, mentality: 'Balanced' as const };
+            let tactic: { formation: Formation; mentality: import('./types').Mentality } = { formation: '4-3-3', mentality: 'Balanced' };
 
             if (config.isBase && config.template) {
                 players = JSON.parse(JSON.stringify(config.template.players));
@@ -378,7 +379,7 @@ export const generateExpandedWorldCupStructure = (): Record<string, Team> => {
             if (!config) continue;
 
             let players: Player[] = [];
-            let tactic = { formation: '4-3-3' as Formation, mentality: 'Balanced' as const };
+            let tactic: { formation: Formation; mentality: import('./types').Mentality } = { formation: '4-3-3', mentality: 'Balanced' };
 
             if (config.isBase && config.template) {
                 players = JSON.parse(JSON.stringify(config.template.players));
@@ -485,19 +486,16 @@ export const sortQualifiedTeams = (
     return filtered.map(t => t.teamName);
 };
 
-export const simulateKnockoutQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals: number, awayGoals: number, penaltyWinner?: 'home' | 'away', penaltyScore?: string } => {
-    let { homeGoals, awayGoals } = simulateQuickMatch(homeTeam, awayTeam);
+export const simulateKnockoutQuickMatch = (homeTeam: Team, awayTeam: Team, fixtureKey = ''): { homeGoals: number, awayGoals: number, penaltyWinner?: 'home' | 'away', penaltyScore?: string } => {
+    const { homeGoals, awayGoals } = simulateQuickMatch(homeTeam, awayTeam, fixtureKey);
     if (homeGoals === awayGoals) {
-        // Resolve with shootout
-        const homePenalties = Math.floor(Math.random() * 5) + 3;
-        const awayPenalties = Math.random() < 0.5 ? homePenalties + 1 : homePenalties - 1;
+        const { homePenalties, awayPenalties, penaltyWinner } = simulateDeterministicShootout(homeTeam, awayTeam, fixtureKey);
         return {
             homeGoals,
             awayGoals,
-            penaltyWinner: homePenalties > awayPenalties ? 'home' : 'away',
+            penaltyWinner,
             penaltyScore: `${homePenalties}-${awayPenalties}`
         };
     }
     return { homeGoals, awayGoals };
 };
-

@@ -19,9 +19,8 @@ AI integrations live under `src/services/` (Gemini + media generation).
 - Tailwind utility classes are applied directly in JSX; keep class strings readable.
 
 ## Testing Guidelines
-Automated tests are not configured in this repo yet. If you add tests, keep them close to
-the feature (e.g., `src/components/__tests__/`) and document new test commands in
-`package.json`.
+Run `npm test -- --run`, `npx tsc --noEmit`, and `npm run build` before handoff. Keep
+engine tests close to their feature under `src/__tests__/`.
 
 ## Commit & Pull Request Guidelines
 Commit history follows Conventional Commits (e.g., `feat(match): ...`, `fix(TeamDetails): ...`).
@@ -31,8 +30,9 @@ When opening a PR, include:
 - Any relevant issue or feature link.
 
 ## Configuration & Secrets
-Create a `.env` file with `VITE_GEMINI_API_KEY=...` for AI features. Keep secrets out of
-git and prefer local environment files.
+Create a server-only `.env` file with `GEMINI_API_KEY=...` for AI features. Never expose a
+provider key through `VITE_*`, `process.env` browser replacement, client bundles, or replay URLs.
+All AI requests must transit the validated `/api/ai` gateway.
 
 ## Simulation & Career Progression Rules
 - **Infinite Cycle Math**: Never use hardcoded year values for tournament schedules or teammate rivalry checks. Use modulo arithmetic (e.g. `year % 4 === 2` for Euros, `year % 4 === 1` for World Cups) to support infinite seasons.

@@ -1,5 +1,6 @@
 
 import type { Fixture, Team, Player, Formation, PlayerPosition } from './types';
+import { simulateDeterministicQuickMatch } from './engine/matchEngine';
 
 // --- TACTICAL ENGINE CONSTANTS ---
 
@@ -294,27 +295,16 @@ export const generateSwissFixtures = (teams: Team[]): Fixture[] => {
 };
 
 // "The Smoking Gun": Deterministic Math Engine
-export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team): { homeGoals: number, awayGoals: number } => {
-    const homeRating = homeTeam.players.length ? homeTeam.players.reduce((sum, p) => sum + p.rating, 0) / homeTeam.players.length : 70;
-    const awayRating = awayTeam.players.length ? awayTeam.players.reduce((sum, p) => sum + p.rating, 0) / awayTeam.players.length : 70;
-    const homeAdvantage = 3;
-    const ratingDiff = (homeRating + homeAdvantage) - awayRating;
-    let homeGoals = 0;
-    let awayGoals = 0;
-    const baseChance = 0.25; 
-    for(let i=0; i<5; i++) {
-        // This is the specific logic requested
-        if (Math.random() < baseChance + (ratingDiff * 0.02)) homeGoals++;
-        if (Math.random() < baseChance - (ratingDiff * 0.02)) awayGoals++;
-    }
-    return { homeGoals, awayGoals };
+export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team, fixtureKey = ''): { homeGoals: number, awayGoals: number } => {
+    return simulateDeterministicQuickMatch(homeTeam, awayTeam, fixtureKey);
 };
 
 export const calculatePlayerDevelopment = (player: Player, matchPerformance: number = 0): Player => {
     let { rating, age, potential, growthRate, form } = player;
 
     if (potential === undefined) {
-        potential = Math.min(99, rating + Math.floor(Math.random() * 10) + 5);
+        const deterministicCeiling = 5 + ((player.name.length * 17 + age * 13 + rating) % 10);
+        potential = Math.min(99, rating + deterministicCeiling);
     }
     if (growthRate === undefined) {
         growthRate = player.personality === 'Young Prospect' ? 0.6 : 0.4;
@@ -394,7 +384,8 @@ export const ensureTeamAndPlayerFields = (teams: Record<string, Team>): Record<s
         
         // players potential, growthRate, form
         const players = team.players.map(p => {
-            const potential = p.potential !== undefined ? p.potential : Math.min(99, p.rating + Math.floor(Math.random() * 10) + 5);
+            const deterministicCeiling = 5 + ((p.name.length * 17 + p.age * 13 + p.rating) % 10);
+            const potential = p.potential !== undefined ? p.potential : Math.min(99, p.rating + deterministicCeiling);
             const growthRate = p.growthRate !== undefined ? p.growthRate : (p.personality === 'Young Prospect' ? 0.6 : 0.4);
             const form = p.form !== undefined ? p.form : 50;
             return {
@@ -410,6 +401,7 @@ export const ensureTeamAndPlayerFields = (teams: Record<string, Team>): Record<s
             weeklyWageBill,
             weeklyBroadcastRevenue,
             matchDayRevenue,
+            transferBudget: team.transferBudget ?? Math.max(0, Math.round(team.balance * 0.25)),
             players
         };
     }

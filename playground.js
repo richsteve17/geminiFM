@@ -2,15 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 
-// 1. Read API Key from .env file automatically so you don't have to configure anything
-let apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+// Server-side development utility only. Never put a provider key in a VITE_* variable.
+let apiKey = process.env.GEMINI_API_KEY;
 
 if (!apiKey) {
     try {
         const envPath = path.resolve('.env');
         if (fs.existsSync(envPath)) {
             const envContent = fs.readFileSync(envPath, 'utf8');
-            const match = envContent.match(/VITE_GEMINI_API_KEY\s*=\s*(.+)/) || envContent.match(/GEMINI_API_KEY\s*=\s*(.+)/);
+            const match = envContent.match(/GEMINI_API_KEY\s*=\s*(.+)/);
             if (match && match[1]) {
                 apiKey = match[1].trim().replace(/['"]/g, '');
             }
@@ -21,8 +21,8 @@ if (!apiKey) {
 }
 
 if (!apiKey) {
-    console.error("❌ ERROR: Could not find VITE_GEMINI_API_KEY in your .env file.");
-    console.error("Please ensure you have a .env file containing: VITE_GEMINI_API_KEY=your_key");
+    console.error("❌ ERROR: Could not find GEMINI_API_KEY in your server-side .env file.");
+    console.error("Please ensure .env contains: GEMINI_API_KEY=your_key");
     process.exit(1);
 }
 

@@ -15,12 +15,16 @@
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@shared/*": [
+        "./shared/*"
       ]
     },
     "allowImportingTsExtensions": true,

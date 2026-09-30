@@ -1,5 +1,4 @@
 
-import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
 import type {
     Team,
     MatchState,
@@ -12,31 +11,45 @@ import type {
     ContractTerms,
     ContractBonusType,
     PlayerPosition,
-    RiftSeverity,
-    RiftScope,
 } from '../types';
+import { simulateDeterministicSegment } from '../engine/matchEngine';
 
-let _ai: GoogleGenAI | null = null;
-const api_key_raw = process.env.API_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-
-const getAIInstance = (): GoogleGenAI => {
-    if (!_ai) {
-        if (!api_key_raw || api_key_raw === "undefined" || api_key_raw === "null") {
-            console.warn("GEMINI_API_KEY / API_KEY is not set. Using local simulation fallback.");
-            throw new Error("API_KEY_NOT_SET");
-        }
-        _ai = new GoogleGenAI({ apiKey: api_key_raw });
-    }
-    return _ai;
+type GenerateContentResponse = {
+    text?: string;
+    candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string } }> } }>;
 };
+type VideoGatewayOperation = {
+    name: string;
+    done: boolean;
+    response?: { generatedVideos?: Array<{ video?: { uri?: string } }> };
+};
+type RiftSeverity = 'none' | 'minor' | 'moderate' | 'serious';
+type RiftScope = 'direct' | 'nation-wide';
+enum Modality { AUDIO = 'AUDIO' }
 
-// Define a proxy object for ai to lazily load and avoid crashing on startup
+async function gatewayRequest<T>(path: string, body: unknown): Promise<T> {
+    const response = await fetch(`/api/ai/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || 'AI_GATEWAY_FAILED');
+    return response.json() as Promise<T>;
+}
+
+// The browser never receives a provider key. Legacy feature calls are routed through the
+// server gateway while deterministic game truth moves into src/engine.
 export const ai = {
     get models() {
-        return getAIInstance().models;
+        return {
+            generateContent: (request: unknown) => gatewayRequest<GenerateContentResponse>('content', request),
+            generateVideos: (request: unknown) => gatewayRequest<VideoGatewayOperation>('video', request),
+        };
     },
     get operations() {
-        return getAIInstance().operations;
+        return {
+            getVideosOperation: (request: unknown) => gatewayRequest<VideoGatewayOperation>('video-operation', request),
+        };
     }
 };
 
@@ -285,6 +298,10 @@ export const simulateMatchSegment = async (
         tacticalContext?: string 
     }
 ) => {
+    // Match scores, event ledgers, and tactical truth are pure deterministic simulation.
+    // Gemini remains a presentation layer for advice, press, scouting, and narrative.
+    return simulateDeterministicSegment(homeTeam, awayTeam, currentMatchState, targetMinute, context);
+
     // Determine context for short bursts
     const userInstruction = context.shout ? `User Shout: "${context.shout}" (Factor this into momentum).` : "";
     const tacticalInfo = context.tacticalContext ? `TACTICAL REALITY CHECK:\n${context.tacticalContext}` : "";
@@ -501,9 +518,8 @@ export const generateReplayVideo = async (description: string, eventId: number, 
 
         const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
         if (videoUri) {
-            const fullUrl = `${videoUri}&key=${api_key_raw}`;
-            mediaCache.set(cacheKey, fullUrl); 
-            return fullUrl;
+            mediaCache.set(cacheKey, videoUri);
+            return videoUri;
         }
         return null;
     } catch (error) {
@@ -1349,7 +1365,6 @@ Return JSON:
 If result is 'draw' or involvement is 'minimal' and competition is low-stakes, riftSeverity should be "none" or "minor".
 `;
     try {
-        const ai = getAIInstance();
         const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
@@ -1392,7 +1407,6 @@ Return JSON:
 }
 `;
     try {
-        const ai = getAIInstance();
         const response = await ai.models.generateContent({ model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" } });
         return JSON.parse(cleanJson(response.text));
     } catch (e) {
@@ -1437,7 +1451,6 @@ Return JSON:
 }
 `;
     try {
-        const ai = getAIInstance();
         const response = await ai.models.generateContent({ 
             model: MODEL_TEXT, 
             contents: prompt, 

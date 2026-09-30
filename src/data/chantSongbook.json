@@ -1,0 +1,2121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Football_Manager_Chant_Songbook_Master",
+  "version": "2.0.0",
+  "description": "Comprehensive master songbook dataset for procedural football chant generation and speech-to-singing audio synthesis engines. Contains prosodic meters, variable slots, acoustic synthesis physics, situational matchday triggers, and musical arrangements.",
+  "audio_synthesis_physics": {
+    "gang_vocal_stacking": {
+      "min_clones": 8,
+      "max_clones": 24,
+      "micro_pitch_detune_cents": [
+        -35,
+        35
+      ],
+      "time_jitter_ms": [
+        15,
+        60
+      ],
+      "formant_shift_semitones": [
+        -1.5,
+        1.5
+      ],
+      "vocal_frequency_filtering": {
+        "high_pass_cutoff_hz": 120,
+        "low_pass_cutoff_hz": 4800,
+        "presence_boost_hz": 2800,
+        "presence_boost_db": 3.0
+      }
+    },
+    "terrace_acceleration_curve": {
+      "description": "Crowd adrenaline causes a natural linear tempo increase over repeated chant cycles.",
+      "initial_bpm_factor": 1.0,
+      "climax_bpm_factor": 1.12,
+      "cycle_acceleration_rate_pct": 2.5
+    },
+    "stadium_acoustics_ir": {
+      "reverb_type": "Concrete Bowl / Open Terrace Stadium",
+      "rt60_decay_seconds": 2.4,
+      "pre_delay_ms": 38,
+      "low_shelf_boost_db": 2.5,
+      "high_cut_frequency_hz": 4200
+    }
+  },
+  "engine_matching_rules": {
+    "trochaic_2_syllables": [
+      "Vardy",
+      "Mitro",
+      "Klopp",
+      "Mikel",
+      "Bobby"
+    ],
+    "dactylic_3_syllables": [
+      "Virgil van Dijk",
+      "Bobby Firmino",
+      "Alexander"
+    ],
+    "amphibrach_4_syllables": [
+      "Divock Origi",
+      "Alessandro",
+      "Federico"
+    ]
+  },
+  "archetypes": [
+    {
+      "id": "sloop_john_b",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Sloop John B / The John B. Sails",
+      "original_source": {
+        "title": "Sloop John B",
+        "artist": "The Beach Boys (Arr. Brian Wilson) / Traditional Bahamian",
+        "year": 1966,
+        "genre": "Folk Rock / Surf Pop",
+        "key": "Ab major / G major (terrace standard)",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          116,
+          130
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Iambic tetrameter with feminine/masculine alternations",
+        "clapping_cadence": "Four-on-the-floor stomps or handclaps on beats 2 and 4"
+      },
+      "match_event_trigger": "WINGER_TAKES_ON_DEFENDER",
+      "generative_template": {
+        "description": "Universal player praise or terrace defiance archetype. High flexibility for 2 or 3-syllable player names.",
+        "slots": {
+          "PLAYER_NAME": "Target player (optimal: 2-3 syllables, e.g. Eden Hazard, Virgil van Dijk)",
+          "POSITION_FLANK_1": "Pitch side 1 (e.g. left)",
+          "POSITION_FLANK_2": "Pitch side 2 (e.g. right)",
+          "RIVAL_CLUB": "Opponent / rival team (1-2 syllables, e.g. City, Arsenal, Spurs)",
+          "ACTION_VERB": "Goal action (e.g. score, strike, defend)"
+        },
+        "template_lines": [
+          "He plays on the {POSITION_FLANK_1}, he plays on the {POSITION_FLANK_2},",
+          "That boy {PLAYER_NAME}, makes {RIVAL_CLUB} look shite,",
+          "He runs down the wing, and hears the crowd sing,",
+          "He'll score in the morning, and do it again!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Manchester United / Real Madrid",
+          "subject": "Cristiano Ronaldo",
+          "lyrics": "He plays on the left, he plays on the right, / That boy Cristiano, makes England look shite!"
+        },
+        {
+          "club": "FC United of Manchester / General EFL",
+          "subject": "Terrace Defiance",
+          "lyrics": "We're FC United, we do what we want! / We're FC United, we do what we want!"
+        }
+      ]
+    },
+    {
+      "id": "freed_from_desire",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Freed from Desire (On Fire)",
+      "original_source": {
+        "title": "Freed from Desire",
+        "artist": "Gala (Gala Rizzatto, Maurizio Molella, Phil Jay)",
+        "year": 1996,
+        "genre": "Eurodance",
+        "key": "F minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          126,
+          134
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          6,
+          9,
+          6,
+          9
+        ],
+        "stress_pattern": "Syncopated dactylic pulse over 4/4 kick",
+        "clapping_cadence": "Pogo jumping on every beat, explosive shout on 'ON FIRE!'"
+      },
+      "match_event_trigger": "STRIKER_SCORING_STREAK",
+      "generative_template": {
+        "description": "High-adrenaline striker or manager hype chant. Best for fast 2-syllable names with trochaic stress.",
+        "slots": {
+          "PLAYER_NAME": "Striker or Manager (2 syllables)",
+          "TARGET_GROUP": "Opponent group (e.g. your defense, Serie A, the Premier League)",
+          "ADJECTIVE": "Emotion (e.g. terrified, petrified)"
+        },
+        "template_lines": [
+          "{PLAYER_NAME}'s on fire,",
+          "{TARGET_GROUP} is {ADJECTIVE},",
+          "{PLAYER_NAME}'s on fire,",
+          "{TARGET_GROUP} is {ADJECTIVE},",
+          "Na-na-na-na-na, na-na, na-na-na, na-na-na!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Northern Ireland / Wigan Athletic",
+          "subject": "Will Grigg",
+          "lyrics": "Will Grigg's on fire, your defense is terrified! / Will Grigg's on fire, your defense is terrified!"
+        },
+        {
+          "club": "AC Milan",
+          "subject": "Stefano Pioli",
+          "lyrics": "Pioli is on fire! / Pioli is on fire!"
+        }
+      ]
+    },
+    {
+      "id": "allez_allez_allez",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Allez, Allez, Allez / L'Estate Sta Finendo",
+      "original_source": {
+        "title": "L'Estate Sta Finendo",
+        "artist": "Righeira",
+        "year": 1985,
+        "genre": "Italo-Disco",
+        "key": "A minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          112,
+          126
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 8,
+        "rhyme_scheme": "AABBCCDD",
+        "syllable_meter": [
+          7,
+          7,
+          7,
+          7,
+          6,
+          6,
+          6,
+          6
+        ],
+        "stress_pattern": "Melodic minor descent with syncopated triplet climax on 'Allez Allez Allez'",
+        "clapping_cadence": "Accelerating double-clap between line couplets"
+      },
+      "match_event_trigger": "CONTINENTAL_CUP_AWAY_LEG",
+      "generative_template": {
+        "description": "Epic continental campaign or cup run narrative chant. Excellent for clubs traveling in European/Continental competition.",
+        "slots": {
+          "CAMPAIGN_TERRITORY": "Geographic conquest (e.g. Europe, South America, across the land)",
+          "CLUB_NAME": "Subject club",
+          "ICONIC_VENUE": "Famous ground / city (e.g. Paris, Wembley, Rome, Madrid)",
+          "HISTORIC_HERO": "Club legend / manager"
+        },
+        "template_lines": [
+          "We've conquered all of {CAMPAIGN_TERRITORY},",
+          "We're never gonna stop,",
+          "From {ICONIC_VENUE} down to Berlin,",
+          "We've won the bloody lot,",
+          "{HISTORIC_HERO} and his army,",
+          "On the fields of {CLUB_NAME},",
+          "We are the loyal supporters,",
+          "And we come from {CLUB_NAME}!",
+          "Allez, Allez, Allez! Allez, Allez, Allez!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Liverpool FC",
+          "subject": "European Cup Campaign",
+          "lyrics": "We've conquered all of Europe, we're never gonna stop, / From Paris down to Turkey, we've won the fucking lot..."
+        },
+        {
+          "club": "SSC Napoli",
+          "subject": "Terrace Devotion",
+          "lyrics": "Un giorno all'improvviso mi innamorai di te, / Il cuore mi batteva non chiedermi il perch\u00e9..."
+        }
+      ]
+    },
+    {
+      "id": "seven_nation_army",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Seven Nation Army",
+      "original_source": {
+        "title": "Seven Nation Army",
+        "artist": "The White Stripes (Jack White)",
+        "year": 2003,
+        "genre": "Garage Rock / Alternative",
+        "key": "E minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          120,
+          126
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 2,
+        "rhyme_scheme": "Instrumental vocalized drone",
+        "syllable_meter": [
+          7,
+          7
+        ],
+        "stress_pattern": "Quarter-note syncopation: E - E - G - E - D - C - B",
+        "clapping_cadence": "Overhead scarf pumping on every quarter note"
+      },
+      "match_event_trigger": "GOAL_CELEBRATION_FANFARE",
+      "generative_template": {
+        "description": "Mass terrace vocalization hook. Replaces lyrics with modal vocables or single names matched to the 7-note riff.",
+        "slots": {
+          "PLAYER_OR_CLUB": "Name fitting the 7-note cadence (e.g. 'San-dro To-na-li', 'Ju-ven-tus Tur-in')"
+        },
+        "template_lines": [
+          "Oh {PLAYER_OR_CLUB}!",
+          "Po-po-po-po-po-po-po!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Italy National Team (2006 World Cup)",
+          "subject": "Tournament Anthem",
+          "lyrics": "Po-po-po-po-po-po-po, po-po-po-po-po-po-po!"
+        }
+      ]
+    },
+    {
+      "id": "dirty_old_town",
+      "category": "British & Irish Hymns / Folk Marches",
+      "canonical_name": "Dirty Old Town (Virgil van Dijk Chant)",
+      "original_source": {
+        "title": "Dirty Old Town",
+        "artist": "The Pogues / Ewan MacColl",
+        "year": 1949,
+        "genre": "Folk / Celtic Punk",
+        "key": "G major / C major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          100,
+          114
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Steady folk lilt with emphasized second beat",
+        "clapping_cadence": "Syncopated two-clap terrace shuffle"
+      },
+      "match_event_trigger": "DEFENSIVE_MASTERCLASS",
+      "generative_template": {
+        "description": "Defender or defensive midfielder anchor chant. Portrays unflappable calm and technical elegance.",
+        "slots": {
+          "DEFENDER_NAME": "Player name (optimal: 3-4 syllables with dactylic stress, e.g. Virgil van Dijk)",
+          "SQUAD_NUMBER": "Shirt number",
+          "KEY_ATTRIBUTE": "Style of play (e.g. calm as you like, strong as an ox)"
+        },
+        "template_lines": [
+          "He's our centre-half, he's our number {SQUAD_NUMBER},",
+          "Watch him defend and we watch him score,",
+          "He can pass the ball, {KEY_ATTRIBUTE},",
+          "He's {DEFENDER_NAME}, he's {DEFENDER_NAME}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Liverpool FC",
+          "subject": "Virgil van Dijk",
+          "lyrics": "He's our centre-half, he's our number four, / Watch him defend and we watch him score, / He can pass the ball, calm as you like, / He's Virgil van Dijk, he's Virgil van Dijk!"
+        }
+      ]
+    },
+    {
+      "id": "saturday_night",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Saturday Night (Divock Origi)",
+      "original_source": {
+        "title": "Saturday Night",
+        "artist": "Whigfield",
+        "year": 1994,
+        "genre": "Eurodance",
+        "key": "Eb minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          128,
+          132
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 2,
+        "rhyme_scheme": "Monorhyme couplet",
+        "syllable_meter": [
+          11,
+          6
+        ],
+        "stress_pattern": "Syncopated pop vocal groove",
+        "clapping_cadence": "Double clap on the upbeat of beat 4"
+      },
+      "match_event_trigger": "SUPER_SUB_GOAL",
+      "generative_template": {
+        "description": "Cult hero / clutch substitute chant. Celebrates dramatic late-game interventions.",
+        "slots": {
+          "CULT_HERO": "Player name (optimal: 4 syllables, e.g. Di-vock O-ri-gi)"
+        },
+        "template_lines": [
+          "Saturday night and I like the way you move,",
+          "{CULT_HERO}!",
+          "He comes off the bench and he scores when he wants,",
+          "{CULT_HERO}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Liverpool FC",
+          "subject": "Divock Origi",
+          "lyrics": "Saturday night and I like the way you move, Divock Origi! / Saturday night and I like the way you move, Divock Origi!"
+        }
+      ]
+    },
+    {
+      "id": "voulez_vous",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Voulez-Vous (Sadio Man\u00e9)",
+      "original_source": {
+        "title": "Voulez-Vous",
+        "artist": "ABBA",
+        "year": 1979,
+        "genre": "Disco / Pop Rock",
+        "key": "F# minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          124,
+          128
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          4,
+          5,
+          5,
+          7
+        ],
+        "stress_pattern": "Staccato brass stab followed by syncopated vocal burst",
+        "clapping_cadence": "Clap-clap-clap on the offbeats"
+      },
+      "match_event_trigger": "FAST_BREAKAWAY_COUNTERATTACK",
+      "generative_template": {
+        "description": "Rapid counter-attacking winger praise.",
+        "slots": {
+          "PLAYER_NAME": "Winger last name (2 syllables)",
+          "STAND_NAME": "Home stand (e.g. Kopites, Shed End, Stretford End)",
+          "HOST_CITY": "City of tournament final (e.g. Madrid, Wembley)"
+        },
+        "template_lines": [
+          "{PLAYER_NAME}! (Aha!)",
+          "Running down the wing,",
+          "Hear the {STAND_NAME} sing,",
+          "And we won it in {HOST_CITY}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Liverpool FC",
+          "subject": "Sadio Man\u00e9",
+          "lyrics": "Sadio! (Man\u00e9!) / Running down the wing, / Hear the Kopites sing, / And we won it in Madrid!"
+        }
+      ]
+    },
+    {
+      "id": "gimme_gimme_gimme",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Gimme! Gimme! Gimme! (The Foreign Sensation)",
+      "original_source": {
+        "title": "Gimme! Gimme! Gimme! (A Man After Midnight)",
+        "artist": "ABBA",
+        "year": 1979,
+        "genre": "Disco / Euro-Pop",
+        "key": "D minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          118,
+          122
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          11,
+          10,
+          11,
+          9
+        ],
+        "stress_pattern": "Four-on-the-floor synth groove with driving chorus lift",
+        "clapping_cadence": "Pounding bass drum stomps on all four quarter notes"
+      },
+      "match_event_trigger": "FOREIGN_SIGNING_DEBUT_IMPACT",
+      "generative_template": {
+        "description": "Foreign or exotic transfer signing who immediately wins over the fanbase.",
+        "slots": {
+          "POSITION": "Player role (e.g. winger, striker, ginger)",
+          "NATIONALITY": "Country of origin (e.g. Sweden, Brazil, France)",
+          "FORMER_CLUB": "Previous club",
+          "TEAM_COLOR": "Club kit color"
+        },
+        "template_lines": [
+          "Gimme, gimme, gimme a {POSITION} from {NATIONALITY},",
+          "He came from {FORMER_CLUB} and he plays in the {TEAM_COLOR},",
+          "Gimme, gimme, gimme a {POSITION} from {NATIONALITY},",
+          "He's gonna take us straight to the top!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Tottenham Hotspur",
+          "subject": "Dejan Kulusevski",
+          "lyrics": "Gimme, gimme, gimme a ginger from Sweden, / Came from Juventus and he plays on the wing!"
+        }
+      ]
+    },
+    {
+      "id": "dont_you_want_me",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Don't You Want Me (Midfield Engine)",
+      "original_source": {
+        "title": "Don't You Want Me",
+        "artist": "The Human League",
+        "year": 1981,
+        "genre": "Synth-Pop",
+        "key": "A minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          116,
+          120
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 2,
+        "rhyme_scheme": "Rhythmic vocable chant",
+        "syllable_meter": [
+          9,
+          3
+        ],
+        "stress_pattern": "Dotted eighth-note syncopation",
+        "clapping_cadence": "Fast continuous clapping resolving into a massive name shout"
+      },
+      "match_event_trigger": "HARD_TACKLE_OR_MIDFIELD_RECOVERY",
+      "generative_template": {
+        "description": "Cult midfield workhorse anthem. Simple, punchy, universally recognized.",
+        "slots": {
+          "PLAYER_FULL_NAME": "Player name (e.g. John McGinn, Christian Benteke)"
+        },
+        "template_lines": [
+          "Du-du-du-du-du-du-du-du-du,",
+          "{PLAYER_FULL_NAME}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Aston Villa",
+          "subject": "John McGinn",
+          "lyrics": "Du-du-du-du-du-du-du-du-du, John McGinn!"
+        }
+      ]
+    },
+    {
+      "id": "september",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "September (Derby Memory)",
+      "original_source": {
+        "title": "September",
+        "artist": "Earth, Wind & Fire",
+        "year": 1978,
+        "genre": "Funk / R&B",
+        "key": "A major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          124,
+          128
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          7,
+          7,
+          7,
+          7
+        ],
+        "stress_pattern": "Funk brass syncopation with infectious swing",
+        "clapping_cadence": "Rhythmic handclaps on the backbeats"
+      },
+      "match_event_trigger": "DERBY_WIN_ANNIVERSARY",
+      "generative_template": {
+        "description": "Remembering a famous derby destruction in a specific calendar month.",
+        "slots": {
+          "CALENDAR_MONTH": "Month of victory (e.g. September, December, May)",
+          "HERO_NAME": "Player who scored",
+          "RIVAL_CLUB": "Defeated rival"
+        },
+        "template_lines": [
+          "1, 2, 3, 4!",
+          "Ba-de-ya, say do you remember,",
+          "Ba-de-ya, dancing in {CALENDAR_MONTH},",
+          "Ba-de-ya, when {HERO_NAME} smashed {RIVAL_CLUB}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Arsenal / England",
+          "subject": "Derby Day Memory",
+          "lyrics": "Ba-de-ya, say do you remember, / Ba-de-ya, dancing in September..."
+        }
+      ]
+    },
+    {
+      "id": "bad_moon_rising",
+      "category": "Latin American Barra Brava / Murga",
+      "canonical_name": "Bad Moon Rising (Decime Qu\u00e9 Se Siente / Boedo)",
+      "original_source": {
+        "title": "Bad Moon Rising",
+        "artist": "Creedence Clearwater Revival (John Fogerty)",
+        "year": 1969,
+        "genre": "Roots Rock / Swamp Pop",
+        "key": "D major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          140,
+          178
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 8,
+        "rhyme_scheme": "AABBCCDD",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8,
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Murga swing rhythm driven by bombos con platillo",
+        "clapping_cadence": "Continuous polyrhythmic double-beat clapping"
+      },
+      "match_event_trigger": "HISTORIC_DERBY_RIVALRY",
+      "generative_template": {
+        "description": "Rivalry provocation and neighborhood pride archetype. Essential for South American / Barra Brava style.",
+        "slots": {
+          "RIVAL_NAME": "Primary rival (e.g. Brasil, Boca, River)",
+          "HOME_DISTRICT": "Club's territorial identity / neighborhood",
+          "RIVAL_TRAUMA": "Historic victory or trauma inflicted on rival",
+          "HERO_FIGURE": "Key player or icon"
+        },
+        "template_lines": [
+          "{RIVAL_NAME}, tell me how it feels,",
+          "To have your master in your house,",
+          "I swear that as years go by,",
+          "We will never forget,",
+          "That {HERO_FIGURE} dribbled past you,",
+          "And scored right in your net,",
+          "You've been crying since that day,",
+          "And you'll never stop again!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Argentina National Team (2014)",
+          "subject": "Rivalry with Brazil",
+          "lyrics": "Brasil, decime qu\u00e9 se siente, tener en casa a tu pap\u00e1... / Que el Diego los gambete\u00f3, que el Cani los vacun\u00f3..."
+        },
+        {
+          "club": "San Lorenzo",
+          "subject": "Boedo Identity",
+          "lyrics": "Vengo del barrio de Boedo, barrio de murga y carnaval... / La hinchada que tiene m\u00e1s huevos, la que te sigue a donde vas..."
+        },
+        {
+          "club": "Liverpool FC",
+          "subject": "Diogo Jota",
+          "lyrics": "Oh he wears the number 20, he will take us to victory, / And when he's running down the left wing, he'll cut inside and score for LFC... / He's a lad from Portugal, better than Figo don't you know, / Oh his name is Diogo!"
+        }
+      ]
+    },
+    {
+      "id": "muchachos",
+      "category": "Latin American Barra Brava / Murga",
+      "canonical_name": "Muchachos (Tournament Miracle)",
+      "original_source": {
+        "title": "Muchachos, Esta Noche Me Emborracho",
+        "artist": "La Mosca Ts\u00e9-Ts\u00e9",
+        "year": 2003,
+        "genre": "Ska-Rock / Argentine Cumbia",
+        "key": "C minor to C major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          128,
+          134
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 6,
+        "rhyme_scheme": "AABCCB",
+        "syllable_meter": [
+          10,
+          10,
+          11,
+          10,
+          10,
+          11
+        ],
+        "stress_pattern": "Tango-tinged melancholic verse bursting into triumphant brass explosion",
+        "clapping_cadence": "Rhythmic vertical arm-waving with crowd surging forward"
+      },
+      "match_event_trigger": "INTERNATIONAL_TOURNAMENT_FINAL",
+      "generative_template": {
+        "description": "National revival or underdog squad reaching the summit.",
+        "slots": {
+          "NATION_NAME": "Country or club name",
+          "LEGEND_PAST": "Deceased or retired legend (e.g. Maradona, Shankly)",
+          "LEGEND_PRESENT": "Current superstar (e.g. Messi, Salah)",
+          "TROPHY_NAME": "Target trophy"
+        },
+        "template_lines": [
+          "In {NATION_NAME} I was born,",
+          "Land of {LEGEND_PAST} and {LEGEND_PRESENT},",
+          "I cannot explain it to you,",
+          "Because you wouldn't understand,",
+          "Muchachos! Now we've got our hope and dream again,",
+          "We want to win the {TROPHY_NAME}, we want to be the champions of the world!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Argentina National Team (Qatar 2022)",
+          "subject": "World Cup Dream",
+          "lyrics": "En Argentina nac\u00ed, tierra de Diego y Lionel... / Muchachos, ahora nos volvimos a ilusionar..."
+        }
+      ]
+    },
+    {
+      "id": "dale_alegria_a_mi_corazon",
+      "category": "Latin American Barra Brava / Murga",
+      "canonical_name": "Dale Alegr\u00eda a mi Coraz\u00f3n (Sim Se\u00f1or / Libertadores)",
+      "original_source": {
+        "title": "Y Dale Alegr\u00eda A Mi Coraz\u00f3n",
+        "artist": "Fito P\u00e1ez",
+        "year": 1990,
+        "genre": "Rock en Espa\u00f1ol / Argentine Pop-Rock",
+        "key": "G major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          116,
+          126
+        ],
+        "spotify_track": "Y dale alegr\u00eda a mi coraz\u00f3n"
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          11,
+          11,
+          10,
+          10
+        ],
+        "stress_pattern": "Ascending Latin-rock lyrical cadence with call-and-response refrain",
+        "clapping_cadence": "Continuous half-time terrace clap"
+      },
+      "match_event_trigger": "CONTINENTAL_OBSESSION_OR_SAMBA_STRIKER",
+      "generative_template": {
+        "description": "Obsession with continental silverware or Brazilian flair player anthem.",
+        "slots": {
+          "TROPHY_NAME": "Target trophy (e.g. Champions League, Copa Libertadores, Premier League)",
+          "PLAYER_NAME": "Flair attacker",
+          "NICKNAME": "Player nickname"
+        },
+        "template_lines": [
+          "There's something that the fans all want you to know,",
+          "The greatest in the world his name is {PLAYER_NAME},",
+          "Give him the ball and he will score every time,",
+          "Si Se\u00f1or, give the ball to {NICKNAME} and he'll score!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Liverpool FC",
+          "subject": "Roberto Firmino (Si Se\u00f1or)",
+          "lyrics": "There's something that the Kop wants you to know, / The best in the world his name is Bobby Firmino, / Our number nine, / Give him the ball and he'll score every time, / Si Se\u00f1or, give the ball to Bobby and he will score!"
+        },
+        {
+          "club": "Boca Juniors / River Plate",
+          "subject": "Libertadores Obsession",
+          "lyrics": "Y dale alegr\u00eda, alegr\u00eda a mi coraz\u00f3n, / La Copa Libertadores es mi obsesi\u00f3n..."
+        }
+      ]
+    },
+    {
+      "id": "pasos_al_costado",
+      "category": "Latin American Barra Brava / Murga",
+      "canonical_name": "Pasos al Costado (The Lateral Sway)",
+      "original_source": {
+        "title": "Pasos al Costado",
+        "artist": "Turf",
+        "year": 2004,
+        "genre": "Latin Alternative Rock",
+        "key": "E major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          132,
+          138
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "ABAB",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Driving horn section melody with lateral stand swaying",
+        "clapping_cadence": "Brass-driven syncopated jumps"
+      },
+      "match_event_trigger": "DOMINANT_POSSESSION_PHASE",
+      "generative_template": {
+        "description": "Rhythmic lateral terrace sway sung while dominating an away fixture.",
+        "slots": {
+          "CLUB_NAME": "Club name",
+          "RIVAL_NAME": "Rival club"
+        },
+        "template_lines": [
+          "No matter where you play, we're always by your side,",
+          "This love is for the shirt, this love will never die,",
+          "We'll sing until the end, we'll make the stadium roar,",
+          "And {RIVAL_NAME} will remember who we are!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "River Plate / San Lorenzo / Tigres UANL",
+          "subject": "Barra Brava Anthem",
+          "lyrics": "No me importan las buenas, no me importan las malas, / Yo te sigo a todos lados..."
+        }
+      ]
+    },
+    {
+      "id": "fields_of_athenry",
+      "category": "British & Irish Hymns / Folk Marches",
+      "canonical_name": "The Fields of Athenry (Fields of Anfield Road)",
+      "original_source": {
+        "title": "The Fields of Athenry",
+        "artist": "Pete St. John / The Dubliners",
+        "year": 1979,
+        "genre": "Irish Folk Ballad",
+        "key": "D major / G major",
+        "meter": "3/4 or 4/4 folk lilt",
+        "tempo_bpm_range": [
+          72,
+          88
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "ABCB",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Mournful, sweeping balladeering chorus with terrace harmony",
+        "clapping_cadence": "Gentle sway or delayed backbeat claps"
+      },
+      "match_event_trigger": "LATE_MATCH_NOSTALGIA_OR_HERITAGE",
+      "generative_template": {
+        "description": "Historical sacred-ground anthem. Commemorates club founders, historical triumphs, and stadium ground identity.",
+        "slots": {
+          "STADIUM_ROAD": "Street or landmark of stadium (e.g. Anfield Road, Highbury, Celtic Park)",
+          "LEGEND_1": "Historic manager",
+          "LEGEND_2": "Historic player",
+          "CLUB_COLOR": "Team color"
+        },
+        "template_lines": [
+          "All round the fields of {STADIUM_ROAD},",
+          "Where once we watched the king {LEGEND_2} play,",
+          "We had {LEGEND_1} on our side, and our glory never died,",
+          "All the glory of the mighty {CLUB_COLOR} array."
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Liverpool FC",
+          "subject": "The Fields of Anfield Road",
+          "lyrics": "All round the Fields of Anfield Road, / Where once we watched the King Kenny play (and could he play!), / Ste Heighway on the wing, we had dreams and songs to sing, / Of the glory round the Fields of Anfield Road."
+        },
+        {
+          "club": "Celtic FC",
+          "subject": "The Fields of Athenry",
+          "lyrics": "Low lie the fields of Athenry, / Where once we watched the small free birds fly..."
+        }
+      ]
+    },
+    {
+      "id": "when_the_saints_go_marching_in",
+      "category": "British & Irish Hymns / Folk Marches",
+      "canonical_name": "When the Saints Go Marching In",
+      "original_source": {
+        "title": "When the Saints Go Marching In",
+        "artist": "Traditional Gospel / Spiritual",
+        "year": 1896,
+        "genre": "Spiritual / Dixieland Jazz",
+        "key": "F major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          120,
+          138
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABA",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Syncopated brass march with long drawn-out opening vowels",
+        "clapping_cadence": "Clap on beats 2 and 4, accelerating as the chant loops"
+      },
+      "match_event_trigger": "PRE_MATCH_WALKOUT_OR_CORNER_KICK",
+      "generative_template": {
+        "description": "High-volume march-in chant. Used by clubs nicknamed Saints, Spurs, Reds, or Blues.",
+        "slots": {
+          "NICKNAME": "Plural nickname (e.g. Saints, Spurs, Reds, Blues, Hoops)"
+        },
+        "template_lines": [
+          "Oh when the {NICKNAME} (oh when the {NICKNAME}),",
+          "Go marching in (go marching in),",
+          "Oh how I want to be in that number,",
+          "When the {NICKNAME} go marching in!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Southampton / Tottenham Hotspur",
+          "subject": "Marching Anthem",
+          "lyrics": "Oh when the Spurs/Saints go marching in, / Oh when the Spurs go marching in..."
+        }
+      ]
+    },
+    {
+      "id": "battle_hymn_of_the_republic",
+      "category": "British & Irish Hymns / Folk Marches",
+      "canonical_name": "Battle Hymn of the Republic (Glory, Glory)",
+      "original_source": {
+        "title": "Battle Hymn of the Republic",
+        "artist": "William Steffe / Julia Ward Howe",
+        "year": 1861,
+        "genre": "Military Hymn / March",
+        "key": "Bb major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          112,
+          120
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          7
+        ],
+        "stress_pattern": "Stately, resolute military cadence",
+        "clapping_cadence": "Steady cadence marching claps"
+      },
+      "match_event_trigger": "TITLE_DECIDER_OR_TROPHY_LIFT",
+      "generative_template": {
+        "description": "The quintessential triumphant club victory hymn.",
+        "slots": {
+          "CLUB_NAME": "Club name",
+          "KIT_COLOR": "Primary color (reds, blues, whites)"
+        },
+        "template_lines": [
+          "Glory, glory to the {CLUB_NAME},",
+          "Glory, glory to the {CLUB_NAME},",
+          "Glory, glory to the {CLUB_NAME},",
+          "As the {KIT_COLOR} go marching on!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Manchester United / Tottenham / Leeds",
+          "subject": "Glory Glory",
+          "lyrics": "Glory, glory Man United, / As the Reds go marching on, on, on!"
+        }
+      ]
+    },
+    {
+      "id": "storia_di_un_grande_amore",
+      "category": "Continental European Ultras Choirs",
+      "canonical_name": "Storia Di Un Grande Amore (Official Club Anthem)",
+      "original_source": {
+        "title": "Juve, Storia Di Un Grande Amore",
+        "artist": "Paolo Belli & Claudio Guidetti",
+        "year": 2007,
+        "genre": "Italian Orchestral Pop-Rock Anthem",
+        "key": "D major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          118,
+          124
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "ABAB",
+        "syllable_meter": [
+          10,
+          10,
+          10,
+          10
+        ],
+        "stress_pattern": "Operatic pop crescendo with soaring choral chorus",
+        "clapping_cadence": "Full arena scarf sway followed by unison roar on the chorus hook"
+      },
+      "match_event_trigger": "TEAM_WALKOUT_OR_SERIE_A_SCUDETTO",
+      "generative_template": {
+        "description": "Formal, dignified club walkout anthem. Emphasizes jersey colors, eternal loyalty, and historic pride.",
+        "slots": {
+          "CLUB_NAME": "Club name",
+          "PRIMARY_COLOR": "Main club jersey color",
+          "SECONDARY_COLOR": "Secondary jersey color",
+          "CLUB_MOTTO": "Historical club slogan"
+        },
+        "template_lines": [
+          "{CLUB_NAME}, a story of an endless love,",
+          "{PRIMARY_COLOR} that embraces the {SECONDARY_COLOR},",
+          "A chorus that rises straight to the sky,",
+          "{CLUB_MOTTO}, forever by your side!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Juventus FC",
+          "subject": "Official Stadium Anthem",
+          "lyrics": "Juve, storia di un grande amore, / Bianco che abbraccia il nero, / Coro che si alza davvero, solo per te!"
+        }
+      ]
+    },
+    {
+      "id": "bella_ciao",
+      "category": "Continental European Ultras Choirs",
+      "canonical_name": "Bella Ciao (Terrace Resistance)",
+      "original_source": {
+        "title": "Bella Ciao",
+        "artist": "Italian Partisan Folk Song",
+        "year": 1943,
+        "genre": "Anti-Fascist Folk March",
+        "key": "E minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          110,
+          140
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "ABCB",
+        "syllable_meter": [
+          8,
+          12,
+          8,
+          6
+        ],
+        "stress_pattern": "Minor key syncopated march accelerating rapidly",
+        "clapping_cadence": "Fast staccato claps matching the 'ciao, ciao, ciao' triplets"
+      },
+      "match_event_trigger": "BOARDROOM_PROTEST_OR_UNDERDOG_DEFIANCE",
+      "generative_template": {
+        "description": "Anti-establishment defiance against state ownership, ticket hikes, or corrupt owners.",
+        "slots": {
+          "CLUB_NAME": "Club name"
+        },
+        "template_lines": [
+          "We love our colors, we stand together,",
+          "Oh bella ciao, bella ciao, bella ciao, ciao, ciao!",
+          "Against the bosses, we'll fight forever,",
+          "For the pride of {CLUB_NAME}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Livorno / Red Star Paris / Marseille",
+          "subject": "Ultras Defiance",
+          "lyrics": "Una mattina mi son svegliato, o bella ciao, bella ciao..."
+        }
+      ]
+    },
+    {
+      "id": "pippi_longstocking",
+      "category": "Continental European Ultras Choirs",
+      "canonical_name": "Hey, Pippi L\u00e5ngstrump (Terrace Bounce / Pozna\u0144)",
+      "original_source": {
+        "title": "H\u00e4r kommer Pippi L\u00e5ngstrump",
+        "artist": "Konrad Elfers",
+        "year": 1969,
+        "genre": "Children's Theme / Marching Polka",
+        "key": "C major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          136,
+          148
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Polka bounce rhythm designed for synchronized lateral pogoing",
+        "clapping_cadence": "Continuous high-tempo jumping with backs turned to the pitch"
+      },
+      "match_event_trigger": "CROWD_CELEBRATION_BLOWOUT_WIN",
+      "generative_template": {
+        "description": "High-tempo terrace bounce chant while blowing out an opponent 4-0.",
+        "slots": {
+          "CLUB_NAME": "Club name"
+        },
+        "template_lines": [
+          "Hey, {CLUB_NAME}! (Hey!)",
+          "Hey, {CLUB_NAME}! (Hey!)",
+          "We bounce and we jump through the night and the day!",
+          "Hey, {CLUB_NAME}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Eintracht Frankfurt / Ajax / Feyenoord",
+          "subject": "Terrace Bounce",
+          "lyrics": "Pippi Langkous, tralalala..."
+        }
+      ]
+    },
+    {
+      "id": "humba_tatera",
+      "category": "Continental European Ultras Choirs",
+      "canonical_name": "Humba T\u00e4ter\u00e4 (Bundesliga Megaphone Ritual)",
+      "original_source": {
+        "title": "Humba T\u00e4ter\u00e4",
+        "artist": "Ernst Neger / Toni H\u00e4mmerle",
+        "year": 1964,
+        "genre": "German Fastnacht / Carnival Brass March",
+        "key": "Bb major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          128,
+          140
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 6,
+        "rhyme_scheme": "Call-and-response letter spelling into Polka explosion",
+        "syllable_meter": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          8
+        ],
+        "stress_pattern": "Capo megaphone call with stand-wide echo",
+        "clapping_cadence": "Crouched silence during spelling, erupting into stand-wide jumping on the chorus"
+      },
+      "match_event_trigger": "FULL_TIME_DERBY_HOME_WIN",
+      "generative_template": {
+        "description": "Post-match victory ritual where manager or star player leads the Ultras stand.",
+        "slots": {
+          "SPELL_WORD": "Acronym or word (e.g. H-U-M-B-A or C-L-U-B)"
+        },
+        "template_lines": [
+          "Give me an H! (H!)",
+          "Give me a U! (U!)",
+          "Give me an M! (M!)",
+          "Give me a B! (B!)",
+          "Give me an A! (A!)",
+          "Oba Humba, Humba, Humba T\u00e4ter\u00e4!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Mainz 05 / Bayern Munich / Eintracht Frankfurt",
+          "subject": "Victory Megaphone Celebration",
+          "lyrics": "Gebt mir ein H! (H!) / Gebt mir ein U! (U!) / Gebt mir ein M! (M!) / Gebt mir ein B! (B!) / Gebt mir ein A! (A!) / Humba humba humba t\u00e4ter\u00e4!"
+        }
+      ]
+    },
+    {
+      "id": "kum_ba_yah",
+      "category": "Situational / Away-End Match-State Taunts",
+      "canonical_name": "Kum Ba Yah (You're Not Singing Anymore)",
+      "original_source": {
+        "title": "Kum Ba Yah",
+        "artist": "Gullah Spiritual / Traditional",
+        "year": 1920,
+        "genre": "Spiritual",
+        "key": "C major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          96,
+          110
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AAAB",
+        "syllable_meter": [
+          7,
+          7,
+          7,
+          7
+        ],
+        "stress_pattern": "Slow mocking drawl designed to taunt newly silenced opposing home fans",
+        "clapping_cadence": "No clapping; sarcastic wave directed at opposition stands"
+      },
+      "match_event_trigger": "OPPOSITION_HOME_CROWD_SILENCED",
+      "generative_template": {
+        "description": "Away end dominance chant after scoring a go-ahead goal or seeing home fans leave early.",
+        "slots": {
+          "MOCK_PHRASE": "Status taunt (e.g. 'You're not singing anymore', 'Is this a library', 'Cheerio, cheerio')"
+        },
+        "template_lines": [
+          "{MOCK_PHRASE},",
+          "{MOCK_PHRASE},",
+          "{MOCK_PHRASE},",
+          "{MOCK_PHRASE}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Universal English Away Ends",
+          "subject": "Silencing Opposition",
+          "lyrics": "You're not singing anymore! / You're not singing anymore! / You're not singing, you're not singing, / You're not singing anymore!"
+        }
+      ]
+    },
+    {
+      "id": "guantanamera",
+      "category": "Situational / Away-End Match-State Taunts",
+      "canonical_name": "Guantanamera (You Only Sing When You're Winning)",
+      "original_source": {
+        "title": "Guantanamera",
+        "artist": "Jose\u00edto Fern\u00e1ndez / Juli\u00e1n Orb\u00f3n",
+        "year": 1929,
+        "genre": "Cuban Guajira / Son",
+        "key": "F major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          108,
+          120
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABA",
+        "syllable_meter": [
+          9,
+          8,
+          9,
+          8
+        ],
+        "stress_pattern": "Guajira 4/4 cadence with distinct syncope on line 2",
+        "clapping_cadence": "Sustained rhythmic clap: 1, 2, 3, 4"
+      },
+      "match_event_trigger": "OPPOSITION_CHERRY_PICKING_SINGING",
+      "generative_template": {
+        "description": "Mocking fair-weather supporters who only make noise when ahead.",
+        "slots": {
+          "TAUNT_CONDITION": "Condition phrase (e.g. 'when you're winning', 'two-nil down')"
+        },
+        "template_lines": [
+          "You only sing {TAUNT_CONDITION},",
+          "Sing {TAUNT_CONDITION},",
+          "You only sing {TAUNT_CONDITION},",
+          "Sing {TAUNT_CONDITION}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Universal British Away Ends",
+          "subject": "Mocking Silence",
+          "lyrics": "You only sing when you're winning, / Sing when you're winnnn-ing, / You only sing when you're winning!"
+        }
+      ]
+    },
+    {
+      "id": "fire_drill",
+      "category": "Situational / Away-End Match-State Taunts",
+      "canonical_name": "Is There a Fire Drill? (Mass Departure)",
+      "original_source": {
+        "title": "Traditional British Terrace Banter",
+        "artist": "English Terrace Oral Folk",
+        "year": 1975,
+        "genre": "Terrace Spoken Cadence",
+        "key": "Acapella Chant",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          116,
+          126
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 3,
+        "rhyme_scheme": "Monorhyme repetition",
+        "syllable_meter": [
+          6,
+          6,
+          6
+        ],
+        "stress_pattern": "Triplets with rising sarcastic intonation",
+        "clapping_cadence": "Pointing fingers at stadium exit gates in rhythm"
+      },
+      "match_event_trigger": "OPPOSITION_FANS_LEAVING_EARLY_80TH_MIN",
+      "generative_template": {
+        "description": "Mocking opposing home supporters abandoning seats after conceding late.",
+        "slots": {
+          "EXIT_TARGET": "Exit descriptor"
+        },
+        "template_lines": [
+          "Is there a fire drill?",
+          "Is there a fire drill?",
+          "Is there a fire drill?!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Universal EFL / Premier League",
+          "subject": "Early Exits",
+          "lyrics": "Is there a fire drill? Is there a fire drill? Is there a fire drill?!"
+        }
+      ]
+    },
+    {
+      "id": "sacked_in_the_morning",
+      "category": "Situational / Away-End Match-State Taunts",
+      "canonical_name": "Sacked in the Morning",
+      "original_source": {
+        "title": "My Bonnie Lies over the Ocean",
+        "artist": "Traditional Scottish / American Folk",
+        "year": 1881,
+        "genre": "Folk Waltz / Terrace 4/4",
+        "key": "G major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          116,
+          124
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 2,
+        "rhyme_scheme": "Rhyming couplet",
+        "syllable_meter": [
+          6,
+          8
+        ],
+        "stress_pattern": "Lilting melodic mockery",
+        "clapping_cadence": "Rhythmic mocking wave directed at opposition dugout"
+      },
+      "match_event_trigger": "OPPOSITION_MANAGER_UNDER_PRESSURE_LOSING_BADLY",
+      "generative_template": {
+        "description": "Taunting a struggling rival manager who is on the verge of dismissal.",
+        "slots": {
+          "MANAGER_NAME": "Opposing manager"
+        },
+        "template_lines": [
+          "Sacked in the morning!",
+          "You're getting sacked in the morning!",
+          "Sacked in the morning!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Universal English Grounds",
+          "subject": "Manager Crisis",
+          "lyrics": "Sacked in the morning, you're getting sacked in the morning!"
+        }
+      ]
+    },
+    {
+      "id": "referee_wanker",
+      "category": "Situational / Away-End Match-State Taunts",
+      "canonical_name": "The Referee's a Wanker",
+      "original_source": {
+        "title": "Traditional Terrace Folk",
+        "artist": "Terrace Oral Tradition",
+        "year": 1965,
+        "genre": "Acapella Terrace Rage",
+        "key": "Monophonic",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          120,
+          130
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 1,
+        "rhyme_scheme": "Repeated phrase with syncopated five-clap cadence",
+        "syllable_meter": [
+          7
+        ],
+        "stress_pattern": "Staccato rage shout",
+        "clapping_cadence": "Clap, clap, clap-clap-clap!"
+      },
+      "match_event_trigger": "CONTROVERSIAL_REFEREE_PENALTY_OR_RED_CARD",
+      "generative_template": {
+        "description": "Instant terrace roar following an infuriating match official decision.",
+        "slots": {
+          "OFFICIAL_ROLE": "Referee or Linesman"
+        },
+        "template_lines": [
+          "The referee's a wanker! [clap clap, clap-clap-clap]",
+          "The referee's a wanker! [clap clap, clap-clap-clap]"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Universal British Football",
+          "subject": "Officiating Rage",
+          "lyrics": "The referee's a wanker! [clap clap, clap-clap-clap]"
+        }
+      ]
+    },
+    {
+      "id": "glad_all_over",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Glad All Over (Selhurst Park Anthem)",
+      "original_source": {
+        "title": "Glad All Over",
+        "artist": "The Dave Clark Five",
+        "year": 1963,
+        "genre": "Beat / Merseybeat / Rock & Roll",
+        "key": "G major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          136,
+          144
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 2,
+        "rhyme_scheme": "Call and Response with floor-tom foot stomps",
+        "syllable_meter": [
+          5,
+          4
+        ],
+        "stress_pattern": "Heavy stomp on beats 1 and 3, double clap on 4",
+        "clapping_cadence": "[Stomp, Stomp] Glad all over! [Clap, Clap]"
+      },
+      "match_event_trigger": "HOME_TEAM_GOAL_OR_FULL_TIME_VICTORY",
+      "generative_template": {
+        "description": "Explosive post-goal or walkout celebration anthem.",
+        "slots": {
+          "CLUB_NAME": "Club name"
+        },
+        "template_lines": [
+          "And I'm feeling... Glad all over! [clap-clap]",
+          "Yes, I'm glad all over! [clap-clap]",
+          "Yeah, {CLUB_NAME}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Crystal Palace",
+          "subject": "Club Anthem",
+          "lyrics": "I'm glad all over, yes I'm glad all over, baby it's Palace!"
+        }
+      ]
+    },
+    {
+      "id": "cant_take_my_eyes_off_you",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Can't Take My Eyes Off You (Playmaker Maestro)",
+      "original_source": {
+        "title": "Can't Take My Eyes Off You",
+        "artist": "Frankie Valli",
+        "year": 1967,
+        "genre": "Pop / Brass Soul",
+        "key": "E major to G major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          124,
+          130
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          10,
+          10,
+          10,
+          10
+        ],
+        "stress_pattern": "Gentle verse leading into massive brass explosion on the chorus",
+        "clapping_cadence": "Rhythmic clapping starting on the chorus brass fanfare"
+      },
+      "match_event_trigger": "NUMBER_10_ASSIST_OR_FREE_KICK_GOAL",
+      "generative_template": {
+        "description": "Ode to an artistic number 10, midfield playmaker, or visionary passer.",
+        "slots": {
+          "PLAYER_NAME": "Playmaker name",
+          "MANAGER_NAME": "Manager name",
+          "ORIGIN_COUNTRY": "Country of origin"
+        },
+        "template_lines": [
+          "We've got {PLAYER_NAME},",
+          "I just don't think you understand,",
+          "He's {MANAGER_NAME}'s man, he's better than Zidane,",
+          "We've got {PLAYER_NAME}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Arsenal FC",
+          "subject": "Mesut \u00d6zil",
+          "lyrics": "We've got \u00d6zil, Mesut \u00d6zil, I just don't think you understand, / He's Ars\u00e8ne Wenger's man, he's better than Zidane, / We've got Mesut \u00d6zil!"
+        }
+      ]
+    },
+    {
+      "id": "just_cant_get_enough",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Just Can't Get Enough (Celtic Park Bounce)",
+      "original_source": {
+        "title": "Just Can't Get Enough",
+        "artist": "Depeche Mode",
+        "year": 1981,
+        "genre": "Synth-Pop",
+        "key": "G major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          126,
+          132
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          7,
+          7,
+          7,
+          7
+        ],
+        "stress_pattern": "Bright syncopated synth bass bounce",
+        "clapping_cadence": "Horizontal scarf waving transitioning into rapid jumping"
+      },
+      "match_event_trigger": "ATTACKING_DOMINANCE_OR_MULTIPLE_GOALS",
+      "generative_template": {
+        "description": "Euphoric chant for an attacking team scoring multiple goals in quick succession.",
+        "slots": {
+          "CLUB_NAME": "Club name"
+        },
+        "template_lines": [
+          "When I see you {CLUB_NAME}, I go out of my head,",
+          "I just can't get enough, I just can't get enough!",
+          "All the things you do to me and all the things you said,",
+          "I just can't get enough, I just can't get enough!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Celtic FC / Liverpool / Burnley",
+          "subject": "Attacking Joy",
+          "lyrics": "When I see you Celtic, I go out of my head, / I just can't get enough, I just can't get enough!"
+        }
+      ]
+    },
+    {
+      "id": "forever_blowing_bubbles",
+      "category": "British & Irish Hymns / Folk Marches",
+      "canonical_name": "I'm Forever Blowing Bubbles (West Ham Anthem)",
+      "original_source": {
+        "title": "I'm Forever Blowing Bubbles",
+        "artist": "John Kellette & James Kendis",
+        "year": 1918,
+        "genre": "Tin Pan Alley / 3/4 Waltz",
+        "key": "G major",
+        "meter": "3/4 Waltz time",
+        "tempo_bpm_range": [
+          92,
+          108
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Lilting romantic waltz with deep melancholy working-class fatalism",
+        "clapping_cadence": "Slow scarf sway, thousands of bubbles floating over pitch"
+      },
+      "match_event_trigger": "PRE_MATCH_WALKOUT_UNDERDOG_SOLEMNITY",
+      "generative_template": {
+        "description": "Bittersweet, emotionally deep club heritage anthem accepting struggle while maintaining eternal hope.",
+        "slots": {
+          "CLUB_NAME": "Club nickname"
+        },
+        "template_lines": [
+          "I'm forever blowing bubbles,",
+          "Pretty bubbles in the air,",
+          "They fly so high, nearly reach the sky,",
+          "Then like my dreams, they fade and die!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "West Ham United",
+          "subject": "Club Identity",
+          "lyrics": "I'm forever blowing bubbles, pretty bubbles in the air... / Fortune's always hiding, I've looked everywhere..."
+        }
+      ]
+    },
+    {
+      "id": "the_liquidator",
+      "category": "British & Irish Hymns / Folk Marches",
+      "canonical_name": "The Liquidator (Trojan Reggae Walkout)",
+      "original_source": {
+        "title": "The Liquidator",
+        "artist": "The Harry J Allstars",
+        "year": 1969,
+        "genre": "Rocksteady / Early Reggae",
+        "key": "Bb major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          102,
+          108
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 2,
+        "rhyme_scheme": "Organ riff punctuated by syncopated crowd shouts",
+        "syllable_meter": [
+          4,
+          4
+        ],
+        "stress_pattern": "Offbeat reggae skank on 2 and 4 with Hammond organ",
+        "clapping_cadence": "[Organ riff] -> Clap, clap, clap, clap, '{CLUB_NAME}!'"
+      },
+      "match_event_trigger": "KICKOFF_COUNTDOWN_PREMATCH_WALKOUT",
+      "generative_template": {
+        "description": "Pre-match team entrance track with rhythmic terrace insertion.",
+        "slots": {
+          "RIVAL_CLUB": "Hated rival",
+          "CLUB_NAME": "Home club"
+        },
+        "template_lines": [
+          "[Organ Riff Bar 1-4]",
+          "We hate {RIVAL_CLUB}! {CLUB_NAME}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Chelsea FC / Wolves / West Brom",
+          "subject": "Team Walkout",
+          "lyrics": "We hate Tottenham! Chelsea!"
+        }
+      ]
+    },
+    {
+      "id": "one_step_beyond",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "One Step Beyond (Ska Full-Time Victory)",
+      "original_source": {
+        "title": "One Step Beyond",
+        "artist": "Madness / Prince Buster",
+        "year": 1979,
+        "genre": "2-Tone / Ska",
+        "key": "D minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          148,
+          156
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 2,
+        "rhyme_scheme": "Spoken intro followed by fast saxophone ska line",
+        "syllable_meter": [
+          5,
+          4
+        ],
+        "stress_pattern": "High-octane driving ska skank",
+        "clapping_cadence": "Full terrace nutty train dance / pogoing after final whistle"
+      },
+      "match_event_trigger": "FULL_TIME_CRUCIAL_WIN_CELEBRATION",
+      "generative_template": {
+        "description": "Post-match victory dance after securing qualification or beating a major rival.",
+        "slots": {
+          "VICTORY_MESSAGE": "Celebratory proclamation"
+        },
+        "template_lines": [
+          "Don't watch that, watch this!",
+          "One step beyond!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Chelsea FC",
+          "subject": "Full-Time Victory Dance",
+          "lyrics": "One step beyond! (Nutty train dance across Stamford Bridge)"
+        }
+      ]
+    },
+    {
+      "id": "askin_olayim",
+      "category": "Continental European Ultras Choirs",
+      "canonical_name": "A\u015fk\u0131n Olay\u0131m (Mediterranean Striker Ballad)",
+      "original_source": {
+        "title": "A\u015fk\u0131n Olay\u0131m",
+        "artist": "Simge (Composed by Onurr)",
+        "year": 2018,
+        "genre": "Anatolian Pop / Mediterranean Ballad",
+        "key": "D minor",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          86,
+          92
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          9,
+          9,
+          9,
+          9
+        ],
+        "stress_pattern": "Emotional minor ballad crescendo with 50,000 voices singing the chorus",
+        "clapping_cadence": "No clapping; fans perform striker's trademark gesture (hands to ears)"
+      },
+      "match_event_trigger": "STRIKER_HOME_GOAL_ICONIC_CELEBRATION",
+      "generative_template": {
+        "description": "Sensational bond between a charismatic foreign striker and the stadium crowd.",
+        "slots": {
+          "STRIKER_NAME": "Striker name (e.g. Mauro Icardi)"
+        },
+        "template_lines": [
+          "Let it hit, let it pass, it won't hurt my heart,",
+          "I have become your destiny, I have become your love,",
+          "Every goal you score lights up the entire city,",
+          "{STRIKER_NAME}!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Galatasaray (RAMS Park)",
+          "subject": "Mauro Icardi",
+          "lyrics": "Vursun, ge\u00e7sin, ac\u0131tmaz can\u0131m\u0131... / A\u015fk\u0131n olay\u0131m!"
+        }
+      ]
+    },
+    {
+      "id": "we_won_it_six_times",
+      "category": "British & Irish Hymns / Folk Marches",
+      "canonical_name": "We Won It Six Times (European Cup Dynasty)",
+      "original_source": {
+        "title": "Traditional European Trophy March",
+        "artist": "Terrace Oral Tradition",
+        "year": 1977,
+        "genre": "Terrace March",
+        "key": "G major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          118,
+          126
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "AABB",
+        "syllable_meter": [
+          6,
+          6,
+          8,
+          8
+        ],
+        "stress_pattern": "Punchy repetitive boast chant",
+        "clapping_cadence": "Rhythmic double clap between lines"
+      },
+      "match_event_trigger": "TAUNTING_DOMESTIC_RIVALS_WITH_EUROPEAN_TITLES",
+      "generative_template": {
+        "description": "Bragging about historical continental silverware against domestic rivals who lack European titles.",
+        "slots": {
+          "TITLE_COUNT": "Number of continental cups won (e.g. six, five, four)",
+          "FINAL_CITY": "City where latest cup was won"
+        },
+        "template_lines": [
+          "We won it {TITLE_COUNT} times,",
+          "We won it {TITLE_COUNT} times,",
+          "In {FINAL_CITY} we won it {TITLE_COUNT} times,",
+          "We won it {TITLE_COUNT} times!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Liverpool FC / Real Madrid / AC Milan",
+          "subject": "Continental Supremacy",
+          "lyrics": "We won it six times, we won it six times! / In Madrid we won it six times!"
+        }
+      ]
+    },
+    {
+      "id": "you_cant_buy_class",
+      "category": "Situational / Away-End Match-State Taunts",
+      "canonical_name": "You Can't Buy Class (Financial Fair Play Taunt)",
+      "original_source": {
+        "title": "Terrace Spoken Monophony",
+        "artist": "Working Class Terrace Oral Folk",
+        "year": 2005,
+        "genre": "Acapella Taunt",
+        "key": "Monophonic",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          112,
+          120
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 2,
+        "rhyme_scheme": "Repeated phrase with heavy foot stomps",
+        "syllable_meter": [
+          5,
+          6
+        ],
+        "stress_pattern": "Heavy downbeat emphasis",
+        "clapping_cadence": "Steady cadence marching claps"
+      },
+      "match_event_trigger": "UNDERDOG_DEFEATING_BILLIONAIRE_SPENDING_CLUB",
+      "generative_template": {
+        "description": "Taunting state-owned or billionaire-funded clubs when an underdog outplays them.",
+        "slots": {
+          "RIVAL_CLUB": "Wealthy opponent"
+        },
+        "template_lines": [
+          "You bought the league, you bought the grass,",
+          "Where were you when you were shit?",
+          "You can't buy class, no you can't buy class!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Universal EFL / Traditional Clubs vs New Money",
+          "subject": "Financial Taunt",
+          "lyrics": "Where were you when you were shit? / You can't buy history, you can't buy class!"
+        }
+      ]
+    },
+    {
+      "id": "twist_and_shout",
+      "category": "Pop & Rock Terrace Standards",
+      "canonical_name": "Twist and Shout / La Bamba (Away Day Party)",
+      "original_source": {
+        "title": "Twist and Shout",
+        "artist": "The Isley Brothers / The Beatles / Bert Berns",
+        "year": 1961,
+        "genre": "Rock & Roll / R&B",
+        "key": "D major",
+        "meter": "4/4",
+        "tempo_bpm_range": [
+          128,
+          136
+        ]
+      },
+      "prosody_and_structure": {
+        "verse_lines": 4,
+        "rhyme_scheme": "Call and Response",
+        "syllable_meter": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "stress_pattern": "Classic `I - IV - V` Latin rock syncopation",
+        "clapping_cadence": "Fans waving jackets and scarves in a bouncing circle"
+      },
+      "match_event_trigger": "PARTY_ATMOSPHERE_LARGE_AWAY_ALLOCATION",
+      "generative_template": {
+        "description": "Celebratory away end party chant during a routine comfortable away victory.",
+        "slots": {
+          "PLAYER_NAME": "Beloved player or manager"
+        },
+        "template_lines": [
+          "Well shake it up {PLAYER_NAME} now, (shake it up {PLAYER_NAME}!)",
+          "Twist and shout! (twist and shout!)",
+          "Come on and work it on out now, (work it on out!)",
+          "You know you look so good!"
+        ]
+      },
+      "real_world_variants": [
+        {
+          "club": "Universal British & European Away Days",
+          "subject": "Terrace Party",
+          "lyrics": "Shake it up baby now, twist and shout!"
+        }
+      ]
+    }
+  ],
+  "liverpool_chant_encyclopedia": [
+    {
+      "chant_name": "Diogo Jota Chant",
+      "subject": "Diogo Jota",
+      "original_source_song": "Bad Moon Rising",
+      "original_artist": "Creedence Clearwater Revival (John Fogerty)",
+      "release_year": 1969,
+      "original_genre": "Roots Rock",
+      "source_url": "http://www.youtube.com/watch?v=zUQiUFZ5RDw",
+      "in_stadium_url": "http://www.youtube.com/watch?v=UXMqdoymeOQ",
+      "lyrics": "Oh he wears the number 20, he will take us to victory,\nAnd when he's running down the left wing, he'll cut inside and score for LFC,\nHe's a lad from Portugal, better than Figo don't you know,\nOh his name is Diogo!"
+    },
+    {
+      "chant_name": "Sim Se\u00f1or (Bobby Firmino)",
+      "subject": "Roberto Firmino",
+      "original_source_song": "Y dale alegr\u00eda a mi coraz\u00f3n",
+      "original_artist": "Fito P\u00e1ez",
+      "release_year": 1990,
+      "original_genre": "Argentine Rock / Pop Rock",
+      "source_url": "http://www.youtube.com/watch?v=-9f24o5V60k",
+      "recorded_or_boss_url": "http://www.youtube.com/watch?v=MuRx0aQjpJ4",
+      "in_stadium_url": "http://www.youtube.com/watch?v=iN8q4axcd0Q",
+      "lyrics": "There's something that the Kop wants you to know,\nThe best in the world his name is Bobby Firmino,\nOur number nine,\nGive him the ball and he will score every time,\nSi Se\u00f1or, give the ball to Bobby and he will score!"
+    },
+    {
+      "chant_name": "Mo Salah (Running Down the Wing)",
+      "subject": "Mohamed Salah",
+      "original_source_song": "Sit Down",
+      "original_artist": "James",
+      "release_year": 1989,
+      "original_genre": "Madchester / Indie Rock",
+      "source_url": "http://www.youtube.com/watch?v=zPNw_2h0CnU",
+      "in_stadium_url": "http://www.youtube.com/watch?v=eqyWFmkkTGw",
+      "lyrics": "Mo Salah! Mo Salah! Mo Salah! Running down the wing!\nSalah la la la la la la la, Egyptian King!"
+    },
+    {
+      "chant_name": "Thiago Alc\u00e2ntara Chant",
+      "subject": "Thiago Alc\u00e2ntara",
+      "original_source_song": "Cuba",
+      "original_artist": "Gibson Brothers",
+      "release_year": 1978,
+      "original_genre": "Euro-Disco / Latin Disco",
+      "source_url": "http://www.youtube.com/watch?v=cRuHjC4gefM",
+      "in_stadium_url": "http://www.youtube.com/watch?v=uZ5wygkbjLg",
+      "lyrics": "Thiago, Thiago Alc\u00e2ntara!\nYou dance through the midfield like nobody does,\nThe first time I saw you I knew it was love,\nThiago, Thiago Alc\u00e2ntara!"
+    },
+    {
+      "chant_name": "I'm So Glad That J\u00fcrgen Is a Red",
+      "subject": "J\u00fcrgen Klopp",
+      "original_source_song": "I Feel Fine",
+      "original_artist": "The Beatles",
+      "release_year": 1964,
+      "original_genre": "Beat / Merseybeat",
+      "source_url": "http://www.youtube.com/watch?v=WrAV5EVI4tU",
+      "recorded_or_boss_url": "http://www.youtube.com/watch?v=tiq6BP5v5d4",
+      "in_stadium_url": "http://www.youtube.com/watch?v=Ds50zJv8WjE",
+      "lyrics": "I'm so glad that J\u00fcrgen is a Red,\nI'm so glad he delivered what he said,\nJ\u00fcrgen said to me you know, we'll win the Premier League you know, he said so,\nI'm in love with him and I feel fine!"
+    },
+    {
+      "chant_name": "Luis D\u00edaz (His Name Is Lucho)",
+      "subject": "Luis D\u00edaz",
+      "original_source_song": "Bella Ciao",
+      "original_artist": "Italian Partisan Folk Tradition",
+      "release_year": 1943,
+      "original_genre": "Anti-Fascist Folk",
+      "source_url": "http://www.youtube.com/watch?v=O7W-365s-8c",
+      "in_stadium_url": "http://www.youtube.com/watch?v=O7W-365s-8c",
+      "lyrics": "His name is Lucho, he's from Barrancas,\nAnd he plays for Liverpool!\nHe scores with his left, he scores with his right,\nAnd when he scores, he dances all night!"
+    },
+    {
+      "chant_name": "Dominik Szoboszlai Chant",
+      "subject": "Dominik Szoboszlai",
+      "original_source_song": "This Is the Life",
+      "original_artist": "Amy Macdonald",
+      "release_year": 2007,
+      "original_genre": "Indie Folk / Pop Rock",
+      "source_url": "http://www.youtube.com/watch?v=iRYvuS9OxdA",
+      "lyrics": "Dominik Szoboszlai, Hungarian lad who can hit it so high,\nDancing past players like he doesn't care,\nDominik Szoboszlai!"
+    },
+    {
+      "chant_name": "Federico Chiesa Chant",
+      "subject": "Federico Chiesa",
+      "original_source_song": "Sway (Qui\u00e9n Ser\u00e1)",
+      "original_artist": "Dean Martin (Luis Demetrio / Pablo Beltr\u00e1n Ruiz)",
+      "release_year": 1954,
+      "original_genre": "Mambo / Big Band Pop",
+      "source_url": "http://www.youtube.com/watch?v=J76ExFgg0Vs",
+      "lyrics": "We can hear them crying in Turin, Federico he's here to win,\nOne chat with Arne Slot and he said ciao, I'm a Kopite now!"
+    },
+    {
+      "chant_name": "Virgil van Dijk (He's Our Centre Half)",
+      "subject": "Virgil van Dijk",
+      "original_source_song": "Dirty Old Town",
+      "original_artist": "The Pogues / Ewan MacColl",
+      "release_year": 1949,
+      "original_genre": "Folk / Celtic Punk",
+      "source_url": "http://www.youtube.com/watch?v=s11BuatTuXk",
+      "recorded_or_boss_url": "http://www.youtube.com/watch?v=pa6_0xhHx-o",
+      "in_stadium_url": "http://www.youtube.com/watch?v=TB5tc_XmEeY",
+      "lyrics": "He's our centre-half, he's our number four,\nWatch him defend and we watch him score,\nHe can pass the ball, calm as you like,\nHe's Virgil van Dijk, he's Virgil van Dijk!"
+    },
+    {
+      "chant_name": "Sadio Man\u00e9 Chant",
+      "subject": "Sadio Man\u00e9",
+      "original_source_song": "Voulez-Vous",
+      "original_artist": "ABBA",
+      "release_year": 1979,
+      "original_genre": "Disco",
+      "lyrics": "Sadio! (Man\u00e9!) / Running down the wing, / Hear the Kopites sing, / And we won it in Madrid!"
+    },
+    {
+      "chant_name": "Divock Origi (Saturday Night)",
+      "subject": "Divock Origi",
+      "original_source_song": "Saturday Night",
+      "original_artist": "Whigfield",
+      "release_year": 1994,
+      "original_genre": "Eurodance",
+      "source_url": "http://www.youtube.com/watch?v=8DNQRtmIMxk",
+      "recorded_or_boss_url": "http://www.youtube.com/watch?v=_byRt1Dgrf4",
+      "in_stadium_url": "http://www.youtube.com/watch?v=9LuKOoWbSG0",
+      "lyrics": "Saturday night and I like the way you move, Divock Origi! / Saturday night and I like the way you move, Divock Origi!"
+    },
+    {
+      "chant_name": "Steven Gerrard (Steve Gerrard, Gerrard)",
+      "subject": "Steven Gerrard",
+      "original_source_song": "Que Sera, Sera (Whatever Will Be, Will Be)",
+      "original_artist": "Doris Day (Jay Livingston & Ray Evans)",
+      "release_year": 1956,
+      "original_genre": "Traditional Pop Waltz",
+      "lyrics": "Steve Gerrard, Gerrard,\nHe'll pass the ball 40 yards,\nHe's big and he's fucking hard,\nSteve Gerrard, Gerrard!"
+    },
+    {
+      "chant_name": "Fernando Torres (Armband Proved He Was a Red)",
+      "subject": "Fernando Torres",
+      "original_source_song": "When Johnny Comes Marching Home",
+      "original_artist": "Patrick Gilmore / American Civil War March",
+      "release_year": 1863,
+      "original_genre": "Military March",
+      "lyrics": "His armband proved he was a red, Torres, Torres!\nYou'll Never Walk Alone it said, Torres, Torres!\nWe bought the lad from sunny Spain, he gets the ball and scores again,\nFernando Torres, Liverpool's number nine!"
+    },
+    {
+      "chant_name": "Luis Su\u00e1rez Chant",
+      "subject": "Luis Su\u00e1rez",
+      "original_source_song": "Just Can't Get Enough",
+      "original_artist": "Depeche Mode",
+      "release_year": 1981,
+      "original_genre": "Synth-Pop",
+      "source_url": "http://www.youtube.com/watch?v=_6FBfAQ-NDE",
+      "lyrics": "His name is Luis Suarez and he just can't get enough, / He just can't get enough!"
+    },
+    {
+      "chant_name": "Best Midfield in the World",
+      "subject": "Alonso, Sissoko, Gerrard, Mascherano",
+      "original_source_song": "Sloop John B",
+      "original_artist": "The Beach Boys",
+      "release_year": 1966,
+      "original_genre": "Folk Rock",
+      "source_url": "http://www.youtube.com/watch?v=tLoS8bGr0uo",
+      "lyrics": "We've got the best midfield in the world!\nWe've got Xabi Alonso, Momo Sissoko, Gerrard and Mascherano!"
+    },
+    {
+      "chant_name": "Team of Carraghers",
+      "subject": "Jamie Carragher",
+      "original_source_song": "Yellow Submarine",
+      "original_artist": "The Beatles",
+      "release_year": 1966,
+      "original_genre": "Pop / Singalong",
+      "lyrics": "We all dream of a team of Carraghers, a team of Carraghers, a team of Carraghers!"
+    },
+    {
+      "chant_name": "Liverbird Upon My Chest",
+      "subject": "Liverpool Identity & Championship Run",
+      "original_source_song": "The Ballad of the Green Berets",
+      "original_artist": "SSgt Barry Sadler",
+      "release_year": 1966,
+      "original_genre": "Military Ballad",
+      "source_url": "http://www.youtube.com/watch?v=0ZXHsiFaUFM",
+      "lyrics": "Liverbird upon my chest, we are the men of Shankly's best,\nA silver cup to crown the year, to make the Kopites shout and cheer!"
+    },
+    {
+      "chant_name": "The Fields of Anfield Road",
+      "subject": "Anfield Heritage",
+      "original_source_song": "The Fields of Athenry",
+      "original_artist": "Pete St. John / The Dubliners",
+      "release_year": 1979,
+      "original_genre": "Irish Folk",
+      "source_url": "http://www.youtube.com/watch?v=_NlrsmEvv1Q",
+      "recorded_or_boss_url": "http://www.youtube.com/watch?v=W9Bs7VezEQg",
+      "in_stadium_url": "http://www.youtube.com/watch?v=XxmWAMAUZpc",
+      "lyrics": "All round the Fields of Anfield Road, where once we watched the King Kenny play..."
+    },
+    {
+      "chant_name": "Poor Scouser Tommy",
+      "subject": "Kopite Legend",
+      "original_source_song": "Red River Valley + The Sash",
+      "original_artist": "Traditional Western Folk / Marty Robbins",
+      "release_year": 1870,
+      "original_genre": "Folk Ballad into March",
+      "source_url": "http://www.youtube.com/watch?v=OSWcJVMZ3rQ",
+      "recorded_or_boss_url": "http://www.youtube.com/watch?v=puHt8Gb9za8",
+      "in_stadium_url": "http://www.youtube.com/watch?v=-WGeepTiWVI",
+      "lyrics": "Oh I am a Liverpudlian, I come from the Spion Kop..."
+    },
+    {
+      "chant_name": "Allez Allez Allez",
+      "subject": "European Conquest",
+      "original_source_song": "L'Estate Sta Finendo",
+      "original_artist": "Righeira",
+      "release_year": 1985,
+      "original_genre": "Italo-Disco",
+      "source_url": "http://www.youtube.com/watch?v=d63zhQZDQeo",
+      "recorded_or_boss_url": "http://www.youtube.com/watch?v=IeECirFyk8E",
+      "in_stadium_url": "http://www.youtube.com/watch?v=mEM8XbPqbys",
+      "lyrics": "We've conquered all of Europe, we're never gonna stop..."
+    },
+    {
+      "chant_name": "You'll Never Walk Alone",
+      "subject": "Club Anthem",
+      "original_source_song": "Carousel",
+      "original_artist": "Rodgers & Hammerstein / Gerry & The Pacemakers",
+      "release_year": 1945,
+      "original_genre": "Showtune / Merseybeat",
+      "source_url": "http://www.youtube.com/watch?v=OV5_LQArLa0",
+      "in_stadium_url": "http://www.youtube.com/watch?v=HcBRHYuOr-A",
+      "lyrics": "When you walk through a storm, hold your head up high..."
+    }
+  ]
+}

@@ -131,21 +131,19 @@ describe('Tournament & Match Engine Extensions Tests', () => {
             const denmark = euros['Denmark'];
             const switzerland = euros['Switzerland'];
             
-            // Force a scenario where simulateKnockoutQuickMatch gets called
-            // We run it 20 times to ensure we hit a draw and verify penalty resolution
-            let shootoutFound = false;
-            for (let i = 0; i < 20; i++) {
-                const result = simulateKnockoutQuickMatch(denmark, switzerland);
-                if (result.homeGoals === result.awayGoals) {
-                    shootoutFound = true;
-                    expect(result.penaltyWinner).toBeDefined();
-                    expect(['home', 'away']).toContain(result.penaltyWinner);
-                    expect(result.penaltyScore).toBeDefined();
-                    expect(result.penaltyScore).toMatch(/^\d+-\d+$/);
-                }
-            }
-            // Draw matches are common enough that 20 simulations should yield at least one draw
-            expect(shootoutFound).toBe(true);
+            const candidates = Array.from({ length: 256 }, (_, index) =>
+                simulateKnockoutQuickMatch(denmark, switzerland, `knockout-test-${index}`)
+            );
+            const shootout = candidates.find(result => result.homeGoals === result.awayGoals);
+            expect(shootout).toBeDefined();
+            if (!shootout) throw new Error('Expected at least one seeded draw.');
+
+            expect(shootout.penaltyWinner).toBeDefined();
+            expect(['home', 'away']).toContain(shootout.penaltyWinner);
+            expect(shootout.penaltyScore).toMatch(/^\d+-\d+$/);
+            expect(simulateKnockoutQuickMatch(denmark, switzerland, 'knockout-test-0')).toEqual(
+                simulateKnockoutQuickMatch(denmark, switzerland, 'knockout-test-0')
+            );
         });
     });
 });

@@ -77,9 +77,10 @@ export interface Player {
   rating: number;
   age: number;
   nationality: string;
-  potential: number; // 0-100, how good they can become
-  growthRate: number; // Modifier for development speed
-  form: number; // Current form based on recent performance, affects rating temporarily
+  /** Hydrated on career creation for older/static catalog records. */
+  potential?: number; // 0-100, how good they can become
+  growthRate?: number; // Modifier for development speed
+  form?: number; // Current form based on recent performance, affects rating temporarily
   personality: PlayerPersonality;
   wage: number;
   status: PlayerStatus;
@@ -108,6 +109,7 @@ export type ChairmanPersonality = 'Traditionalist' | 'Ambitious Tycoon' | 'Money
 export interface Tactic {
   formation: Formation;
   mentality: Mentality;
+  instructions?: string[];
 }
 
 export type LeagueTier = 'Premier League' | 'Championship' | 'La Liga' | 'Serie A' | 'Bundesliga' | 'Ligue 1' | 'MLS' | 'International' | 'Champions League';
@@ -122,19 +124,23 @@ export interface PromiseData {
 
 export interface Team {
   name: string;
+  shortName?: string;
   league: LeagueTier;
   players: Player[];
   tactic: Tactic;
+  /** Legacy test/save alias; normalized to tactic on import. */
+  tactics?: Tactic;
   prestige: number;
   chairmanPersonality: ChairmanPersonality;
   group?: string;
   balance: number; 
-  weeklyWageBill: number;
-  matchDayRevenue: number;
-  transferBudget: number;
+  weeklyWageBill?: number;
+  matchDayRevenue?: number;
+  transferBudget?: number;
   objectives: string[];
   activePromises: PromiseData[]; // MEMORY SYSTEM
-  weeklyBroadcastRevenue: number;
+  weeklyBroadcastRevenue?: number;
+  history?: unknown[];
   colors?: { // Dynamic Theming
       primary: string;
       secondary: string;
@@ -196,6 +202,9 @@ export interface MatchEvent {
     description: string;
     scoreAfter?: string;
     cardType?: 'yellow' | 'red';
+    /** Normalized deterministic pitch coordinate (0-100), if the event occurred on-field. */
+    pitchX?: number;
+    pitchY?: number;
 }
 
 export interface MatchState {
@@ -208,6 +217,10 @@ export interface MatchState {
     subsUsed: { home: number; away: number };
     momentum: number;
     tacticalAnalysis: string;
+    /** Persisted source of truth for replayable engine events. */
+    simulationSeed?: number;
+    /** Monotonic session key used to reject stale asynchronous presentation work. */
+    sessionId?: string;
 }
 
 export enum GameState {
@@ -264,7 +277,7 @@ export interface NewsItem {
     week: number;
     title: string;
     body: string;
-    type: 'call-up' | 'tournament-result' | 'player-return' | 'chemistry-rift' | 'contract-renewal' | 'player-departure' | 'injury' | 'suspension' | 'scout-report' | 'press' | 'finance' | 'promise-broken' | 'serious-rift' | 'teammate-bond' | 'job-offer';
+    type: string;
     riftDecision?: {
         riftPlayerA: string;
         riftPlayerB: string;
