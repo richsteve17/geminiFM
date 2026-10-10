@@ -5,7 +5,7 @@ import { GlobeAltIcon } from './icons/GlobeAltIcon';
 import { TEAMS } from '../constants';
 import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled, getPaidVoiceName, setPaidVoiceName } from '../services/geminiService';
 import { BUILD_INFO } from '../buildInfo';
-import { getSeasonKitThemes } from '../data/seasonThemes';
+import { getSeasonKitThemes, hasVerifiedSeasonKits } from '../data/seasonThemes';
 
 interface StartScreenProps {
     onSelectTeam: () => void;
@@ -15,10 +15,11 @@ interface StartScreenProps {
     onContinue?: () => void;
     hasSave?: boolean;
     saveMetadata?: { teamName: string; week: number; year: number; } | null;
+    initialTeam?: string;
 }
 
-const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect, onContinue, hasSave, saveMetadata }) => {
-    const [selectedTeam, setSelectedTeam] = useState<string>('Manchester City');
+const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect, onContinue, hasSave, saveMetadata, initialTeam = 'Manchester City' }) => {
+    const [selectedTeam, setSelectedTeam] = useState<string>(initialTeam);
     const [paidAudio, setPaidAudio] = useState(isPaidAudioEnabled());
     const [paidVideo, setPaidVideo] = useState(isPaidVideoEnabled());
     const [paidVoice, setPaidVoice] = useState(getPaidVoiceName());
@@ -49,11 +50,11 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
     };
 
     const getKits = (teamName: string) => {
-        const team = TEAMS[teamName];
-        return team ? getSeasonKitThemes(team) : [];
+        return getSeasonKitThemes(teamName);
     };
 
     const currentKits = getKits(selectedTeam);
+    const hasVerifiedKits = hasVerifiedSeasonKits(selectedTeam);
 
     return (
         <div className="relative flex flex-col items-center justify-center min-h-[88vh] px-4 py-8 w-full max-w-7xl mx-auto overflow-hidden rounded-2xl bg-slate-950 border border-slate-800/80 shadow-2xl">
@@ -259,12 +260,11 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
 
             {/* --- CURRENT-SEASON CLUB THEME SELECTOR --- */}
             <div className="z-10 w-full max-w-4xl text-center flex flex-col items-center">
-                {onThemeSelect && (
-                    <div className="mb-6 w-full animate-in fade-in slide-in-from-bottom-4">
+                <div className="mb-6 w-full animate-in fade-in slide-in-from-bottom-4">
                         
                         <div className="flex flex-col items-center mb-4">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">{BUILD_INFO.season} Club Theme Pack</label>
-                            <p className="text-[9px] text-slate-600 max-w-xl mb-2">Club-colour UI themes for this season; not licensed shirt artwork or a kit-design claim.</p>
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">{BUILD_INFO.season} Verified Kit Catalog</label>
+                            <p className="text-[9px] text-slate-600 max-w-xl mb-2">Source-backed kit references drive the UI palette. No legacy-color fallback is presented as a current kit.</p>
                             <div className="relative inline-block w-64">
                                 <select 
                                     onChange={(e) => handleTeamChange(e.target.value)}
@@ -281,48 +281,36 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                             </div>
                         </div>
 
-                        {/* Club theme cards */}
-                        <div className="flex flex-wrap justify-center gap-4">
-                            {currentKits.map((kit) => (
-                                <button
-                                    key={kit.id}
-                                    type="button"
-                                    onClick={() => handleKitSelect({ primary: kit.bg, secondary: kit.accent, text: kit.text })}
-                                    className="relative w-36 h-48 bg-slate-900/50 border border-slate-800 rounded-xl shadow-lg transition-all hover:scale-105 hover:border-slate-600 group overflow-hidden flex flex-col items-center p-3"
-                                >
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-3 block">{kit.label}</span>
-                                    
-                                    <div className="relative mb-3 flex-grow flex items-center justify-center">
-                                        <svg 
-                                            className="w-20 h-20 drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] transition-transform group-hover:scale-110 duration-300" 
-                                            viewBox="0 0 100 100" 
-                                            style={{ color: kit.bg }}
+                        {hasVerifiedKits ? (
+                            <div className="flex flex-wrap justify-center gap-4">
+                                {currentKits.map((kit) => (
+                                    <div key={kit.id} className="w-44 bg-slate-900/50 border border-slate-800 rounded-xl shadow-lg overflow-hidden flex flex-col">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleKitSelect({ primary: kit.bg, secondary: kit.accent, text: kit.text })}
+                                            disabled={!onThemeSelect}
+                                            className="group p-3 text-left transition-all hover:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-emerald-500/70 disabled:cursor-default disabled:opacity-90 disabled:hover:bg-transparent"
+                                            title={onThemeSelect ? `Apply ${kit.label} UI theme` : `${kit.label} source reference`}
                                         >
-                                            {/* jersey body */}
-                                            <path 
-                                                d="M 30,20 L 40,10 L 60,10 L 70,20 L 85,25 L 80,40 L 71,36 L 71,85 L 29,85 L 29,36 L 20,40 L 15,25 Z" 
-                                                fill="currentColor" 
-                                                stroke="#1e293b" 
-                                                strokeWidth="1.5"
-                                            />
-                                            {/* Sleeves stripe accent */}
-                                            <path d="M 15,25 L 20,40" stroke={kit.accent} strokeWidth="4" />
-                                            <path d="M 85,25 L 80,40" stroke={kit.accent} strokeWidth="4" />
-                                            {/* Collar collar outline */}
-                                            <path d="M 40,10 Q 50,22 60,10" fill="none" stroke={kit.accent} strokeWidth="4.5" />
-                                            {/* Center chest stripe or panel */}
-                                            <line x1="50" y1="22" x2="50" y2="85" stroke={kit.accent} strokeWidth="8" opacity="0.8" />
-                                        </svg>
+                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-2 block">{kit.label}</span>
+                                            <div className="h-28 mb-2 rounded-md bg-slate-950/70 overflow-hidden flex items-center justify-center border border-slate-800">
+                                                <img src={kit.imageUrl} alt={`${selectedTeam} ${kit.label} reference`} className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" loading="lazy" referrerPolicy="no-referrer" />
+                                            </div>
+                                            <p className="text-[9px] font-bold text-slate-200 uppercase tracking-wide leading-relaxed">{kit.colorNames.join(' · ')}</p>
+                                            <p className="mt-1 text-[8px] text-slate-500 leading-relaxed">{kit.design} · {kit.brand}</p>
+                                            <div className="mt-2 w-full text-center text-[9px] font-bold py-1 rounded bg-slate-950 border border-slate-800 text-slate-400 group-hover:text-emerald-400 group-hover:border-emerald-500/50 transition-colors uppercase tracking-wider">{onThemeSelect ? 'Apply UI Theme' : 'Reference Only'}</div>
+                                        </button>
+                                        <a href={kit.sourceUrl} target="_blank" rel="noreferrer" className="border-t border-slate-800 px-3 py-2 text-[8px] uppercase tracking-wider text-slate-500 hover:text-emerald-400 transition-colors">Source: {kit.sourceName} ↗</a>
                                     </div>
-
-                                    <div className="w-full text-center text-[9px] font-bold py-1 rounded bg-slate-950 border border-slate-800 text-slate-400 group-hover:text-emerald-400 group-hover:border-emerald-500/50 transition-colors uppercase tracking-wider">
-                                        Apply Theme
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="max-w-xl mx-auto rounded-lg border border-amber-900/60 bg-amber-950/20 px-4 py-3 text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">No verified {BUILD_INFO.season} kit record</p>
+                                <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{selectedTeam} is intentionally excluded from the current-kit selector until an authoritative source record is imported. The old generic palette is not being passed off as a new kit.</p>
+                            </div>
+                        )}
+                </div>
 
                 <details className="mt-2 w-full max-w-4xl text-left border border-slate-800 bg-slate-950/70 rounded-lg shadow-inner group">
                     <summary className="cursor-pointer list-none px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-widest text-slate-400 hover:text-emerald-300 transition-colors">

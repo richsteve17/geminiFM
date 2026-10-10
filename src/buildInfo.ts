@@ -8,7 +8,8 @@ export const CURRENT_BUILD_CHANGES = [
     'Server-only Gemini gateway with rate limits, model policy, and normalized response payloads.',
     'Deterministic fixture results, live event ledgers, shootouts, match ratings, and post-match state.',
     'Songbook-driven terrace audio and event-positioned 3D broadcast pitch presentation.',
-    'Release record and season-aware club UI theme selector replace the obsolete homepage dev log.',
+    'Source-backed 2026/27 kit cards now use verified Football Kit Archive records, reference imagery, and kit-specific UI palettes.',
+    'Unverified clubs no longer receive a generic legacy palette mislabeled as a current kit.',
 ] as const;
 
 export const BUILD_INFO = {
