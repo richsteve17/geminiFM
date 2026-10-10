@@ -4,6 +4,8 @@ import { BriefcaseIcon } from './icons/BriefcaseIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
 import { TEAMS } from '../constants';
 import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled, getPaidVoiceName, setPaidVoiceName } from '../services/geminiService';
+import { BUILD_INFO } from '../buildInfo';
+import { getSeasonKitThemes } from '../data/seasonThemes';
 
 interface StartScreenProps {
     onSelectTeam: () => void;
@@ -16,7 +18,6 @@ interface StartScreenProps {
 }
 
 const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect, onContinue, hasSave, saveMetadata }) => {
-    const [showDevlog, setShowDevlog] = useState(false);
     const [selectedTeam, setSelectedTeam] = useState<string>('Manchester City');
     const [paidAudio, setPaidAudio] = useState(isPaidAudioEnabled());
     const [paidVideo, setPaidVideo] = useState(isPaidVideoEnabled());
@@ -49,30 +50,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
 
     const getKits = (teamName: string) => {
         const team = TEAMS[teamName];
-        if (!team || !team.colors) return [];
-
-        const { primary, secondary, text, third: thirdColor } = team.colors;
-
-        return [
-            {
-                name: 'PRIMARY KIT',
-                bg: primary,
-                text: text,
-                accent: secondary
-            },
-            {
-                name: 'SECONDARY KIT',
-                bg: secondary,
-                text: primary === '#FFFFFF' ? '#000000' : '#FFFFFF',
-                accent: primary
-            },
-            {
-                name: 'THIRD KIT',
-                bg: thirdColor || '#1F2937',
-                text: '#FFFFFF',
-                accent: primary
-            }
-        ];
+        return team ? getSeasonKitThemes(team) : [];
     };
 
     const currentKits = getKits(selectedTeam);
@@ -106,15 +84,15 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 </div>
                 
                 <h1 className="text-5xl md:text-7xl font-black text-white italic tracking-tighter uppercase drop-shadow-lg mb-1">
-                    GEMINI <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500">FM '27</span>
+                    MANUS <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500">FM '27</span>
                 </h1>
                 
                 <div className="flex flex-wrap items-center justify-center gap-3 text-[10px] font-mono tracking-widest text-emerald-400 uppercase opacity-90 mb-6">
-                    <span className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-800/80 rounded">v3.0 Engine</span>
+                    <span className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-800/80 rounded">v{BUILD_INFO.version} · {BUILD_INFO.checkpoint}</span>
                     <span>•</span>
-                    <span className="px-2 py-0.5 bg-blue-950/80 border border-blue-800/80 rounded text-blue-400">Gemini 2.5 Flash</span>
+                    <span className="px-2 py-0.5 bg-blue-950/80 border border-blue-800/80 rounded text-blue-400">Server AI Gateway</span>
                     <span>•</span>
-                    <span className="px-2 py-0.5 bg-amber-950/80 border border-amber-800/80 rounded text-amber-400">Trophy Cabinet Live</span>
+                    <span className="px-2 py-0.5 bg-amber-950/80 border border-amber-800/80 rounded text-amber-400">{BUILD_INFO.season} Theme Pack</span>
                 </div>
 
                 <p className="text-sm md:text-base text-slate-300 font-light max-w-xl mx-auto leading-relaxed border-t border-b border-slate-800/80 py-3 bg-slate-900/30 backdrop-blur-md rounded-lg shadow-inner">
@@ -279,13 +257,14 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 )}
             </div>
 
-            {/* --- TEAM KIT THEME SELECTOR & JERSEYS --- */}
+            {/* --- CURRENT-SEASON CLUB THEME SELECTOR --- */}
             <div className="z-10 w-full max-w-4xl text-center flex flex-col items-center">
                 {onThemeSelect && (
                     <div className="mb-6 w-full animate-in fade-in slide-in-from-bottom-4">
                         
                         <div className="flex flex-col items-center mb-4">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">Team UI Color Theme Previewer</label>
+                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">{BUILD_INFO.season} Club Theme Pack</label>
+                            <p className="text-[9px] text-slate-600 max-w-xl mb-2">Club-colour UI themes for this season; not licensed shirt artwork or a kit-design claim.</p>
                             <div className="relative inline-block w-64">
                                 <select 
                                     onChange={(e) => handleTeamChange(e.target.value)}
@@ -302,19 +281,17 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                             </div>
                         </div>
 
-                        {/* Jersey kit Cards Container */}
+                        {/* Club theme cards */}
                         <div className="flex flex-wrap justify-center gap-4">
                             {currentKits.map((kit) => (
                                 <button
-                                    key={kit.name}
+                                    key={kit.id}
                                     type="button"
                                     onClick={() => handleKitSelect({ primary: kit.bg, secondary: kit.accent, text: kit.text })}
                                     className="relative w-36 h-48 bg-slate-900/50 border border-slate-800 rounded-xl shadow-lg transition-all hover:scale-105 hover:border-slate-600 group overflow-hidden flex flex-col items-center p-3"
                                 >
-                                    {/* Small badge label */}
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-3 block">{kit.name}</span>
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-3 block">{kit.label}</span>
                                     
-                                    {/* Miniature Football Shirt Vector Silhouette */}
                                     <div className="relative mb-3 flex-grow flex items-center justify-center">
                                         <svg 
                                             className="w-20 h-20 drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] transition-transform group-hover:scale-110 duration-300" 
@@ -347,36 +324,19 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     </div>
                 )}
 
-                {/* Developer / System Logs Console panel */}
-                <button 
-                    type="button"
-                    onClick={() => setShowDevlog(!showDevlog)}
-                    className="text-[9px] font-bold text-slate-500 hover:text-emerald-400 uppercase tracking-widest transition-colors mt-2"
-                >
-                    {showDevlog ? '[ Hide Server Logs ]' : '[ Show Server Logs ]'}
-                </button>
-
-                {showDevlog && (
-                    <div className="mt-4 bg-slate-950 border border-slate-900 p-5 rounded-lg text-left max-h-40 overflow-y-auto font-mono text-[10px] w-full text-slate-400 shadow-inner">
-                        <p className="text-emerald-500 mb-1.5">&gt; SYSTEM INITIALIZED</p>
-                        <p className="text-slate-500 mb-1">&gt; LOADING MODULE: GEMINI-2.5-FLASH... OK</p>
-                        <p className="text-slate-500 mb-1">&gt; LOADING MODULE: VEO-3.1... OK</p>
-                        <p className="text-blue-400 mt-2">&gt; ECONOMIC AUDIT COMPLETE:</p>
-                        <ul className="list-disc list-inside text-slate-500 pl-1 mb-1.5">
-                            <li>FIFA vs GFM Cost Crossover confirmed at Month 4.</li>
-                            <li>Streamer Mode Profit Calculation enabled (Revenue - COGS).</li>
-                            <li>Net Profit per Clip displayed in Viral Studio.</li>
+                <details className="mt-2 w-full max-w-4xl text-left border border-slate-800 bg-slate-950/70 rounded-lg shadow-inner group">
+                    <summary className="cursor-pointer list-none px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-widest text-slate-400 hover:text-emerald-300 transition-colors">
+                        <span>Release record · v{BUILD_INFO.version}</span>
+                        <span className="text-slate-600">{BUILD_INFO.checkpoint} · {BUILD_INFO.builtAt.slice(0, 19).replace('T', ' ')} UTC</span>
+                    </summary>
+                    <div className="border-t border-slate-800 px-4 py-3 text-[11px] text-slate-400">
+                        <p className="font-bold text-emerald-400 uppercase tracking-widest mb-2">Current build</p>
+                        <ul className="space-y-1.5 list-disc list-inside leading-relaxed">
+                            {BUILD_INFO.changes.map(change => <li key={change}>{change}</li>)}
                         </ul>
-                        <p className="text-blue-400 mt-2">&gt; PATCH NOTES v3.0:</p>
-                        <ul className="list-disc list-inside text-slate-500 pl-1">
-                            <li>Implemented permanent Trophy Room & Career Honors timeline dashboard.</li>
-                            <li>Added dynamic Board Objectives, Sacking Index pressure checks, and Resignations.</li>
-                            <li>Integrated weekly job poaching offers inside the News Feed.</li>
-                            <li>Added starting partner chemistry growth boosts (5% potential growth rate bonus).</li>
-                            <li>Migrated core text generation engines to low-overhead Gemini 2.5 Flash.</li>
-                        </ul>
+                        <p className="mt-3 text-[9px] text-slate-600 uppercase tracking-wider">This record is generated from package version, Git revision, and build timestamp — not runtime theater.</p>
                     </div>
-                )}
+                </details>
             </div>
         </div>
     );

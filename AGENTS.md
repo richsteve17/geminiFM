@@ -22,6 +22,11 @@ AI integrations live under `src/services/` (Gemini + media generation).
 Run `npm test -- --run`, `npx tsc --noEmit`, and `npm run build` before handoff. Keep
 engine tests close to their feature under `src/__tests__/`.
 
+## Release Record and Season Theme Maintenance
+- The homepage release record is generated from `package.json` version, the Git revision, and build timestamp. Bump the patch/minor version for user-visible releases.
+- Update `CURRENT_BUILD_CHANGES` in `src/buildInfo.ts` with factual changes included in the release. Do not use placeholder status or invented patch notes.
+- The bottom homepage selector is a **current-season club-colour UI theme pack**, not licensed kit art. Keep its season label and palette rules in `src/data/seasonThemes.ts` aligned with the active catalog snapshot.
+
 ## Commit & Pull Request Guidelines
 Commit history follows Conventional Commits (e.g., `feat(match): ...`, `fix(TeamDetails): ...`).
 When opening a PR, include:
