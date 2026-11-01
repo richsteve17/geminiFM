@@ -26,6 +26,7 @@ engine tests close to their feature under `src/__tests__/`.
 - The homepage release record is generated from `package.json` version, the Git revision, and build timestamp. Bump the patch/minor version for user-visible releases.
 - Update `CURRENT_BUILD_CHANGES` in `src/buildInfo.ts` with factual changes included in the release. Do not use placeholder status or invented patch notes.
 - The bottom homepage selector uses **source-backed current-season shirt photographs** and separately applies approximate UI palettes. Keep `src/data/seasonThemes.ts`, `src/data/seasonKitCatalog.json`, and the asset provenance manifests aligned. Preserve MLS calendar-year seasons, null unknown metadata, and honest unavailable-image states; never relabel old colours as new kits or claim a blanket artwork licence.
+- Pitch players use the pinned anatomical model, `Footballer.tsx`, `matchKits.ts`, and `playerMotion.ts`. Keep source lineage in `docs/footballer-adaptation.json`; source-photo projection is not an official complete kit or a player likeness. Shirt markers identify lineup slots, not unverified real squad numbers. Scope actor poses by team as well as name, preserve normalized skin weights / shader attributes, and freeze the visual clock on pause without modifying football results.
 
 ## Commit & Pull Request Guidelines
 Commit history follows Conventional Commits (e.g., `feat(match): ...`, `fix(TeamDetails): ...`).

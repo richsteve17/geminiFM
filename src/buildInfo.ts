@@ -5,7 +5,9 @@ declare const __MANUS_FM_BUILT_AT__: string;
 export const ACTIVE_SEASON = '2026/27';
 export const CURRENT_BUILD_CHANGES = [
     '235 locally packaged current-season kit photos across all 82 playable clubs. European 2026/27 and MLS 2026 labels remain distinct; unknown release/sponsor facts stay blank.',
-    'Authentic local club crests replace generic squad-header shirts across all 82 clubs. Emoji navigation and match decoration replaced by a consistent icon system; pitch sprites are unchanged.',
+    'Authentic local club crests replace generic squad-header shirts across all 82 clubs. Emoji navigation and match decoration use a consistent icon system.',
+    'Pitch players now use a sourced anatomical 16-bone footballer rig, articulated gait and resolved shooting/save/celebration poses. Club shirt photographs project onto the model; keeper colours, back panels, shorts and socks remain approximations, not official full-kit textures or player likenesses.',
+    'Clash-aware match kit selection, boot/sock detail and lineup-slot shirt markers. Closer broadcast camera and full-pitch tactical view; pause freezes the visual action and goal cue. One shared model geometry, independent player skeletons and bounded texture resolution.',
     '17 supplied recordings connected to kickoff, goals, pressure and full-time. Clubs or cues without a matching recording are marked unavailable.',
     'Live goals appear at their actual minute. Match highlights animate the resolved passing, crossing and shot paths; lineups, keeper placement, fatigue and tactics affect play.',
     'AI match commentary and contextual press use actual fixture facts. Direct Gemini quota exhaustion routes text through managed Gemini; managed calls use project credits and are capped.',
