@@ -12,7 +12,7 @@ interface TeamDetailsProps {
     managerReputation: number;
     nextFixture: Fixture | null;
     activeTab: 'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors';
-    onNavigateToTab: (tab: 'match' | 'tactics' | 'news' | 'scouting' | 'transfers' | 'honors') => void;
+    onNavigateToTab: (tab: 'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors') => void;
     onResign?: () => void;
 }
 
@@ -160,6 +160,8 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({
                 >
                     <span>🔍</span> Scout Network
                 </button>
+
+                <button onClick={() => onNavigateToTab('scouting_market')} className={`w-full py-2 px-3 text-left rounded-lg text-xs font-bold ${activeTab === 'scouting_market' ? 'bg-emerald-700 text-white' : 'text-slate-400 hover:bg-slate-900/45'}`}>Free Agency</button>
 
                 <button 
                     onClick={() => onNavigateToTab('transfers')} 

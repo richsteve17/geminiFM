@@ -15,6 +15,7 @@ const gitRevision = () => {
 
 export default defineConfig({
     base: '/',
+    build: { outDir: 'dist/public', emptyOutDir: true },
     define: {
         __MANUS_FM_VERSION__: JSON.stringify(packageVersion),
         __MANUS_FM_CHECKPOINT__: JSON.stringify(gitRevision()),

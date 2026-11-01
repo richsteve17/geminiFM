@@ -36,10 +36,10 @@ const Header: React.FC<HeaderProps> = ({ onQuit, onSave, onToggleGuide, onToggle
                 <div className="flex items-center">
                     <FootballIcon className="w-8 h-8 text-[var(--team-secondary,rgb(74,222,128))]" />
                     <h1 className="ml-4 text-xl sm:text-2xl font-bold tracking-wider text-white hidden sm:block">
-                        Gemini Football Manager '27
+                        Manus FM '27
                     </h1>
                     <h1 className="ml-4 text-xl font-bold tracking-wider text-white sm:hidden">
-                        GFM '27
+                        MFM '27
                     </h1>
                 </div>
                 

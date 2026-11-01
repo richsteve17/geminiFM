@@ -12,7 +12,10 @@ import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getCont
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 import AtmosphereWidget from './AtmosphereWidget';
-import { generatePunkChant, Chant } from '../services/chantService'; 
+import { createChantForCue, type Chant } from '../services/chantService';
+import { createAtmosphereCueMemory, selectAtmosphereCues } from '../engine/atmosphereCues';
+import { stadiumAudio } from '../services/audioDirector';
+import { summarizeMatch } from '../engine/matchPlayback';
 
 interface MatchViewProps {
     fixture: Fixture | undefined;
@@ -22,7 +25,7 @@ interface MatchViewProps {
     onPlayFirstHalf: () => void;
     onPlaySecondHalf: (shout: TouchlineShout) => void;
     onPauseMatch: () => void;
-    onSimulateSegment: (targetMinute: number, momentumShift?: number) => void; 
+    onSimulateSegment: (targetMinute: number, momentumShift?: number) => void;
     onNextMatch: () => void;
     error: string | null;
     isSeasonOver: boolean;
@@ -35,20 +38,20 @@ interface MatchViewProps {
     onMatchSpeedChange: (speed: 'slow' | 'normal' | 'fast' | 'instant') => void;
 }
 
-export default function MatchView({ 
-    fixture, weeklyResults, matchState, gameState, 
-    onPlayFirstHalf, onPlaySecondHalf, onSimulateSegment, onNextMatch, 
+export default function MatchView({
+    fixture, weeklyResults, matchState, gameState,
+    onPlayFirstHalf, onPlaySecondHalf, onSimulateSegment, onNextMatch,
     userTeamName, teams, isLoading, currentWeek, error, isSeasonOver,
     onPauseMatch, matchSpeed, onMatchSpeedChange
 }: MatchViewProps) {
     const isPaidAudio = isPaidAudioEnabled();
     const isPaidVideo = isPaidVideoEnabled();
-    
+
     const feedRef = useRef<HTMLDivElement>(null);
     const lastEventCountRef = useRef(0);
     const [assistantAdvice, setAssistantAdvice] = useState<string | null>(null);
     const [isAskingAssistant, setIsAskingAssistant] = useState(false);
-    
+
     // Feature States
     const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
     const [generatingVideoId, setGeneratingVideoId] = useState<number | null>(null);
@@ -56,15 +59,17 @@ export default function MatchView({
     const [videoFormat, setVideoFormat] = useState<'landscape' | 'portrait'>('landscape');
     const [currentClipEventId, setCurrentClipEventId] = useState<number | null>(null);
     const [mediaError, setMediaError] = useState<string | null>(null);
-    
+
     // Social Studio State
     const [socialPost, setSocialPost] = useState<SocialPostData | null>(null);
 
     // Atmosphere & Interaction
     const [availableShouts, setAvailableShouts] = useState<TacticalShout[]>([]);
     const [selectedShout, setSelectedShout] = useState<TacticalShout | null>(null);
-    const [currentChant, setCurrentChant] = useState<Chant | null>(null);
-    
+    const atmosphereMemoryRef = useRef(createAtmosphereCueMemory());
+    const [chantQueue, setChantQueue] = useState<Chant[]>([]);
+    const handleChantFinished = React.useCallback((id: string) => setChantQueue(queue => queue[0]?.id === id ? queue.slice(1) : queue), []);
+
     // THE SICK FEATURE: Touchline Scream
     const [customShout, setCustomShout] = useState('');
     const [isShouting, setIsShouting] = useState(false);
@@ -72,7 +77,7 @@ export default function MatchView({
     const [autoFollowFeed, setAutoFollowFeed] = useState(false);
     const [hasNewFeedEvents, setHasNewFeedEvents] = useState(false);
     const [feedOrder, setFeedOrder] = useState<'latest' | 'chronological'>('latest');
-    const [mobilePanel, setMobilePanel] = useState<'notes' | 'pitch'>('notes');
+    const [mobilePanel, setMobilePanel] = useState<'notes' | 'pitch'>('pitch');
 
     // Feed behavior: default to manual reading. Auto-follow is opt-in.
     useEffect(() => {
@@ -111,7 +116,7 @@ export default function MatchView({
 
     // Load Shouts at Halftime
     useEffect(() => {
-        if (gameState === GameState.PAUSED && matchState?.currentMinute === 45 && userTeamName && fixture) {
+        if (gameState === GameState.PAUSED && [45, 105].includes(matchState?.currentMinute || 0) && userTeamName && fixture) {
             const userTeam = teams[userTeamName];
             if (!userTeam) {
                 setAvailableShouts([]);
@@ -127,26 +132,33 @@ export default function MatchView({
     // Viral Clip Audio Auto-Play
     useEffect(() => {
         if (videoUrl && videoFormat === 'portrait' && socialPost && currentClipEventId) {
-            playMatchCommentary(socialPost.caption, currentClipEventId * 999); 
+            playMatchCommentary(socialPost.caption, currentClipEventId * 999);
         }
     }, [videoUrl, videoFormat, socialPost, currentClipEventId]);
 
-    // Chant Trigger Logic
     useEffect(() => {
-        if (matchState?.events?.length && gameState === GameState.PLAYING) {
-            const lastEvent = matchState.events[matchState.events.length - 1];
-            if (matchState.currentMinute - lastEvent.minute < 2) {
-                if (lastEvent.type === 'goal') {
-                    const isUserGoal = lastEvent.teamName === userTeamName;
-                    const player = lastEvent.player || "Unknown";
-                    generatePunkChant(userTeamName || "Team", isUserGoal ? 'goal' : 'losing', player).then(chant => {
-                        setCurrentChant(chant);
-                        setTimeout(() => setCurrentChant(null), 10000); 
-                    });
-                }
-            }
-        }
-    }, [matchState?.events?.length, userTeamName, gameState]);
+        atmosphereMemoryRef.current = createAtmosphereCueMemory();
+        setChantQueue([]);
+    }, [fixture?.id]);
+
+    useEffect(() => {
+        if (!fixture || !matchState) return;
+        const { cues, memory } = selectAtmosphereCues({
+            matchId: `${fixture.id}|${matchState.sessionId || 'live'}`, homeTeamName: fixture.homeTeam, awayTeamName: fixture.awayTeam,
+            currentMinute: matchState.currentMinute, momentum: matchState.momentum, events: matchState.events,
+            isLive: gameState !== GameState.PRE_MATCH && !matchState.isFinished, isFinished: matchState.isFinished,
+        }, atmosphereMemoryRef.current);
+        atmosphereMemoryRef.current = memory;
+        if (!cues.length) return;
+        const goals = cues.filter(cue => cue.kind === 'goal').map(createChantForCue);
+        const others = cues.filter(cue => cue.kind !== 'goal').map(createChantForCue);
+        setChantQueue(queue => goals.length ? [...goals, ...others] : [...queue, ...others].slice(0, 8));
+    }, [fixture?.id, gameState, matchState?.currentMinute, matchState?.events, matchState?.momentum, matchState?.isFinished]);
+
+    const handleKickoffWithAudio = async () => {
+        await stadiumAudio.unlockFromUserGesture();
+        onPlayFirstHalf();
+    };
 
     const handleAskAssistant = async () => {
         if (!fixture || !matchState || !userTeamName) return;
@@ -178,7 +190,7 @@ export default function MatchView({
         const commentary = `${event.minute}th minute. ${event.description}`;
         try {
             await playMatchCommentary(commentary, event.id);
-            setTimeout(() => setPlayingAudioId(null), 6000); 
+            setTimeout(() => setPlayingAudioId(null), 6000);
         } catch (e) {
             setMediaError("Audio unavailable.");
             setPlayingAudioId(null);
@@ -197,13 +209,13 @@ export default function MatchView({
         setSocialPost(null);
 
         const description = `${event.teamName} scores a goal. ${event.description}`;
-        
+
         if (format === 'portrait' && userTeamName) {
             generateSocialPost(description, userTeamName, 'goal').then(setSocialPost);
         }
 
         try {
-            const url = await generateReplayVideo(description, event.id, format); 
+            const url = await generateReplayVideo(description, event.id, format);
             if (url) {
                 setVideoUrl(url);
             } else {
@@ -219,9 +231,9 @@ export default function MatchView({
     const renderEvent = (event: MatchEvent) => {
         let color = 'text-gray-300';
         let icon = '•';
-        
+
         if (event.type === 'goal') { color = 'text-green-400 font-bold'; icon = '⚽'; }
-        if (event.type === 'card') { 
+        if (event.type === 'card') {
             if (event.cardType === 'red') { color = 'text-red-500 font-bold'; icon = '🟥'; }
             else { color = 'text-yellow-400'; icon = '🟨'; }
         }
@@ -235,7 +247,7 @@ export default function MatchView({
                 <div className="flex-1 min-w-0">
                      <p className={`text-xs sm:text-sm ${color} break-words whitespace-normal`}>
                         <span className="mr-2">{icon}</span>
-                        {event.description} 
+                        {event.description}
                         {event.scoreAfter && <span className="ml-2 text-white border border-gray-600 px-1 rounded bg-gray-800 inline-block">{event.scoreAfter}</span>}
                     </p>
                 </div>
@@ -262,7 +274,7 @@ export default function MatchView({
             <button onClick={onNextMatch} className="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">End Season</button>
         </div>
     );
-    
+
     if (gameState === GameState.PRE_MATCH && !fixture) {
          return <div className="text-center p-8"><h2 className="text-xl font-bold mb-2 text-green-400">Week {currentWeek}</h2><p>No match scheduled.</p></div>;
     }
@@ -272,6 +284,8 @@ export default function MatchView({
     const feedEvents = feedOrder === 'latest'
         ? [...(matchState?.events || [])].reverse()
         : (matchState?.events || []);
+    const spatialEvent = [...(matchState?.events || [])].reverse().find(event => event.play || event.pitchX !== undefined) || null;
+    const matchStats = summarizeMatch(matchState?.events || [], fixture?.homeTeam || '', fixture?.awayTeam || '');
 
     return (
         <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden flex flex-col relative h-[78vh] min-h-[520px] sm:h-[640px] lg:h-auto lg:min-h-[600px]">
@@ -280,7 +294,7 @@ export default function MatchView({
                     <button onClick={() => setVideoUrl(null)} className="absolute top-4 right-4 text-white hover:text-gray-300 z-50 bg-gray-800/50 rounded-full p-2">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
                     </button>
-                    
+
                     <div className={`relative ${videoFormat === 'portrait' ? 'max-w-[320px] aspect-[9/16] rounded-3xl border-0 ring-4 ring-gray-800' : 'w-full max-w-4xl aspect-[16/9] rounded-lg border-2 border-green-600'} shadow-2xl bg-black overflow-hidden`}>
                         <video src={videoUrl} controls autoPlay loop className="w-full h-full object-cover" />
                         {videoFormat === 'portrait' && socialPost && (
@@ -288,14 +302,14 @@ export default function MatchView({
                                 <div className="text-white space-y-2">
                                     <div>
                                         <h4 className="font-bold text-sm shadow-black drop-shadow-md flex items-center gap-1">
-                                            @{userTeamName?.replace(/\s/g, '').toLowerCase()}_official 
+                                            @{userTeamName?.replace(/\s/g, '').toLowerCase()}_official
                                              <span className="text-blue-400 text-[10px]">✓</span>
                                         </h4>
                                         <p className="text-xs mt-1 leading-snug drop-shadow-md opacity-90">
                                             {socialPost.caption}
                                         </p>
                                     </div>
-                                    
+
                                     {/* Engagement Stats */}
                                     <div className="flex items-center justify-between text-[10px] font-bold text-gray-300">
                                         <div className="flex items-center gap-3">
@@ -324,7 +338,7 @@ export default function MatchView({
             )}
 
             {gameState !== GameState.PRE_MATCH && (
-                <AtmosphereWidget chant={currentChant} momentum={matchState?.momentum || 0} teamName={userTeamName || "Home"} />
+                <AtmosphereWidget chant={chantQueue[0] ?? null} momentum={matchState?.momentum || 0} teamName={fixture?.homeTeam || 'Home'} onChantFinished={handleChantFinished} />
             )}
 
             <div className="bg-black p-3 sm:p-4 rounded-t-lg border-b border-gray-700 flex-shrink-0">
@@ -339,6 +353,11 @@ export default function MatchView({
                     </div>
                      <h3 className="text-base sm:text-xl lg:text-2xl font-bold w-1/3 text-left text-white truncate px-1 sm:px-2">{fixture?.awayTeam}</h3>
                 </div>
+                {matchState && <div className="mt-3 grid grid-cols-3 text-center text-xs text-slate-300 gap-1">
+                    <span>{matchStats.home.shots} / {matchStats.home.onTarget}</span><span className="text-slate-500">Shots / on target</span><span>{matchStats.away.shots} / {matchStats.away.onTarget}</span>
+                    <span className="text-amber-300">{matchStats.home.xG.toFixed(2)}</span><span className="text-slate-500">Expected goals</span><span className="text-amber-300">{matchStats.away.xG.toFixed(2)}</span>
+                </div>}
+                {matchState?.presentation && <p className={`mt-2 text-center text-xs ${matchState.presentation.mode === 'ai' ? 'text-emerald-400' : 'text-amber-300'}`}>{matchState.presentation.mode === 'ai' ? 'AI match director connected' : matchState.presentation.reason || 'Local match commentary'}</p>}
                 {(!isPaidAudio || !isPaidVideo) && (
                     <div className="text-center text-slate-400 text-[10px] mt-2 font-bold uppercase tracking-wider">
                         {!isPaidAudio && "🔊 Free Speech Engine Active"}
@@ -369,10 +388,10 @@ export default function MatchView({
 
                 {gameState !== GameState.PRE_MATCH && (
                     <div className={`${mobilePanel === 'pitch' ? 'block' : 'hidden'} sm:block flex-shrink-0 mb-2 sm:mb-4`}>
-                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={matchState?.events?.[matchState.events.length-1] || null} currentMinute={matchState?.currentMinute || 0} />
+                        <PitchView momentum={matchState?.momentum || 0} homeTeamName={fixture?.homeTeam || 'Home'} awayTeamName={fixture?.awayTeam || 'Away'} lastEvent={spatialEvent} currentMinute={matchState?.currentMinute || 0} homeScore={matchState?.homeScore} awayScore={matchState?.awayScore} homeTeam={fixture ? teams[fixture.homeTeam] : undefined} awayTeam={fixture ? teams[fixture.awayTeam] : undefined} paused={gameState !== GameState.PLAYING} />
                     </div>
                 )}
-                
+
                 <div ref={feedRef} onScroll={onFeedScroll} className={`${mobilePanel === 'notes' ? 'block' : 'hidden'} sm:block overflow-y-auto space-y-1 scroll-smooth flex-1 pr-1 sm:pr-2 min-h-[180px] sm:min-h-0`}>
                     <div className="sticky top-0 z-20 mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gray-900/90 border border-gray-700 rounded px-2 py-1">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -417,8 +436,8 @@ export default function MatchView({
                                             key={speed}
                                             onClick={() => onMatchSpeedChange(speed)}
                                             className={`text-[9px] uppercase px-2 py-0.5 rounded font-bold transition-all ${
-                                                matchSpeed === speed 
-                                                ? 'bg-green-600 text-white' 
+                                                matchSpeed === speed
+                                                ? 'bg-green-600 text-white'
                                                 : 'text-gray-400 hover:text-white hover:bg-gray-700'
                                             }`}
                                         >
@@ -430,8 +449,8 @@ export default function MatchView({
                             </div>
                         </div>
                         <form onSubmit={handleCustomShout} className="relative opacity-100 transition-opacity">
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 value={customShout}
                                 onChange={(e) => setCustomShout(e.target.value)}
                                 placeholder="SHOUT INSTRUCTION (e.g. 'Press them!')"
@@ -441,8 +460,8 @@ export default function MatchView({
                             <div className="absolute left-3 top-1/2 -translate-y-1/2">
                                 <UserIcon className="w-4 h-4 text-gray-400" />
                             </div>
-                            <button 
-                                type="submit" 
+                            <button
+                                type="submit"
                                 disabled={!customShout.trim() || isShouting}
                                 className="absolute right-2 top-1/2 -translate-y-1/2 bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded uppercase"
                             >
@@ -459,9 +478,9 @@ export default function MatchView({
                 ) : (
                     <>
                         {gameState === GameState.PRE_MATCH && fixture && (
-                            <button onClick={onPlayFirstHalf} className="w-full py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700 flex items-center justify-center gap-2"> 
-                                <FootballIcon className="w-5 h-5" /> KICK OFF 
-                            </button> 
+                            <button onClick={() => void handleKickoffWithAudio()} className="w-full py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700 flex items-center justify-center gap-2">
+                                <FootballIcon className="w-5 h-5" /> KICK OFF
+                            </button>
                         )}
 
                         {gameState === GameState.PAUSED && (
@@ -470,18 +489,18 @@ export default function MatchView({
                                     <p className="text-xs text-gray-400 font-bold">MATCH PAUSED</p>
                                 </div>
 
-                                {matchState?.currentMinute === 45 && (
+                                {[45, 105].includes(matchState?.currentMinute || 0) && (
                                     <div className="flex flex-col items-center space-y-2 mt-2 pt-2 border-t border-gray-700">
-                                        <h4 className="text-gray-400 text-xs uppercase font-bold">Half Time Talk</h4>
+                                        <h4 className="text-gray-400 text-xs uppercase font-bold">{matchState?.currentMinute === 105 ? 'Extra-time interval' : 'Half Time Talk'}</h4>
                                         <div className="flex gap-2 w-full overflow-x-auto pb-2">
                                             {availableShouts.map(shout => (
                                                 <button key={shout.id} onClick={() => setSelectedShout(shout)} className={`px-3 py-2 text-xs rounded border flex-shrink-0 ${selectedShout?.id === shout.id ? 'bg-blue-600 border-blue-400' : 'bg-gray-700 border-gray-600'}`}>{shout.label}</button>
                                             ))}
                                         </div>
-                                        <button onClick={() => onPlaySecondHalf(selectedShout?.label || 'Demand More')} className="w-full py-2 bg-green-600 text-white font-bold rounded">Start 2nd Half</button>
+                                        <button onClick={() => onPlaySecondHalf(selectedShout?.label || 'Demand More')} className="w-full py-2 bg-green-600 text-white font-bold rounded">{matchState?.currentMinute === 105 ? 'Resume extra time' : 'Start 2nd Half'}</button>
                                     </div>
                                 )}
-                                
+
                                 {matchState?.currentMinute !== 45 && (matchState?.currentMinute || 0) < 90 && (
                                     <div className="grid grid-cols-2 gap-2 mt-2">
                                         <button onClick={() => onPlaySecondHalf('resume')} className="py-3 bg-green-600 text-white rounded font-bold col-span-2">RESUME MATCH</button>

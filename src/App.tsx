@@ -4,11 +4,16 @@ import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './consta
 import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ContractTerms, TransferBid, CareerHistoryEntry, LeagueTier, PlayerEffect } from './types';
 import { AppScreen, GameState } from './types';
 import { hashSeed, simulateDeterministicShootout } from './engine/matchEngine';
+import { applyLiveFatigue, nextMatchBoundary, revealMatchMinute } from './engine/matchPlayback';
+import { isFreeAgent, mergeFreeAgentsIntoMarket, signFreeAgent, toFreeAgent } from './engine/freeAgency';
+import { applyPressConferenceTransition } from './engine/pressConference';
+import { buildPressContext } from './engine/pressContext';
+import { CAREER_SAVE_VERSION, migrateCareerSave } from './engine/careerSave';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
 import MatchView from './components/MatchView';
-import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConference, evaluatePressConference, PressConferenceReport, getInternationalBreakSummary, getTeammateTournamentRivalry } from './services/geminiService';
+import { simulateMatchSegment, getInterviewQuestions, evaluateInterview, getPlayerTalkQuestions, evaluatePlayerTalk, scoutPlayers, generatePressConferenceQuestions, type PressConferenceContext, type PressQuestionGenerationResult, type PressConferenceReport, getInternationalBreakSummary, getTeammateTournamentRivalry } from './services/geminiService';
 import { generateFixtures, simulateQuickMatch, generateSwissFixtures, analyzeTactics, FORMATION_SLOTS, calculatePlayerDevelopment, ensureTeamAndPlayerFields } from './utils';
 import StartScreen from './components/StartScreen';
 import TeamSelectionScreen from './components/TeamSelectionScreen';
@@ -20,7 +25,7 @@ import NewsScreen from './components/NewsScreen';
 import CreateManagerScreen from './components/CreateManagerScreen';
 import TutorialOverlay from './components/TutorialOverlay';
 import ScoutingScreen from './components/ScoutingScreen';
-import PressConferenceScreen from './components/PressConferenceScreen';
+import PressConferenceScreen, { type PressProgress } from './components/PressConferenceScreen';
 import MechanicsGuide from './components/MechanicsGuide';
 import TransferCenter from './components/TransferCenter';
 import TacticsManager from './components/TacticsManager';
@@ -126,8 +131,10 @@ export default function App() {
 
     const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
     const [scoutResults, setScoutResults] = useState<Player[]>([]);
-    const [pressQuestions, setPressQuestions] = useState<string[]>([]);
-    const [pressContext, setPressContext] = useState<string>('');
+    const [pressInput, setPressInput] = useState<PressConferenceContext | null>(null);
+    const [pressQuestionResult, setPressQuestionResult] = useState<PressQuestionGenerationResult | null>(null);
+    const appliedPressEvaluationIdsRef = useRef(new Set<string>());
+    const [pressProgress, setPressProgress] = useState<PressProgress | null>(null);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     const [managerReputation, setManagerReputation] = useState<number>(0);
     const [careerHistory, setCareerHistory] = useState<CareerHistoryEntry[]>([]);
@@ -139,6 +146,11 @@ export default function App() {
     const [activeTheme, setActiveTheme] = useState<{ primary: string, secondary: string, text: string } | null>(null);
 
     const userTeam = userTeamName ? teams[userTeamName] : null;
+    const liveSessionRef = useRef<string | undefined>(undefined);
+    liveSessionRef.current = matchState?.sessionId;
+    const simulationInFlightRef = useRef<string | null>(null);
+    const finishedMatchRef = useRef<string | null>(null);
+    const freeAgentSigningKeysRef = useRef(new Set<string>());
 
     // Logger Subscription
     useEffect(() => {
@@ -186,63 +198,29 @@ export default function App() {
             if (gameState === GameState.PLAYING && currentFixture && userTeam && matchState && !isLoading) {
                 
                 if (currentPlaybackMinute >= simulationTargetMinute) {
-                    console.log("Playback tick: Reached target minute", { currentPlaybackMinute, simulationTargetMinute });
-                    if (currentPlaybackMinute >= 90) {
-                        if (currentFixture.isKnockout && matchState.homeScore === matchState.awayScore && currentPlaybackMinute === 90) {
-                            const etEvent: MatchEvent = {
-                                id: Date.now(),
-                                minute: 90,
-                                type: 'commentary',
-                                description: 'The referee blows the whistle. The scores are level at 90 minutes. We are going to Extra Time!'
-                            };
-                            setPendingEvents(prev => [...prev, etEvent]);
-                            setSimulationTargetMinute(120);
-                            return;
+                    const boundary = nextMatchBoundary(matchState, currentFixture, !!activeShout, SIMULATION_CHUNK_MINUTES);
+                    if (boundary.kind === 'finish') {
+                        let completed = matchState;
+                        if (boundary.shootout) {
+                            const pens = simulateDeterministicShootout(teams[currentFixture.homeTeam], teams[currentFixture.awayTeam], `${currentFixture.id}|${matchState.simulationSeed ?? 0}`);
+                            completed = { ...matchState, penaltyWinner: pens.penaltyWinner, events: [...matchState.events, {
+                                id: hashSeed(`${matchState.simulationSeed ?? 0}|120|shootout`), minute: 120, type: 'commentary',
+                                description: `Penalty shootout: ${currentFixture.homeTeam} ${pens.homePenalties}-${pens.awayPenalties} ${currentFixture.awayTeam}.`,
+                            }] };
                         }
-                        if (currentFixture.isKnockout && currentPlaybackMinute >= 120) {
-                            if (matchState.homeScore === matchState.awayScore) {
-                                const { homePenalties, awayPenalties, penaltyWinner: penWinner } = simulateDeterministicShootout(
-                                    teams[currentFixture.homeTeam],
-                                    teams[currentFixture.awayTeam],
-                                    `${currentFixture.id}|${matchState.simulationSeed ?? 0}`
-                                );
-                                
-                                const penaltyEvent: MatchEvent = {
-                                    id: hashSeed(`${matchState.simulationSeed ?? 0}|120|shootout`),
-                                    minute: 120,
-                                    type: 'commentary',
-                                    description: `The match is decided by a penalty shootout! Shootout ends: ${currentFixture.homeTeam} ${homePenalties}-${awayPenalties} ${currentFixture.awayTeam}.`
-                                };
-                                
-                                setPendingEvents(prev => [...prev, penaltyEvent]);
-                                setMatchState(prev => prev ? {
-                                    ...prev,
-                                    penaltyWinner: penWinner
-                                } : null);
-                            }
-                            finishMatch();
-                            return;
-                        }
-                        if (currentFixture.isKnockout && currentPlaybackMinute >= 90 && currentPlaybackMinute < 120) {
-                            // Extra time is playing
-                        } else {
-                            finishMatch();
-                            return;
-                        }
+                        finishMatch(completed);
+                        return;
                     }
-                    if (currentPlaybackMinute === 45 && simulationTargetMinute === 45) {
-                        console.log("Playback tick: Pausing at halftime");
+                    if (boundary.kind === 'half-time') {
                         setGameState(GameState.PAUSED);
                         return;
                     }
-
+                    const nextTarget = boundary.target;
+                    const session = matchState.sessionId;
+                    const requestKey = `${session}|${currentPlaybackMinute}|${nextTarget}`;
+                    if (simulationInFlightRef.current) return;
+                    simulationInFlightRef.current = requestKey;
                     setIsLoading(true);
-                    let maxTarget = 90;
-                    if (currentFixture.isKnockout && simulationTargetMinute >= 90) {
-                        maxTarget = 120;
-                    }
-                    const nextTarget = Math.min(simulationTargetMinute + SIMULATION_CHUNK_MINUTES, simulationTargetMinute < 45 ? 45 : maxTarget);
-                    console.log("Playback tick: Next target", nextTarget);
                     
                     // --- CONSTRUCT TACTICAL CONTEXT ---
                     const starters = userTeam.players.filter(p => p.isStarter);
@@ -278,6 +256,7 @@ export default function App() {
                             nextTarget,
                             { shout: activeShout, userTeamName, tacticalContext }
                         );
+                        if (liveSessionRef.current !== session) return;
 
                         const rawEvents = Array.isArray(result?.events) ? result.events : [];
                         const safeEvents: MatchEvent[] = rawEvents.map((event: any, index: number) => {
@@ -300,13 +279,13 @@ export default function App() {
                                 cardType: event?.cardType === 'yellow' || event?.cardType === 'red' ? event.cardType : undefined,
                                 pitchX: Number.isFinite(Number(event?.pitchX)) ? Math.max(0, Math.min(100, Number(event.pitchX))) : undefined,
                                 pitchY: Number.isFinite(Number(event?.pitchY)) ? Math.max(0, Math.min(100, Number(event.pitchY))) : undefined,
+                                play: event.play,
+                                xG: event.xG,
+                                onTarget: event.onTarget,
+                                momentumAfter: event.momentumAfter,
                             };
                         });
 
-                        const safeHomeAdd = Number.isFinite(Number(result?.homeScoreAdded)) ? Number(result.homeScoreAdded) : 0;
-                        const safeAwayAdd = Number.isFinite(Number(result?.awayScoreAdded)) ? Number(result.awayScoreAdded) : 0;
-                        const parsedMomentum = Number(result?.momentum);
-                        const safeMomentum = Number.isFinite(parsedMomentum) ? Math.max(-100, Math.min(100, parsedMomentum)) : 0;
                         const safeAnalysis = typeof result?.tacticalAnalysis === 'string' && result.tacticalAnalysis.trim()
                             ? result.tacticalAnalysis
                             : 'The match continues.';
@@ -314,10 +293,8 @@ export default function App() {
                         setPendingEvents(prev => [...prev, ...safeEvents]);
                         setMatchState(prev => prev ? ({
                             ...prev,
-                            homeScore: prev.homeScore + safeHomeAdd,
-                            awayScore: prev.awayScore + safeAwayAdd,
-                            momentum: safeMomentum,
-                            tacticalAnalysis: safeAnalysis
+                            tacticalAnalysis: safeAnalysis,
+                            presentation: result.presentation,
                         }) : null);
                         setSimulationTargetMinute(nextTarget);
                         if (activeShout) setActiveShout(undefined);
@@ -327,6 +304,7 @@ export default function App() {
                         setError("Match simulation failed for this segment. Resume to continue.");
                         setGameState(GameState.PAUSED);
                     } finally {
+                        simulationInFlightRef.current = null;
                         setIsLoading(false);
                     }
                     return; 
@@ -343,31 +321,8 @@ export default function App() {
                 timeoutId = setTimeout(() => {
                     setCurrentPlaybackMinute(nextMinute);
                     
-                    // Live in-match fatigue: starters lose condition dynamically based on their individual stamina rating
-                    setTeams(prev => {
-                        const newTeams = { ...prev };
-                        Object.keys(newTeams).forEach(tName => {
-                            newTeams[tName].players = newTeams[tName].players.map(p => {
-                                if (p.isStarter) {
-                                    const staminaVal = p.stamina ?? 75;
-                                    const decayRate = (100 - staminaVal) * 0.005 + 0.12;
-                                    return { ...p, condition: Math.max(30, Math.round((p.condition - decayRate) * 100) / 100) };
-                                }
-                                return p;
-                            });
-                        });
-                        return newTeams;
-                    });
-
-                    if (eventsNow.length > 0) {
-                        setMatchState(prev => prev ? ({
-                            ...prev,
-                            events: [...prev.events, ...eventsNow],
-                            currentMinute: nextMinute 
-                        }) : null);
-                    } else {
-                        setMatchState(prev => prev ? ({ ...prev, currentMinute: nextMinute }) : null);
-                    }
+                    setTeams(prev => applyLiveFatigue(prev, currentFixture.homeTeam, currentFixture.awayTeam));
+                    setMatchState(prev => prev ? revealMatchMinute(prev, pendingEvents, nextMinute, currentFixture.homeTeam, currentFixture.awayTeam) : null);
                 }, delay);
             }
         };
@@ -397,7 +352,8 @@ export default function App() {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
                 managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory,
-                matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute
+                matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute,
+                version: CAREER_SAVE_VERSION, pressInput, pressQuestionResult, pressProgress, appliedPressEvaluationIds: [...appliedPressEvaluationIdsRef.current]
             };
             localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
             logger.success("Game Saved Successfully!");
@@ -411,11 +367,12 @@ export default function App() {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
                 managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory,
-                matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute
+                matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute,
+                version: CAREER_SAVE_VERSION, pressInput, pressQuestionResult, pressProgress, appliedPressEvaluationIds: [...appliedPressEvaluationIdsRef.current]
             };
             localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
         }
-    }, [currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory, matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute]);
+    }, [currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory, matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute, transferMarket, pressInput, pressQuestionResult, pressProgress, appScreen]);
 
     const handleQuit = () => {
         setAppScreen(AppScreen.START_SCREEN);
@@ -457,7 +414,14 @@ export default function App() {
         const savedData = localStorage.getItem('gfm_save_v1');
         if (savedData) {
             try {
-                const parsed = JSON.parse(savedData);
+                const parsed = migrateCareerSave(JSON.parse(savedData));
+                localStorage.setItem('gfm_save_v1_backup', savedData);
+                appliedPressEvaluationIdsRef.current = new Set(parsed.appliedPressEvaluationIds);
+                setPressInput(parsed.pressInput || null);
+                setPressQuestionResult(parsed.pressQuestionResult || null);
+                setPressProgress(parsed.pressProgress || null);
+                finishedMatchRef.current = null;
+                freeAgentSigningKeysRef.current.clear();
                 setUserTeamName(parsed.userTeamName);
                 setGameMode(parsed.gameMode);
                 setIsPrologue(parsed.isPrologue);
@@ -480,12 +444,12 @@ export default function App() {
                 setSimulationTargetMinute(Number.isFinite(parsed.simulationTargetMinute)
                     ? parsed.simulationTargetMinute
                     : restoredMatchState?.currentMinute || 0);
-                setManagerReputation(parsed.managerReputation || 50);
+                setManagerReputation(parsed.managerReputation);
                 if (parsed.transferMarket) setTransferMarket(parsed.transferMarket);
                 if (parsed.incomingBids) setIncomingBids(parsed.incomingBids);
                 if (parsed.careerHistory) setCareerHistory(parsed.careerHistory);
                 
-                if (parsed.appScreen === AppScreen.GAMEPLAY || parsed.appScreen === AppScreen.JOB_CENTRE) {
+                if ((parsed.appScreen === AppScreen.PRESS_CONFERENCE && parsed.pressInput && parsed.pressQuestionResult) || parsed.appScreen === AppScreen.GAMEPLAY || parsed.appScreen === AppScreen.JOB_CENTRE) {
                     setAppScreen(parsed.appScreen);
                 } else {
                     setAppScreen(AppScreen.GAMEPLAY);
@@ -498,7 +462,7 @@ export default function App() {
 
             } catch (e) {
                 console.error("Failed to load save", e);
-                alert("Save file corrupted.");
+                alert(e instanceof Error ? e.message : "Save file corrupted.");
             }
         }
     };
@@ -667,30 +631,12 @@ export default function App() {
         setIsLoading(true);
         if (gameState === GameState.POST_MATCH && matchState && userTeamName && currentFixture) {
             try { 
-                const oppName = currentFixture.homeTeam === userTeamName ? currentFixture.awayTeam : currentFixture.homeTeam;
-                const userGoals = currentFixture.homeTeam === userTeamName ? matchState.homeScore : matchState.awayScore;
-                const oppGoals = currentFixture.homeTeam === userTeamName ? matchState.awayScore : matchState.homeScore;
-                const result = userGoals > oppGoals ? 'won' : userGoals === oppGoals ? 'drew' : 'lost';
-                const scoreLine = `${userGoals}-${oppGoals}`;
-
-                const userClub = teams[userTeamName];
-                const tactics = userClub.tactic;
-                const standingIndex = leagueTable.findIndex(t => t.teamName === userTeamName);
-                const positionStr = standingIndex !== -1 ? `currently ranked ${standingIndex + 1}th out of ${leagueTable.length}` : 'unranked';
-                const activePromisesList = userClub.activePromises || [];
-                const promisesStr = activePromisesList.length > 0 ? activePromisesList.map(p => p.description).join(', ') : 'None';
-
-                const context = `You are journalists at a post-match press conference.
-${userTeamName} just ${result} against ${oppName} with a score of ${scoreLine}.
-Manager's Current Tactics: Formation: ${tactics.formation}, Mentality: ${tactics.mentality}.
-Current League Standings: ${userTeamName} is ${positionStr}.
-Manager's Active Promises to players/board: ${promisesStr}.
-
-The manager is fielding questions. Generate exactly 3 realistic, specific questions about the tactical performance, the match result, our standings, and how this relates to outstanding promises. Do not mention real-world players who aren't in the game.`;
-
-                const qs = await generatePressConference(context); 
-                setPressQuestions(qs); 
-                setPressContext(`${userTeamName} just ${result} against ${oppName} with a score of ${scoreLine}.`);
+                const opponentName = currentFixture.homeTeam === userTeamName ? currentFixture.awayTeam : currentFixture.homeTeam;
+                const snapshot = buildPressContext(currentFixture, matchState, teams[userTeamName], teams[opponentName], leagueTable, fixtures);
+                setPressInput(snapshot);
+                setPressProgress(null);
+                const result = await generatePressConferenceQuestions(snapshot);
+                setPressQuestionResult(result);
                 setAppScreen(AppScreen.PRESS_CONFERENCE); 
                 setIsLoading(false); 
                 return; 
@@ -1132,50 +1078,34 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         });
     };
 
-    const handleFinishPressConference = (report: PressConferenceReport) => {
-        setManagerReputation(r => Math.max(0, Math.min(100, r + report.reputationChange)));
-
-        if (userTeamName) {
-            setTeams(prev => {
-                const updated = { ...prev };
-                const club = updated[userTeamName];
-                if (club) {
-                    club.players = club.players.map(p => {
-                        if (p.isStarter) {
-                            return { 
-                                ...p, 
-                                form: Math.max(0, Math.min(100, p.form + report.squadFormChange)) 
-                            };
-                        }
-                        return p;
-                    });
-                }
-                return updated;
-            });
-        }
-
-        setNews(prev => [
-            {
-                id: Date.now(),
-                week: currentWeek,
-                title: `📰 ${report.newspaperName}: ${report.headline}`,
-                body: `${report.article}\n\n📊 Impact: Reputation (${report.reputationChange >= 0 ? '+' : ''}${report.reputationChange}%), Squad Form (${report.squadFormChange >= 0 ? '+' : ''}${report.squadFormChange} pts)`,
-                type: 'press'
-            },
-            ...prev
-        ]);
-
-        proceedToNextWeek();
+    const requestPressQuestions = async () => {
+        if (!pressInput) return;
+        setIsLoading(true);
+        setPressQuestionResult(await generatePressConferenceQuestions(pressInput));
+        setIsLoading(false);
     };
 
-    const proceedToNextWeek = async () => {
+    const handleFinishPressConference = (report: PressConferenceReport) => {
+        const transition = applyPressConferenceTransition<Player, Team>({ managerReputation, teams, userTeamName: userTeamName || null, appliedEvaluationIds: [...appliedPressEvaluationIdsRef.current] }, report);
+        if (!transition.applied) return;
+        appliedPressEvaluationIdsRef.current = new Set(transition.appliedEvaluationIds);
+        setManagerReputation(transition.managerReputation);
+        setTeams(transition.teams);
+        setNews(prev => [{ id: Date.now(), week: currentWeek, title: `${report.newspaperName}: ${report.headline}`, body: `${report.article}\n\nEditorial basis: ${report.effectRationale}\nApplied reputation: ${transition.effects.managerReputationDelta >= 0 ? '+' : ''}${transition.effects.managerReputationDelta}. Starter form: ${report.squadFormChange >= 0 ? '+' : ''}${report.squadFormChange}.\n${report.answerAssessments.map(a => `"${a.evidenceQuote}" — ${a.disposition}: ${a.explanation}`).join('\n')}`, type: 'press' as const }, ...prev].slice(0, 1000));
+        setPressInput(null); setPressQuestionResult(null); setPressProgress(null);
+        void proceedToNextWeek({ teams: transition.teams, managerReputation: transition.managerReputation });
+    };
+
+    const proceedToNextWeek = async (snapshot?: { teams: Record<string, Team>; managerReputation: number }) => {
+        const activeTeams = snapshot?.teams || teams;
+        const activeManagerReputation = snapshot?.managerReputation ?? managerReputation;
         if (currentWeek >= weeksInSeason) {
             if (gameMode === 'Club') {
                 const nextYear = currentYear + 1;
                 setCurrentYear(nextYear);
                 setCurrentWeek(1);
 
-                const updatedTable: LeagueTableEntry[] = Object.values(teams).map(t => ({
+                const updatedTable: LeagueTableEntry[] = Object.values(activeTeams).map(t => ({
                     teamName: t.name,
                     league: t.league,
                     played: 0, won: 0, drawn: 0, lost: 0,
@@ -1184,12 +1114,13 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                 }));
                 setLeagueTable(updatedTable);
 
-                const domesticFixtures = generateFixtures(Object.values(teams));
-                const { participants, newTeams } = getChampionsLeagueParticipants(teams);
-                const finalTeamsState = { ...teams, ...newTeams };
+                const domesticFixtures = generateFixtures(Object.values(activeTeams));
+                const { participants, newTeams } = getChampionsLeagueParticipants(activeTeams);
+                const finalTeamsState = { ...activeTeams, ...newTeams };
 
                 // --- End-of-season Board Evaluation & Sacking Checks ---
-                const finalPosition = leagueTable.findIndex(t => t.teamName === userTeamName) + 1;
+                const clubLeague = activeTeams[userTeamName]?.league;
+                const finalPosition = leagueTable.filter(t => t.league === clubLeague).sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor).findIndex(t => t.teamName === userTeamName) + 1;
                 const userClub = finalTeamsState[userTeamName];
                 let isSacked = false;
                 let sackMessage = '';
@@ -1221,7 +1152,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                         const gap = finalPosition - targetPos;
 
                         if (gap > 0) {
-                            const sackingIndex = gap * 15 + (100 - managerReputation) * 0.5;
+                            const sackingIndex = gap * 15 + (100 - activeManagerReputation) * 0.5;
                             if (sackingIndex >= 65) {
                                 isSacked = true;
                                 sackMessage = `Sacked: You finished in position ${finalPosition}, missing your board's target of ${targetPos} (${objective}). Due to poor performance and low confidence, you have been sacked.`;
@@ -1239,6 +1170,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
 
                 // Apply player updates (aging, contracts, retirement)
                 const nextYearTeams = { ...finalTeamsState };
+                const releasedFreeAgents: Player[] = [];
                 Object.keys(nextYearTeams).forEach(tName => {
                     const team = nextYearTeams[tName];
                     if (team.league !== 'International') {
@@ -1262,6 +1194,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                             const remainingContracts = p.contractExpires - 1;
                             if (remainingContracts <= 0) {
                                 departures.push(`Free Agent: ${p.name} leaves ${team.name} following contract expiration.`);
+                                releasedFreeAgents.push(toFreeAgent({ ...p, age: p.age + 1 }));
                                 return false;
                             }
                             p.contractExpires = remainingContracts;
@@ -1280,9 +1213,10 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                     }
                 });
                 setTeams(nextYearTeams);
+                setTransferMarket(prev => mergeFreeAgentsIntoMarket(prev, releasedFreeAgents, Object.values(nextYearTeams).flatMap(team => team.players)));
 
                 if (isSacked) {
-                    const nextRep = Math.max(10, Math.round(managerReputation * 0.8));
+                    const nextRep = Math.max(10, Math.round(activeManagerReputation * 0.8));
                     setManagerReputation(nextRep);
                     setUserTeamName(undefined);
                     
@@ -1403,11 +1337,11 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         const nextFixtures = fixtures.map(f => {
             if (f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName) {
                 if (f.isKnockout) {
-                    const res = simulateKnockoutQuickMatch(teams[f.homeTeam], teams[f.awayTeam], f.id);
+                    const res = simulateKnockoutQuickMatch(activeTeams[f.homeTeam], activeTeams[f.awayTeam], f.id);
                     results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner });
                     return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner };
                 } else {
-                    const res = simulateQuickMatch(teams[f.homeTeam], teams[f.awayTeam], f.id);
+                    const res = simulateQuickMatch(activeTeams[f.homeTeam], activeTeams[f.awayTeam], f.id);
                     results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
                     updateTeam(updatedTable, f.homeTeam, res.homeGoals, res.awayGoals);
                     updateTeam(updatedTable, f.awayTeam, res.awayGoals, res.homeGoals);
@@ -1732,7 +1666,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         let updatedBids = [...incomingBids];
         let riftTransferRequestedPlayers: string[] = [];
 
-        if (gameMode === 'Club' && userTeamName && teams[userTeamName]) {
+        if (gameMode === 'Club' && userTeamName && activeTeams[userTeamName]) {
             setTeams(prevTeams => {
                 const nextTeams = { ...prevTeams };
                 const userClub = nextTeams[userTeamName];
@@ -1792,12 +1726,12 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         updatedBids = updatedBids.filter(b => b.weeksPending <= 3);
 
         // --- Generative Bids generation ---
-        if (gameMode === 'Club' && userTeamName && teams[userTeamName]) {
-            const userClub = teams[userTeamName];
+        if (gameMode === 'Club' && userTeamName && activeTeams[userTeamName]) {
+            const userClub = activeTeams[userTeamName];
             userClub.players.forEach(p => {
                 const bidChance = p.transferRequested ? 0.35 : 0.05;
                 if (Math.random() < bidChance) {
-                    const otherClubs = Object.keys(teams).filter(t => t !== userTeamName && teams[t].league !== 'International');
+                    const otherClubs = Object.keys(activeTeams).filter(t => t !== userTeamName && activeTeams[t].league !== 'International');
                     const buyingClub = otherClubs[Math.floor(Math.random() * otherClubs.length)] || 'Paris Saint-Germain';
                     
                     const marketValue = p.marketValue || Math.round(p.rating * p.rating * 15000 + (100 - p.age) * 20000);
@@ -1871,7 +1805,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         setTeams(prev => {
             const newTeams = { ...prev };
 
-            // 1. Process weekly wages and broadcast revenues for all club teams
+            // 1. Process weekly wages and broadcast revenues for all club activeTeams
             if (gameMode === 'Club') {
                 Object.keys(newTeams).forEach(teamName => {
                     const team = newTeams[teamName];
@@ -1886,7 +1820,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                 });
             }
 
-            // 2. Process matchday revenues for home teams of matches played in currentWeek
+            // 2. Process matchday revenues for home activeTeams of matches played in currentWeek
             if (gameMode === 'Club') {
                 nextFixtures.forEach(f => {
                     if (f.week === currentWeek && f.league !== 'International') {
@@ -2067,9 +2001,9 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
         });
 
         // --- Weekly Poaching Job Offers Simulation ---
-        if (gameMode === 'Club' && managerReputation >= 50 && Math.random() < 0.08) {
-            const allTeamList = Object.values(teams).filter(t => t.name !== userTeamName && t.league !== 'International');
-            const matchingTeams = allTeamList.filter(t => t.prestige <= managerReputation + 10 && t.prestige >= managerReputation - 15);
+        if (gameMode === 'Club' && activeManagerReputation >= 50 && Math.random() < 0.08) {
+            const allTeamList = Object.values(activeTeams).filter(t => t.name !== userTeamName && t.league !== 'International');
+            const matchingTeams = allTeamList.filter(t => t.prestige <= activeManagerReputation + 10 && t.prestige >= activeManagerReputation - 15);
             if (matchingTeams.length > 0) {
                 const targetClub = matchingTeams[Math.floor(Math.random() * matchingTeams.length)];
                 
@@ -2091,7 +2025,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
 
         // --- Weekly Cash Flow News ---
         if (gameMode === 'Club' && userTeamName) {
-            const userClub = teams[userTeamName];
+            const userClub = activeTeams[userTeamName];
             if (userClub && userClub.league !== 'International') {
                 const wageBill = userClub.weeklyWageBill || userClub.players.reduce((sum, p) => sum + (p.wage || 0), 0);
                 const broadcast = userClub.weeklyBroadcastRevenue || getWeeklyBroadcastRevenue(userClub.league, userClub.prestige);
@@ -2147,32 +2081,34 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
     };
 
     const handleResumeMatch = (shout?: TouchlineShout) => {
-        if (shout) setActiveShout(shout);
+        setActiveShout(shout || 'resume');
         setError(null);
         setGameState(GameState.PLAYING);
-        // Fix: If at halftime (45'), force simulation to advance to 46' to break the pause loop
-        if (currentPlaybackMinute === 45) {
-            setSimulationTargetMinute(46);
-        }
     }
 
     const handleSimulateSegment = async (targetMinute: number, momentumShift: number = 0) => {
         if (!currentFixture || !matchState || !userTeam) return;
         if (momentumShift !== 0) {
-            setMatchState(prev => prev ? { ...prev, momentum: Math.max(-100, Math.min(100, prev.momentum + momentumShift)) } : null);
+            setMatchState(prev => prev ? { ...prev, momentum: Math.max(-10, Math.min(10, prev.momentum + momentumShift)) } : null);
         }
         if (targetMinute <= 0) {
-            setGameState(GameState.PAUSED);
             return;
         }
-        setSimulationTargetMinute(targetMinute);
+        // Target means generated queue end, not a desired clock. Never skip ungenerated minutes.
+        setMatchSpeed('instant');
+        setActiveShout('resume');
         setError(null);
         setGameState(GameState.PLAYING);
     };
 
-    const finishMatch = () => {
+    const finishMatch = (completedMatch: MatchState | null = matchState) => {
+        if (!completedMatch || !userTeamName || !currentFixture) return;
+        const key = completedMatch.sessionId || currentFixture.id;
+        if (finishedMatchRef.current === key) return;
+        finishedMatchRef.current = key;
+        const matchState = completedMatch;
+        setMatchState({ ...completedMatch, isFinished: true });
         setGameState(GameState.POST_MATCH);
-        if (!matchState || !userTeamName || !currentFixture) return;
 
         const isHome = currentFixture.homeTeam === userTeamName;
         const userGoals = isHome ? matchState.homeScore : matchState.awayScore;
@@ -2272,6 +2208,9 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
 
     const handleStartPlayerTalk = async (player: Player, context: 'transfer' | 'renewal') => {
         if (!userTeamName) return;
+        if (context === 'transfer' && isFreeAgent(player)) {
+            setTransferMarket(prev => mergeFreeAgentsIntoMarket(prev, [player]));
+        }
         setIsLoading(true); setTalkResult(null); setPlayerTalk(null); setError(null); setPendingContractTerms(null);
         setAppScreen(AppScreen.PLAYER_TALK);
         try {
@@ -2297,79 +2236,45 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
     };
 
     const handlePlayerTalkFinish = () => {
-        if (talkResult?.decision === 'accepted' && playerTalk && userTeamName && pendingContractTerms) {
-            const signingBonus = pendingContractTerms.signingBonus;
-            setTeams(prev => {
-                const team = prev[userTeamName];
-                let updatedPlayers;
-
-                const newPromises = (talkResult.extractedPromises || []).map(desc => ({
-                    id: `${Date.now()}-${Math.random()}`,
-                    description: desc,
-                    deadlineWeek: currentWeek + 10,
-                    status: 'pending' as const,
-                    playerInvolved: playerTalk.player.name
-                }));
-
-                const activePromises = [...(team.activePromises || []), ...newPromises];
-
-                if (playerTalk.context === 'renewal') {
-                    updatedPlayers = team.players.map(p => 
-                        p.name === playerTalk.player.name 
-                        ? {
-                            ...p,
-                            wage: pendingContractTerms.wage,
-                            contractExpires: pendingContractTerms.length,
-                            contractIncentives: {
-                                performanceBonus: pendingContractTerms.performanceBonus,
-                                bonusType: pendingContractTerms.bonusType,
-                            },
-                        }
-                        : p
-                    );
-                } else {
-                    const newPlayer = { 
-                        ...playerTalk.player, 
-                        isStarter: false, 
-                        contractExpires: pendingContractTerms.length, 
-                        wage: pendingContractTerms.wage,
-                        contractIncentives: {
-                            performanceBonus: pendingContractTerms.performanceBonus,
-                            bonusType: pendingContractTerms.bonusType,
-                        },
-                        status: { type: 'Available' as const }, 
-                        effects: [] 
-                    };
-                    updatedPlayers = [...team.players, newPlayer];
+        if (!error && talkResult?.decision === 'accepted' && playerTalk && userTeamName && pendingContractTerms) {
+            const team = teams[userTeamName];
+            if (!team) return;
+            const newPromises = (talkResult.extractedPromises || []).slice(0, 6).map((description, index) => ({
+                id: `${currentYear}-${currentWeek}-${playerTalk.player.name}-${index}-${Date.now()}`,
+                description, deadlineWeek: currentWeek + 10, status: 'pending' as const, playerInvolved: playerTalk.player.name,
+            }));
+            const free = playerTalk.context === 'transfer' && isFreeAgent(playerTalk.player);
+            const key = `${currentYear}|${currentWeek}|${userTeamName}|${playerTalk.player.name.toLowerCase()}`;
+            if (freeAgentSigningKeysRef.current.has(key)) return;
+            if (free) {
+                const transition = signFreeAgent({ team, market: transferMarket, player: playerTalk.player, terms: pendingContractTerms, negotiationAccepted: true });
+                if (transition.ok === false) { setError(transition.message); return; }
+                freeAgentSigningKeysRef.current.add(key);
+                const nextTeam = { ...transition.team, activePromises: [...(transition.team.activePromises || []), ...newPromises] };
+                setTeams(prev => ({ ...prev, [userTeamName]: nextTeam }));
+                setTransferMarket(transition.market);
+            } else {
+                if (pendingContractTerms.signingBonus > team.balance || !Number.isFinite(pendingContractTerms.wage)) {
+                    setError('The club cannot fund the accepted contract.'); return;
                 }
-                
-                return { 
-                    ...prev, 
-                    [userTeamName]: {
-                        ...team,
-                        players: updatedPlayers,
-                        activePromises,
-                        balance: team.balance - signingBonus,
-                    } 
-                };
-            });
-
-            setNews(prev => ([
-                {
-                    id: Date.now(),
-                    week: currentWeek,
-                    title: playerTalk.context === 'renewal' ? 'Contract Renewed' : 'Signing Completed',
-                    body: `${playerTalk.player.name} agreed terms: $${pendingContractTerms.wage.toLocaleString()}/week, $${pendingContractTerms.signingBonus.toLocaleString()} signing bonus, and $${pendingContractTerms.performanceBonus.toLocaleString()} ${pendingContractTerms.bonusType === 'goal' ? 'goal bonus' : pendingContractTerms.bonusType === 'cleanSheet' ? 'clean-sheet bonus' : 'appearance bonus'}.`,
-                    type: 'finance',
-                },
-                ...prev,
-            ]).slice(0, 1000));
-
-            if (playerTalk.context === 'transfer') {
-                setTransferMarket(prev => prev.filter(p => p.name !== playerTalk.player.name));
+                freeAgentSigningKeysRef.current.add(key);
+                setTeams(prev => {
+                    const club = prev[userTeamName];
+                    const contract = pendingContractTerms;
+                    const updatedPlayers = playerTalk.context === 'renewal'
+                        ? club.players.map(p => p.name === playerTalk.player.name ? { ...p, wage: contract.wage, contractExpires: contract.length, contractIncentives: { performanceBonus: contract.performanceBonus, bonusType: contract.bonusType } } : p)
+                        : [...club.players, { ...playerTalk.player, currentClub: userTeamName, isStarter: false, wage: contract.wage, contractExpires: contract.length, contractIncentives: { performanceBonus: contract.performanceBonus, bonusType: contract.bonusType }, status: { type: 'Available' as const }, effects: [] }];
+                    return { ...prev, [userTeamName]: { ...club, players: updatedPlayers, activePromises: [...(club.activePromises || []), ...newPromises], balance: club.balance - contract.signingBonus, weeklyWageBill: updatedPlayers.reduce((sum, p) => sum + p.wage, 0) } };
+                });
+                if (playerTalk.context === 'transfer') setTransferMarket(prev => prev.filter(p => p.name !== playerTalk.player.name));
             }
+            setNews(prev => ([{
+                id: Date.now(), week: currentWeek, title: playerTalk.context === 'renewal' ? 'Contract Renewed' : free ? 'Free Agent Signed' : 'Signing Completed',
+                body: `${playerTalk.player.name} agreed ${pendingContractTerms.length} years at €${pendingContractTerms.wage.toLocaleString()}/week, €${pendingContractTerms.signingBonus.toLocaleString()} sign-on and €${pendingContractTerms.performanceBonus.toLocaleString()} ${pendingContractTerms.bonusType} bonus.${free ? ` No club transfer fee. Role: ${pendingContractTerms.role || 'rotation'}.` : ''}`,
+                type: 'finance',
+            }, ...prev]).slice(0, 1000));
         }
-        setPlayerTalk(null); setTalkResult(null); setPendingContractTerms(null); setAppScreen(AppScreen.GAMEPLAY);
+        setPlayerTalk(null); setTalkResult(null); setPendingContractTerms(null); setError(null); setAppScreen(AppScreen.GAMEPLAY);
     };
 
     const handleRiftDecision = (newsId: number, playerAName: string, playerBName: string, choice: 'bench-a' | 'bench-b' | 'risk-it') => {
@@ -2610,7 +2515,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
             case AppScreen.CREATE_MANAGER: return <CreateManagerScreen onCreate={handleCreateManager} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_CENTRE: return <JobCentreScreen jobs={availableJobs} onApply={handleApplyForJob} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen interview={interview} isLoading={isLoading} error={error} jobOffer={jobOffer} onAnswerSubmit={handleJobInterviewAnswer} onFinish={(acc) => { if(acc && interview) initializeGame(interview.teamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
-            case AppScreen.TRANSFERS: return <TransfersScreen targets={transferMarket} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
+            case AppScreen.TRANSFERS: return <TransfersScreen targets={transferMarket} squadPlayers={userTeam?.players ?? []} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={handlePlayerTalkFinish} clubBudget={userTeam ? { balance: userTeam.balance, transferBudget: userTeam.transferBudget || Math.floor(userTeam.balance * 0.7), weeklyWageBill: userTeam.weeklyWageBill || userTeam.players.reduce((sum, p) => sum + p.wage, 0) } : undefined} />;
             case AppScreen.GAMEPLAY:
                 if (!userTeam) return <div>Loading...</div>;
@@ -2633,23 +2538,24 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                         
                         <div className="lg:col-span-9 flex flex-col gap-6">
                             {/* PC Glassmorphic Navigation Tabs */}
-                            <div className="flex border-b border-gray-800 bg-gray-950/60 p-1.5 rounded-lg gap-2 shadow-inner border border-slate-800/40 backdrop-blur-md">
-                                <button onClick={() => setGameplayTab('match')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'match' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                            <div className="flex overflow-x-auto border-b border-gray-800 bg-gray-950/60 p-1.5 rounded-lg gap-2 shadow-inner border border-slate-800/40 backdrop-blur-md">
+                                <button onClick={() => setGameplayTab('match')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'match' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
                                     <span>🎮</span> Match Center
                                 </button>
-                                <button onClick={() => setGameplayTab('tactics')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'tactics' ? 'bg-gradient-to-r from-yellow-600 to-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                <button onClick={() => setGameplayTab('tactics')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'tactics' ? 'bg-gradient-to-r from-yellow-600 to-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
                                     <span>📋</span> Roster & Tactics
                                 </button>
-                                <button onClick={() => setGameplayTab('news')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'news' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                <button onClick={() => setGameplayTab('news')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'news' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
                                     <span>📰</span> Inbox Feed
                                 </button>
-                                <button onClick={() => setGameplayTab('scouting')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'scouting' || gameplayTab === 'scouting_market' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                <button onClick={() => setGameplayTab('scouting')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'scouting' || gameplayTab === 'scouting_market' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
                                     <span>🔍</span> Scout Network
                                 </button>
-                                <button onClick={() => setGameplayTab('transfers')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'transfers' ? 'bg-gradient-to-r from-green-700 to-emerald-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                <button onClick={() => setGameplayTab('scouting_market')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all whitespace-nowrap ${gameplayTab === 'scouting_market' ? 'bg-emerald-700 text-white' : 'text-slate-400 hover:bg-slate-900/40'}`}>Free Agency</button>
+                                <button onClick={() => setGameplayTab('transfers')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'transfers' ? 'bg-gradient-to-r from-green-700 to-emerald-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
                                     <span>🤝</span> Negotiations
                                 </button>
-                                <button onClick={() => setGameplayTab('honors')} className={`flex-1 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'honors' ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                <button onClick={() => setGameplayTab('honors')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'honors' ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
                                     <span>🏆</span> Trophy Room
                                 </button>
                             </div>
@@ -2716,7 +2622,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
 
                             {gameplayTab === 'scouting_market' && (
                                 <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-                                    <TransfersScreen targets={transferMarket} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setGameplayTab('scouting')} />
+                                    <TransfersScreen targets={transferMarket} squadPlayers={userTeam?.players ?? []} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setGameplayTab('scouting')} />
                                 </div>
                             )}
 
@@ -2905,7 +2811,7 @@ The manager is fielding questions. Generate exactly 3 realistic, specific questi
                         </div>
                     </div>
                 );
-            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen questions={pressQuestions} resultContext={pressContext} onFinish={handleFinishPressConference} />;
+            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen key={pressInput?.sessionId} questionResult={pressQuestionResult ?? undefined} initialProgress={pressProgress} onProgress={setPressProgress} onRetryQuestions={() => void requestPressQuestions()} onSkip={() => { setPressInput(null); setPressQuestionResult(null); setPressProgress(null); void proceedToNextWeek(); }} onFinish={handleFinishPressConference} />;
             default: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
         }
     };

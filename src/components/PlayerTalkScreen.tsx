@@ -47,6 +47,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
     const [signingBonus, setSigningBonus] = useState<number>(0);
     const [performanceBonus, setPerformanceBonus] = useState<number>(0);
     const [bonusType, setBonusType] = useState<ContractBonusType>('appearance');
+    const [squadRole, setSquadRole] = useState<NonNullable<ContractTerms['role']>>('rotation');
     const [hasNegotiated, setHasNegotiated] = useState(false);
     const talkSessionKey = talk ? `${talk.player.name}-${talk.context}` : '';
 
@@ -61,6 +62,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
             setPerformanceBonus(getDefaultPerformanceBonus(talk.player.wage, defaultBonusType));
             setCurrentAnswer('');
             setHasNegotiated(false);
+            setSquadRole('rotation');
         }
     }, [talkSessionKey]);
 
@@ -98,7 +100,8 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                     length: contractLength,
                     signingBonus,
                     performanceBonus,
-                    bonusType
+                    bonusType,
+                    role: squadRole,
                 }
             );
             setHasNegotiated(true);
@@ -219,6 +222,13 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                                 {/* Offer Controls */}
                                 {(isFinalStage || talkResult?.decision === 'counter') && (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-950/40 p-4 rounded-lg border border-gray-800 mb-4">
+                                        <div className="md:col-span-2">
+                                            <label className="text-xs font-bold text-gray-400 block mb-1">Agreed squad role</label>
+                                            <select aria-label="Agreed squad role" value={squadRole} onChange={e => setSquadRole(e.target.value as NonNullable<ContractTerms['role']>)} className="w-full bg-gray-900 text-white p-2 rounded border border-gray-700">
+                                                <option value="key-player">Key player</option><option value="rotation">Rotation</option><option value="prospect">Development prospect</option>
+                                            </select>
+                                            <p className="text-xs text-gray-500 mt-1">Recorded in the contract; you still select the starting XI.</p>
+                                        </div>
                                         <div>
                                             <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Weekly Wage Offer</label>
                                             <div className="flex items-center gap-2">

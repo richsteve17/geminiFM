@@ -217,7 +217,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         <div className="flex flex-col text-left">
                             <span className="text-[10px] font-bold text-white uppercase tracking-wider">🎥 Paid 3D Replay Video</span>
                             <span className="text-[8px] text-slate-500 uppercase mt-0.5">
-                                {paidVideo ? 'Google Veo 3D Gen' : '2D Pitch Sim Only (Free)'}
+                                {paidVideo ? 'Google Veo Replay Generation' : 'Live 3D Pitch · No Video Generation'}
                             </span>
                         </div>
                         <button

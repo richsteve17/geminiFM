@@ -49,6 +49,7 @@ export interface ContractTerms {
     signingBonus: number;
     performanceBonus: number;
     bonusType: ContractBonusType;
+    role?: 'key-player' | 'rotation' | 'prospect';
 }
 
 export interface PlayerStats {
@@ -205,6 +206,16 @@ export interface MatchEvent {
     /** Normalized deterministic pitch coordinate (0-100), if the event occurred on-field. */
     pitchX?: number;
     pitchY?: number;
+    /** Resolved action; the broadcast renders this path, not an invented goal. */
+    play?: {
+        kind: 'build-up' | 'counter' | 'cross' | 'shot' | 'set-piece' | 'turnover';
+        outcome: 'goal' | 'saved' | 'wide' | 'blocked' | 'retained' | 'foul';
+        ballPath: Array<{ x: number; y: number }>;
+        receiver?: string;
+    };
+    xG?: number;
+    onTarget?: boolean;
+    momentumAfter?: number;
 }
 
 export interface MatchState {
@@ -221,6 +232,7 @@ export interface MatchState {
     simulationSeed?: number;
     /** Monotonic session key used to reject stale asynchronous presentation work. */
     sessionId?: string;
+    presentation?: { mode: 'ai' | 'local'; reason?: string; provider?: string };
 }
 
 export enum GameState {

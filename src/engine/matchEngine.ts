@@ -1,4 +1,6 @@
-import type { MatchEvent, MatchState, Team } from '../types';
+import type { MatchEvent, MatchState, Player, Team } from '../types';
+import { analyzeTactics } from './tactics';
+import { getRivalry } from './footballCulture';
 
 export type SegmentContext = { shout?: string; userTeamName: string | null; tacticalContext?: string };
 export type MatchSegment = {
@@ -7,11 +9,10 @@ export type MatchSegment = {
     momentum: number;
     tacticalAnalysis: string;
     events: MatchEvent[];
+    presentation?: { mode: 'ai' | 'local'; reason?: string; provider?: string };
 };
-
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-/** Stable non-cryptographic hash for repeatable simulation seeds. */
 export function hashSeed(value: string): number {
     let hash = 2166136261;
     for (let index = 0; index < value.length; index += 1) {
@@ -20,8 +21,6 @@ export function hashSeed(value: string): number {
     }
     return hash >>> 0;
 }
-
-/** A pure random sample from one match seed, minute, and channel. */
 function sample(seed: number, minute: number, channel: number) {
     let value = (seed ^ Math.imul(minute + 1, 0x9e3779b1) ^ Math.imul(channel + 11, 0x85ebca6b)) >>> 0;
     value ^= value >>> 16;
@@ -31,190 +30,127 @@ function sample(seed: number, minute: number, channel: number) {
     value ^= value >>> 16;
     return (value >>> 0) / 4294967296;
 }
-
 function starters(team: Team) {
     const selected = team.players.filter(player => player.isStarter && player.status.type === 'Available');
-    return selected.length > 0 ? selected : team.players.filter(player => player.status.type === 'Available');
+    return (selected.length ? selected : team.players.filter(player => player.status.type === 'Available')).slice(0, 11);
 }
-
 function teamStrength(team: Team) {
     const selected = starters(team);
-    if (selected.length === 0) return 50;
+    if (!selected.length) return 30;
+    const efficiency = analyzeTactics(selected, team.tactic.formation).score;
     const average = selected.reduce((sum, player) => {
         const condition = clamp(player.condition ?? 100, 25, 100) / 100;
-        const form = clamp(player.form ?? 0, -10, 10) * 0.35;
-        return sum + player.rating * condition + form;
+        // Existing saves and UI use 0..100 form, with neutral form 50.
+        const form = (clamp(player.form ?? 50, 0, 100) - 50) * 0.09;
+        return sum + player.rating * (0.65 + condition * 0.35) + form;
     }, 0) / selected.length;
-    const mentality = { 'All-Out Attack': 2.5, Attacking: 1.25, Balanced: 0, Defensive: -0.75, 'Park the Bus': -1.5 }[team.tactic.mentality] ?? 0;
-    return average + mentality;
+    return average * (0.72 + efficiency * 0.0028) - Math.max(0, 11 - selected.length) * 2;
 }
-
+function choosePlayer(team: Team, seed: number, minute: number, channel: number, attack: boolean): Player | undefined {
+    const selected = starters(team);
+    const preferred = selected.filter(player => attack
+        ? ['ST', 'CF', 'LW', 'RW', 'AM', 'CM'].includes(player.position)
+        : ['CB', 'LB', 'RB', 'LWB', 'RWB', 'DM'].includes(player.position));
+    const pool = preferred.length ? preferred : selected;
+    return pool[Math.floor(sample(seed, minute, channel) * pool.length)];
+}
 function eventId(seed: number, minute: number, channel: number) {
     return Math.floor(sample(seed, minute, channel) * 2_000_000_000);
 }
 
-function choosePlayer(team: Team, seed: number, minute: number, channel: number, attack: boolean) {
-    const selected = starters(team);
-    const preferred = attack
-        ? selected.filter(player => ['ST', 'CF', 'LW', 'RW', 'AM', 'CM'].includes(player.position))
-        : selected.filter(player => ['GK', 'LB', 'CB', 'RB', 'LWB', 'RWB', 'DM'].includes(player.position));
-    const pool = preferred.length > 0 ? preferred : selected;
-    return pool[Math.floor(sample(seed, minute, channel) * Math.max(pool.length, 1))] || team.players[0];
+/** Design approximation of shot xG, not a fitted proprietary model. Pitch units are percentages. */
+export function shotExpectedGoals(x: number, y: number, homeAttacking: boolean, finishing: number, goalkeeper: number, pressure: number) {
+    const distance = Math.hypot((homeAttacking ? 100 - x : x) * 1.05, (y - 50) * 0.68);
+    const lateral = Math.abs(y - 50) / 25;
+    const z = 1.7 - distance * 0.2 - lateral * 0.5 + (finishing - goalkeeper) * 0.018 - pressure * 0.38;
+    return clamp(1 / (1 + Math.exp(-z)), 0.02, 0.65);
 }
 
-function commentaryFor(playerName: string, minute: number) {
-    const templates = [
-        `${playerName} recycles possession after a tense midfield duel.`,
-        `${playerName} spots a passing lane, but the defence closes it before the final ball.`,
-        `${playerName} drives forward and forces the back line to retreat.`,
-        `${playerName} wins the second ball as the stadium volume rises.`,
-        `${playerName} puts in a recovery tackle to stop the transition.`,
-    ];
-    return templates[minute % templates.length];
-}
-
-function tacticalAnalysis(home: Team, away: Team, momentum: number, homeAdded: number, awayAdded: number) {
-    if (homeAdded > awayAdded) return `${home.name} converted their pressure into decisive chances.`;
-    if (awayAdded > homeAdded) return `${away.name} found space against the flow and punished it.`;
-    if (momentum >= 3) return `${home.name} hold the territorial edge, but the final pass is missing.`;
-    if (momentum <= -3) return `${away.name} are dictating the rhythm without a breakthrough.`;
-    return 'The tactical battle is balanced; neither side has established lasting control.';
-}
-
-/**
- * Pure deterministic match segment. It never calls an AI provider and derives every sample
- * from a persisted seed plus the minute, so a reloaded match produces the same ledger.
- */
-export function simulateDeterministicSegment(
-    homeTeam: Team,
-    awayTeam: Team,
-    currentMatchState: MatchState,
-    targetMinute: number,
-    context: SegmentContext,
-): MatchSegment {
-    const startMinute = Math.max(1, currentMatchState.currentMinute + 1);
-    const endMinute = clamp(Math.floor(targetMinute), startMinute, 120);
-    const seed = currentMatchState.simulationSeed ?? hashSeed(`${homeTeam.name}|${awayTeam.name}|${currentMatchState.currentMinute}`);
-    const homeStrength = teamStrength(homeTeam);
-    const awayStrength = teamStrength(awayTeam);
-    const shoutBoost = context.shout?.toLowerCase().includes('demand') || context.shout?.toLowerCase().includes('more') ? 1.2 : 0;
-
-    let homeScoreAdded = 0;
-    let awayScoreAdded = 0;
-    let momentum = clamp(currentMatchState.momentum, -10, 10);
+/** Deterministic resolved football facts. Prose is enriched separately by the AI match director. */
+export function simulateDeterministicSegment(homeTeam: Team, awayTeam: Team, state: MatchState, targetMinute: number, context: SegmentContext): MatchSegment {
+    const seed = state.simulationSeed ?? hashSeed(`${homeTeam.name}|${awayTeam.name}`);
+    const start = Math.max(1, state.currentMinute + 1);
+    const end = Math.min(120, Math.floor(targetMinute));
+    let momentum = clamp(state.momentum, -10, 10), homeScoreAdded = 0, awayScoreAdded = 0;
     const events: MatchEvent[] = [];
-
-    for (let minute = startMinute; minute <= endMinute; minute += 1) {
-        const homeShare = clamp(0.5 + (homeStrength - awayStrength + momentum * 1.4 + shoutBoost) / 80, 0.25, 0.75);
+    const homeStrength = teamStrength(homeTeam), awayStrength = teamStrength(awayTeam);
+    const rivalry = getRivalry(homeTeam.name, awayTeam.name);
+    const mentality = (team: Team) => ({ 'All-Out Attack': 1, Attacking: 0.5, Balanced: 0, Defensive: -0.5, 'Park the Bus': -1 }[team.tactic.mentality] || 0);
+    const homeIntent = mentality(homeTeam), awayIntent = mentality(awayTeam);
+    const demand = /demand|more|press/i.test(context.shout || '') ? 1.2 : 0;
+    const userBoost = context.userTeamName === homeTeam.name ? demand : context.userTeamName === awayTeam.name ? -demand : 0;
+    for (let minute = start; minute <= end; minute += 1) {
+        const homeShare = clamp(0.52 + (homeStrength - awayStrength + momentum * 1.1 + userBoost + (homeIntent - awayIntent) * 2) / 110, 0.2, 0.8);
         const homeAttacking = sample(seed, minute, 0) < homeShare;
-        const activeTeam = homeAttacking ? homeTeam : awayTeam;
-        const defendingTeam = homeAttacking ? awayTeam : homeTeam;
-        const eventChance = 0.13 + Math.abs(momentum) * 0.004;
+        const active = homeAttacking ? homeTeam : awayTeam, defending = homeAttacking ? awayTeam : homeTeam;
+        const sign = homeAttacking ? 1 : -1;
+        const eventChance = 0.31 + Math.abs(momentum) * 0.003 + Math.max(0, homeIntent + awayIntent) * 0.014;
         if (sample(seed, minute, 1) > eventChance) {
-            momentum = clamp(momentum * 0.9 + (homeAttacking ? 0.05 : -0.05), -10, 10);
-            continue;
-        }
-
-        const attacker = choosePlayer(activeTeam, seed, minute, 2, true);
-        const defender = choosePlayer(defendingTeam, seed, minute, 3, false);
-        const attackerRating = attacker?.rating ?? 70;
-        const defenderRating = defender?.rating ?? 70;
-        const pitchX = homeAttacking ? 60 + sample(seed, minute, 7) * 28 : 40 - sample(seed, minute, 7) * 28;
-        const pitchY = 14 + sample(seed, minute, 8) * 72;
-        const shotQuality = clamp(0.045 + (attackerRating - defenderRating) / 500 + Math.abs(momentum) * 0.004, 0.025, 0.24);
-        const isGoal = sample(seed, minute, 4) < shotQuality;
-        const isCard = !isGoal && sample(seed, minute, 5) < 0.11;
-
-        if (isGoal) {
-            if (homeAttacking) {
-                homeScoreAdded += 1;
-                momentum = clamp(momentum * 0.9 + 3.4, -10, 10);
-            } else {
-                awayScoreAdded += 1;
-                momentum = clamp(momentum * 0.9 - 3.4, -10, 10);
-            }
-            events.push({
-                id: eventId(seed, minute, 4),
-                minute,
-                type: 'goal',
-                teamName: activeTeam.name,
-                player: attacker?.name || 'The striker',
-                description: `GOAL! ${attacker?.name || 'The striker'} finishes a high-value chance for ${activeTeam.name}.`,
-                scoreAfter: `${currentMatchState.homeScore + homeScoreAdded}-${currentMatchState.awayScore + awayScoreAdded}`,
-                pitchX,
-                pitchY,
-            });
-        } else if (isCard) {
-            const carded = defender?.name || 'The defender';
-            momentum = clamp(momentum * 0.9 + (homeAttacking ? 0.7 : -0.7), -10, 10);
-            events.push({
-                id: eventId(seed, minute, 5),
-                minute,
-                type: 'card',
-                teamName: defendingTeam.name,
-                player: carded,
-                cardType: 'yellow',
-                description: `${carded} is booked for stopping the break.`,
-                pitchX,
-                pitchY,
-            });
+            momentum = clamp(momentum * 0.9 + sign * 0.05, -10, 10);
         } else {
-            momentum = clamp(momentum * 0.9 + (homeAttacking ? 0.45 : -0.45), -10, 10);
+            const attacker = choosePlayer(active, seed, minute, 2, true);
+            const defender = choosePlayer(defending, seed, minute, 3, false);
+            const keeper = starters(defending)[0];
+            const goalkeeperRating = keeper?.position === 'GK' ? keeper.rating : 30;
+            const name = attacker?.name || 'The forward';
+            const shot = sample(seed, minute, 10) < 0.72;
+            const crossing = sample(seed, minute, 11) < 0.3;
+            const counter = mentality(active) < 0 && mentality(defending) > 0;
+            const x = homeAttacking ? 76 + sample(seed, minute, 7) * 17 : 24 - sample(seed, minute, 7) * 17;
+            const y = 27 + sample(seed, minute, 8) * 46;
+            const direction = homeAttacking ? 1 : -1;
+            const base = { x: homeAttacking ? 42 : 58, y: 30 + sample(seed, minute, 12) * 40 };
+            const approach = { x: x - direction * 18, y: crossing ? (y < 50 ? 12 : 88) : clamp(y + 12, 15, 85) };
+            const origin = { x, y };
+            const kind: NonNullable<MatchEvent['play']>['kind'] = counter ? 'counter' : crossing ? 'cross' : shot ? 'shot' : 'build-up';
+            const pressure = clamp((defender?.rating ?? 55) / 100 + Math.max(0, -mentality(defending)) * 0.25 - (counter ? 0.35 : 0), 0, 1.5);
+            const xG = shot ? shotExpectedGoals(x, y, homeAttacking, attacker?.rating ?? 55, goalkeeperRating, pressure) : 0;
+            const goal = shot && sample(seed, minute, 4) < xG;
+            const card = !goal && !shot && sample(seed, minute, 5) < 0.45 * (rivalry?.cardMultiplier ?? 1);
+            const onTarget = goal || (shot && sample(seed, minute, 13) < 0.36);
+            const outcome: NonNullable<MatchEvent['play']>['outcome'] = goal ? 'goal' : card ? 'foul' : !shot ? 'retained' : onTarget ? 'saved' : sample(seed, minute, 14) < 0.45 ? 'blocked' : 'wide';
+            let endpoint = origin;
+            if (shot) endpoint = { x: homeAttacking ? (goal ? 100 : 97) : (goal ? 0 : 3), y: outcome === 'wide' ? (y < 50 ? 35 : 65) : 47 + sample(seed, minute, 15) * 6 };
+            if (goal) {
+                if (homeAttacking) homeScoreAdded++; else awayScoreAdded++;
+                momentum = clamp(momentum * 0.9 + sign * 3.4, -10, 10);
+            } else momentum = clamp(momentum * 0.9 + sign * (shot ? 0.65 : 0.3), -10, 10);
+            const description = goal ? `${name} scores for ${active.name} after ${counter ? 'a direct counterattack' : crossing ? 'a cross into the area' : 'a passing move through the middle'}.`
+                : card ? `${defender?.name || 'The defender'} is booked for halting ${active.name}'s break.`
+                : shot ? `${name} shoots from ${Math.round(Math.hypot((homeAttacking ? 100 - x : x) * 1.05, (y - 50) * 0.68))} metres: ${outcome === 'saved' ? `${keeper?.name || 'the keeper'} makes the save` : outcome === 'blocked' ? 'blocked by the defence' : 'wide of the post'}.`
+                : `${name} ${counter ? 'carries the counterattack forward' : crossing ? 'works a crossing position on the flank' : 'links the midfield and attack'} for ${active.name}.`;
             events.push({
-                id: eventId(seed, minute, 6),
-                minute,
-                type: 'commentary',
-                teamName: activeTeam.name,
-                player: attacker?.name,
-                description: commentaryFor(attacker?.name || 'The midfielder', minute),
-                pitchX,
-                pitchY,
+                id: eventId(seed, minute, goal ? 4 : card ? 5 : 6), minute,
+                type: goal ? 'goal' : card ? 'card' : 'commentary',
+                teamName: card ? defending.name : active.name, player: card ? defender?.name : attacker?.name,
+                description, cardType: card ? 'yellow' : undefined,
+                scoreAfter: goal ? `${state.homeScore + homeScoreAdded}-${state.awayScore + awayScoreAdded}` : undefined,
+                pitchX: x, pitchY: y, xG: shot ? xG : undefined, onTarget: shot ? onTarget : undefined,
+                momentumAfter: momentum,
+                play: { kind, outcome, ballPath: [base, approach, origin, endpoint], receiver: attacker?.name },
             });
         }
+        // Boundary whistles are emitted independently of chunk size (and never replace a goal cue).
+        if ([45, 90, 105, 120].includes(minute)) events.push({ id: eventId(seed, minute, 9), minute, type: 'whistle', teamName: homeTeam.name,
+            description: minute === 45 ? 'Half-time. The players head down the tunnel.' : minute === 105 ? 'Half-time in extra time.' : minute === 90 ? 'The referee brings regulation time to an end.' : 'The final whistle ends extra time.', momentumAfter: momentum });
     }
-
-    if (endMinute === 45) {
-        events.push({ id: eventId(seed, 45, 9), minute: 45, type: 'whistle', teamName: homeTeam.name, description: 'Half-time. The staff room has thirty seconds to reset the match plan.' });
-    }
-    if (endMinute === 90) {
-        events.push({ id: eventId(seed, 90, 9), minute: 90, type: 'whistle', teamName: homeTeam.name, description: 'Full-time. The deterministic ledger is locked for post-match processing.' });
-    }
-
-    return {
-        homeScoreAdded,
-        awayScoreAdded,
-        momentum: clamp(momentum, -10, 10),
-        tacticalAnalysis: tacticalAnalysis(homeTeam, awayTeam, momentum, homeScoreAdded, awayScoreAdded),
-        events,
-    };
+    const homeEfficiency = analyzeTactics(starters(homeTeam), homeTeam.tactic.formation).score;
+    const awayEfficiency = analyzeTactics(starters(awayTeam), awayTeam.tactic.formation).score;
+    const tacticalAnalysis = homeEfficiency < 60 ? `${homeTeam.name}'s out-of-position lineup is opening space for ${awayTeam.name}.`
+        : awayEfficiency < 60 ? `${awayTeam.name}'s shape is leaving gaps for ${homeTeam.name}.`
+        : momentum > 1.5 ? `${homeTeam.name} are pushing the play into ${awayTeam.name}'s half.`
+        : momentum < -1.5 ? `${awayTeam.name} are taking control of the attacking passages.` : `Neither ${homeTeam.name} nor ${awayTeam.name} has sustained control of midfield.`;
+    return { homeScoreAdded, awayScoreAdded, momentum, tacticalAnalysis, events };
 }
 
-/** Deterministic background result for fixtures that are not played in the live match centre. */
 export function simulateDeterministicQuickMatch(homeTeam: Team, awayTeam: Team, fixtureKey = '') {
-    const seed = hashSeed(`${fixtureKey}|${homeTeam.name}|${awayTeam.name}`);
-    const ratingDiff = teamStrength(homeTeam) + 3 - teamStrength(awayTeam);
-    const homeChance = clamp(0.24 + ratingDiff / 125, 0.06, 0.58);
-    const awayChance = clamp(0.24 - ratingDiff / 125, 0.06, 0.58);
-    let homeGoals = 0;
-    let awayGoals = 0;
-    for (let chance = 1; chance <= 6; chance += 1) {
-        if (sample(seed, chance, 20) < homeChance) homeGoals += 1;
-        if (sample(seed, chance, 21) < awayChance) awayGoals += 1;
-    }
-    return { homeGoals, awayGoals };
+    const state: MatchState = { currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: '', simulationSeed: hashSeed(`${fixtureKey}|${homeTeam.name}|${awayTeam.name}`) };
+    const result = simulateDeterministicSegment(homeTeam, awayTeam, state, 90, { userTeamName: null });
+    return { homeGoals: result.homeScoreAdded, awayGoals: result.awayScoreAdded };
 }
-
-/** Deterministic sudden-death safe shootout; ties are impossible by construction. */
 export function simulateDeterministicShootout(homeTeam: Team, awayTeam: Team, fixtureKey = '') {
     const seed = hashSeed(`${fixtureKey}|${homeTeam.name}|${awayTeam.name}|shootout`);
     const homeWins = ((seed >>> 8) & 1) === 0;
-    const winnerScore = 3 + (seed % 3);
-    const loserScore = Math.max(0, winnerScore - 1);
-    const homePenalties = homeWins ? winnerScore : loserScore;
-    const awayPenalties = homeWins ? loserScore : winnerScore;
-    return {
-        homePenalties,
-        awayPenalties,
-        penaltyWinner: homeWins ? 'home' as const : 'away' as const,
-    };
+    const winnerScore = 3 + (seed % 3), loserScore = Math.max(0, winnerScore - 1);
+    return { homePenalties: homeWins ? winnerScore : loserScore, awayPenalties: homeWins ? loserScore : winnerScore, penaltyWinner: homeWins ? 'home' as const : 'away' as const };
 }

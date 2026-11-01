@@ -13,6 +13,32 @@ import type {
     PlayerPosition,
 } from '../types';
 import { simulateDeterministicSegment } from '../engine/matchEngine';
+import { directMatchNarrative } from './matchNarrative';
+import {
+    buildPressEvaluationPrompt,
+    buildPressQuestionPrompt,
+    normalizePressConferenceContext,
+    normalizePressEvaluationRequest,
+    normalizePressQuestions,
+    normalizePressReport,
+    PRESS_RESPONSE_SCHEMAS,
+    type PressConferenceContext,
+    type PressConferenceEvaluationRequest,
+    type PressConferenceEvaluationResult,
+    type PressQuestionGenerationResult,
+} from '../engine/pressConference';
+export type {
+    PressAnswer,
+    PressConferenceContext,
+    PressConferenceEvaluationRequest,
+    PressConferenceEvaluationResult,
+    PressConferenceReport,
+    PressConferenceSession,
+    PressEffectApplication,
+    PressEffectState,
+    PressQuestion,
+    PressQuestionGenerationResult,
+} from '../engine/pressConference';
 
 type GenerateContentResponse = {
     text?: string;
@@ -298,50 +324,8 @@ export const simulateMatchSegment = async (
         tacticalContext?: string 
     }
 ) => {
-    // Match scores, event ledgers, and tactical truth are pure deterministic simulation.
-    // Gemini remains a presentation layer for advice, press, scouting, and narrative.
-    return simulateDeterministicSegment(homeTeam, awayTeam, currentMatchState, targetMinute, context);
-
-    // Determine context for short bursts
-    const userInstruction = context.shout ? `User Shout: "${context.shout}" (Factor this into momentum).` : "";
-    const tacticalInfo = context.tacticalContext ? `TACTICAL REALITY CHECK:\n${context.tacticalContext}` : "";
-    
-    const prompt = `Football Match Sim: ${homeTeam.name} vs ${awayTeam.name}. 
-    Current State: Minute ${currentMatchState.currentMinute}, Score ${currentMatchState.homeScore}-${currentMatchState.awayScore}, Momentum ${currentMatchState.momentum}.
-    Task: Simulate ONLY from minute ${currentMatchState.currentMinute + 1} to ${targetMinute}.
-    
-    ${userInstruction}
-    ${tacticalInfo}
-    
-    CRITICAL INSTRUCTIONS:
-    1. If a team has low Tactical Efficiency (<50%), they MUST make mistakes.
-    2. If a player is Out of Position (e.g. ST in Goal), specific events MUST mention them failing at their role.
-    3. Goals are rare in football. DO NOT add more than 1 or 2 goals max per team in this segment. Often 0 goals are scored.
-    4. NO references to real world injuries (e.g. Alisson Becker) or players not in the game.
-    
-    Respond ONLY in JSON format: { 
-        "homeScoreAdded": number (max 2), 
-        "awayScoreAdded": number (max 2), 
-        "momentum": number (new value -10 to 10), 
-        "tacticalAnalysis": "string (one short sentence about the flow)", 
-        "events": [{ "minute": number, "type": "goal"|"commentary"|"card"|"injury"|"whistle", "teamName": "string", "description": "string", "player": "string" }] 
-    }`;
-
-    try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
-            model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
-        });
-        const parsed = JSON.parse(cleanJson(response.text));
-        
-        // Safety cap
-        parsed.homeScoreAdded = Math.min(2, Math.max(0, Number(parsed.homeScoreAdded) || 0));
-        parsed.awayScoreAdded = Math.min(2, Math.max(0, Number(parsed.awayScoreAdded) || 0));
-        
-        return parsed;
-    } catch (error) {
-        console.warn("Gemini Sim failed, using local simulation engine:", error);
-        return generateLocalSimulation(homeTeam, awayTeam, currentMatchState, targetMinute, context);
-    }
+    const segment = simulateDeterministicSegment(homeTeam, awayTeam, currentMatchState, targetMinute, context);
+    return directMatchNarrative(homeTeam, awayTeam, currentMatchState, segment, context);
 };
 
 // --- MEDIA FEATURES ---
@@ -530,155 +514,112 @@ export const generateReplayVideo = async (description: string, eventId: number, 
 
 // --- INTERACTIVE FEATURES ---
 
-export const generatePressConference = async (context: string): Promise<string[]> => {
-    const prompt = `Press conference. Context: ${context}. Ask 3 questions. JSON: { "questions": [] }`;
+/**
+ * This path deliberately has no local-copy fallback: a question set that is not grounded in the
+ * supplied match snapshot is surfaced as unavailable for the screen to display and retry.
+ */
+export const generatePressConferenceQuestions = async (
+    contextInput: PressConferenceContext,
+): Promise<PressQuestionGenerationResult> => {
+    let context: PressConferenceContext;
     try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
-             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
-        });
-        return JSON.parse(cleanJson(response.text)).questions;
-    } catch (e) { 
-        console.warn("Press Conference generation failed, using rich local engine:", e);
-        const lower = context.toLowerCase();
-        let q1 = "How do you evaluate your team's tactical discipline in today's performance?";
-        let q2 = "There seemed to be some critical defensive lapses. What adjustments will you make in training?";
-        let q3 = "With key fixtures coming up, how will you manage player fatigue and rotations?";
-
-        if (lower.includes("win") || lower.includes("victory") || lower.includes("won")) {
-            q1 = "An outstanding victory today! What do you think was the turning point in the match?";
-            q2 = "Your team showed incredible chemistry. How do you keep this momentum going into next week?";
-            q3 = "The fans are ecstatic. Do you believe this performance proves you can challenge for the title?";
-        } else if (lower.includes("loss") || lower.includes("defeat") || lower.includes("lost")) {
-            q1 = "A tough defeat today. Where do you feel the game plan fell apart?";
-            q2 = "The board and fans are growing concerned about recent form. How do you respond to the pressure?";
-            q3 = "We saw some players looking fatigued. Do you regret not making substitutions earlier?";
-        } else if (lower.includes("draw") || lower.includes("tied")) {
-            q1 = "You share the points today. Do you view this as a point gained or two points dropped?";
-            q2 = "It was a close tactical battle in midfield. How did you react to their tactical adjustments?";
-            q3 = "Both sides had chances to win it late. What was missing to secure all three points?";
-        }
-
-        return [q1, q2, q3];
+        context = normalizePressConferenceContext(contextInput);
+    } catch (error) {
+        return {
+            mode: 'unavailable',
+            provider: 'gemini-2.5-flash',
+            failure: {
+                code: 'PRESS_CONTEXT_INVALID',
+                message: error instanceof Error ? error.message : 'The match snapshot is invalid.',
+                retryable: false,
+            },
+        };
     }
+
+    let correction = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+        let response: GenerateContentResponse;
+        try {
+            response = await ai.models.generateContent({
+                model: MODEL_TEXT,
+                contents: [{ role: 'user', parts: [{ text: buildPressQuestionPrompt(context) + correction }] }],
+                config: { responseMimeType: 'application/json', responseJsonSchema: PRESS_RESPONSE_SCHEMAS.questions, maxOutputTokens: 1024, temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
+            });
+        } catch (error) {
+            return { mode: 'unavailable', provider: 'gemini-2.5-flash', context, failure: { code: 'AI_GATEWAY_FAILED', message: error instanceof Error ? error.message : 'The AI gateway did not return questions.', retryable: true } };
+        }
+        try {
+            const questions = normalizePressQuestions(context, JSON.parse(cleanJson(response.text)));
+            return { mode: 'ai-questions', provider: (response as unknown as { provider?: string }).provider || 'gemini-2.5-flash', session: { id: context.sessionId, context, questions } };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'The AI returned invalid questions.';
+            if (attempt === 0) { correction = `\nYour previous response was rejected: ${message}. Generate a corrected set; obey the required order, unique focus and exact fact IDs.`; continue; }
+            return { mode: 'unavailable', provider: 'gemini-2.5-flash', context, failure: { code: 'AI_RESPONSE_INVALID', message, retryable: true } };
+        }
+    }
+    return { mode: 'unavailable', provider: 'gemini-2.5-flash', context, failure: { code: 'AI_RESPONSE_INVALID', message: 'No validated question set.', retryable: true } };
+
 };
 
-export interface PressConferenceReport {
-    headline: string;
-    article: string;
-    mediaTone: 'positive' | 'negative' | 'neutral' | 'sensationalist';
-    reputationChange: number;
-    squadFormChange: number;
-    newspaperName: string;
-}
-
 export const evaluatePressConference = async (
-    history: { q: string, a: string }[],
-    resultContext: string
-): Promise<PressConferenceReport> => {
-    const prompt = `You are a sports editor. Evaluate this post-match press conference:
-Result Context: ${resultContext}
-Interview Q&A:
-${history.map(item => `Journalist: "${item.q}"\nManager: "${item.a}"`).join('\n')}
+    requestInput: PressConferenceEvaluationRequest,
+): Promise<PressConferenceEvaluationResult> => {
+    let request: Required<PressConferenceEvaluationRequest>;
+    try {
+        request = normalizePressEvaluationRequest(requestInput);
+    } catch (error) {
+        return {
+            mode: 'unavailable',
+            provider: 'gemini-2.5-flash',
+            evaluationId: requestInput?.evaluationId || 'press-evaluation-invalid',
+            failure: {
+                code: 'PRESS_CONTEXT_INVALID',
+                message: error instanceof Error ? error.message : 'The press transcript is invalid.',
+                retryable: false,
+            },
+        };
+    }
 
-Analyze the tone of the manager's responses.
-Generate:
-1. A realistic sports newspaper headline (max 10 words).
-2. A short newspaper article analyzing the comments (2-3 sentences).
-3. The media tone: "positive" (supportive), "negative" (critical), "neutral", or "sensationalist" (dramatic).
-4. reputationChange: integer between -10 and +10 (how this affects manager reputation).
-5. squadFormChange: integer between -5 and +5 (positive answers praising squad increase form, criticizing players decrease it).
-6. newspaperName: Choose a realistic sports news outlet (e.g. "The Daily Pitch", "World Football Athletic", "Sky Sports News", "La Gazzetta dello Sport", "L'Équipe").
-
-Response MUST be JSON format:
-{
-  "headline": "headline here",
-  "article": "article text here",
-  "mediaTone": "positive" | "negative" | "neutral" | "sensationalist",
-  "reputationChange": 3,
-  "squadFormChange": 1,
-  "newspaperName": "name here"
-}`;
+    let response: GenerateContentResponse;
+    try {
+        response = await ai.models.generateContent({
+            // MODEL_TEXT is gemini-2.5-flash, allowed by server/ai/gateway.ts.
+            model: MODEL_TEXT,
+            contents: [{ role: 'user', parts: [{ text: buildPressEvaluationPrompt(request) }] }],
+            config: {
+                responseMimeType: 'application/json',
+                responseJsonSchema: PRESS_RESPONSE_SCHEMAS.editorial,
+                maxOutputTokens: 2048,
+                temperature: 0.35,
+                thinkingConfig: { thinkingBudget: 0 },
+            },
+        });
+    } catch (error) {
+        return {
+            mode: 'unavailable',
+            provider: 'gemini-2.5-flash',
+            evaluationId: request.evaluationId,
+            failure: {
+                code: 'AI_GATEWAY_FAILED',
+                message: error instanceof Error ? error.message : 'The AI gateway did not return an editorial.',
+                retryable: true,
+            },
+        };
+    }
 
     try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
-             model: MODEL_TEXT, contents: prompt, config: { responseMimeType: "application/json" }
-        });
-        const report: PressConferenceReport = JSON.parse(cleanJson(response.text));
-        report.reputationChange = Math.max(-10, Math.min(10, report.reputationChange || 0));
-        report.squadFormChange = Math.max(-5, Math.min(5, report.squadFormChange || 0));
-        return report;
-    } catch (e) {
-        console.warn("Press Conference evaluation failed, using rich local engine:", e);
-        const combinedAnswers = history.map(h => h.a.toLowerCase()).join(' ');
-        
-        let headline = "Manager Speaks Out After Match";
-        let article = "The manager faced the press and answered questions about the team's performance. The media will be watching how the squad responds in the next match.";
-        let mediaTone: 'positive' | 'negative' | 'neutral' | 'sensationalist' = 'neutral';
-        let reputationChange = 0;
-        let squadFormChange = 0;
-        const newspaperName = resultContext.toLowerCase().includes("champions league") ? "World Football Athletic" : "The Daily Pitch";
-
-        const hasPraise = combinedAnswers.includes("great") || combinedAnswers.includes("proud") || combinedAnswers.includes("excellent") || combinedAnswers.includes("love") || combinedAnswers.includes("good") || combinedAnswers.includes("brilliant") || combinedAnswers.includes("work");
-        const hasBlame = combinedAnswers.includes("poor") || combinedAnswers.includes("blame") || combinedAnswers.includes("fault") || combinedAnswers.includes("referee") || combinedAnswers.includes("bad") || combinedAnswers.includes("mistake");
-        const hasExcuse = combinedAnswers.includes("unlucky") || combinedAnswers.includes("pitch") || combinedAnswers.includes("tired") || combinedAnswers.includes("stamina");
-
-        if (resultContext.toLowerCase().includes("won") || resultContext.toLowerCase().includes("win")) {
-            if (hasPraise) {
-                headline = "Victorious Manager Praises Team Spirit!";
-                article = "Following a brilliant win, the manager expressed deep pride in the squad's performance. Team chemistry looks at an all-time high.";
-                mediaTone = 'positive';
-                reputationChange = 3;
-                squadFormChange = 2;
-            } else {
-                headline = "Manager Demands More Despite Victory";
-                article = "Even in victory, the manager remained cautious, urging players to stay focused. A professional tone that the board will likely appreciate.";
-                mediaTone = 'neutral';
-                reputationChange = 1;
-                squadFormChange = 0;
-            }
-        } else if (resultContext.toLowerCase().includes("lost") || resultContext.toLowerCase().includes("defeat")) {
-            if (hasBlame) {
-                headline = "Manager Slams Squad After Defeat!";
-                article = "A tense press conference saw the manager publicly criticize individual errors. Critics suggest this outburst could harm locker room morale.";
-                mediaTone = 'sensationalist';
-                reputationChange = -3;
-                squadFormChange = -2;
-            } else if (hasExcuse) {
-                headline = "Manager Blames Bad Luck for Lost Points";
-                article = "Deflecting blame, the manager pointed to unfortunate decisions and pitch conditions. Fans are debating whether the excuses hold weight.";
-                mediaTone = 'negative';
-                reputationChange = -1;
-                squadFormChange = -1;
-            } else {
-                headline = "Under Fire: Manager Promises Reaction After Loss";
-                article = "Accepting responsibility for the poor result, the manager promised key adjustments in training. The board is giving them space to react.";
-                mediaTone = 'neutral';
-                reputationChange = 1;
-                squadFormChange = 1;
-            }
-        } else {
-            if (hasPraise) {
-                headline = "Glass Half Full: Manager Sees Positives in Draw";
-                article = "Focusing on the positives, the manager highlighted the team's combativeness. A solid base to build upon for the next fixture.";
-                mediaTone = 'positive';
-                reputationChange = 1;
-                squadFormChange = 1;
-            } else {
-                headline = "Frustration Boils Over After Stalemate";
-                article = "Struggling to find the breakthrough, the manager expressed clear disappointment in the final third quality. Training adjustments are expected.";
-                mediaTone = 'negative';
-                reputationChange = -1;
-                squadFormChange = -1;
-            }
-        }
-
+        const report = normalizePressReport(request, JSON.parse(cleanJson(response.text)));
+        return { mode: 'ai-editorial', provider: (response as unknown as { provider?: string }).provider || 'gemini-2.5-flash', report };
+    } catch (error) {
         return {
-            headline,
-            article,
-            mediaTone,
-            reputationChange,
-            squadFormChange,
-            newspaperName
+            mode: 'unavailable',
+            provider: 'gemini-2.5-flash',
+            evaluationId: request.evaluationId,
+            failure: {
+                code: 'AI_RESPONSE_INVALID',
+                message: error instanceof Error ? error.message : 'The AI returned an invalid editorial.',
+                retryable: true,
+            },
         };
     }
 };

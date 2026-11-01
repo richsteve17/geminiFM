@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { nanoid } from 'nanoid';
+import { generateManagedContent, managedAiConfigured } from './managedContent';
 
 const ALLOWED_TEXT_MODELS = new Set([
     'gemini-2.5-flash',
@@ -19,6 +20,7 @@ type VideoOperation = {
 
 const rateWindows = new Map<string, RateWindow>();
 const videoOperations = new Map<string, VideoOperation>();
+const quotaBlockedUntil = new Map<string, number>();
 
 function getClient(): GoogleGenAI {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -60,13 +62,20 @@ function assertTextModel(model: string) {
 export async function generateContent(subject: string, request: { model: string; contents: unknown; config?: unknown }) {
     consumeRateLimit(subject);
     assertTextModel(request.model);
-    const response = await getClient().models.generateContent({
-        model: request.model,
-        contents: request.contents as never,
-        config: request.config as never,
-    });
-    const payload = serializable(response) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    return { ...payload, text: responseText(response, payload) };
+    const textOnly = !request.model.includes('tts');
+    if (textOnly && managedAiConfigured() && (!process.env.GEMINI_API_KEY || (quotaBlockedUntil.get(request.model) || 0) > Date.now())) return generateManagedContent(request);
+    try {
+        const response = await getClient().models.generateContent({ model: request.model, contents: request.contents as never, config: request.config as never });
+        const payload = serializable(response) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+        return { ...payload, text: responseText(response, payload), provider: request.model };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!textOnly || !managedAiConfigured() || !/quota|RESOURCE_EXHAUSTED|429|GEMINI_UNAVAILABLE/i.test(message)) throw error;
+        const retrySeconds = Number(message.match(/"retryDelay"\s*:\s*"(\d+)s"/)?.[1] || 60);
+        quotaBlockedUntil.set(request.model, Date.now() + Math.min(86_400, retrySeconds) * 1000);
+        console.warn(`[AI] Direct ${request.model} quota exhausted; routing text via managed Gemini.`);
+        return generateManagedContent(request);
+    }
 }
 
 export async function startVideo(subject: string, request: { model: string; prompt: string; config?: unknown }) {
