@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { Lightbulb, Target } from 'lucide-react';
 import type { Interview } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
 import { UserIcon } from './icons/UserIcon';
 import { TEAMS } from '../constants';
+import ClubCrest from './ClubIdentity';
 
 interface JobInterviewScreenProps {
     interview: Interview | null;
@@ -139,7 +141,10 @@ const JobInterviewScreen: React.FC<JobInterviewScreenProps> = ({ interview, isLo
                     <div className="lg:col-span-4 space-y-6">
                         {/* Club Identity Card */}
                         <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-5 shadow-lg backdrop-blur-md">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-gray-700/50">Club Profile</h3>
+                            <div className="mb-3 flex items-center gap-2 border-b border-gray-700/50 pb-2">
+                                <ClubCrest name={interview.teamName} size="h-8 w-8" />
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Club Profile</h3>
+                            </div>
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs text-slate-500 uppercase font-bold">Prestige</span>
@@ -154,7 +159,7 @@ const JobInterviewScreen: React.FC<JobInterviewScreenProps> = ({ interview, isLo
                                     <div className="space-y-1">
                                         {targetClub.objectives.map((obj, i) => (
                                             <div key={i} className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-                                                <span>🎯</span> {obj}
+                                                <Target className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={1.75} aria-hidden="true" /> {obj}
                                             </div>
                                         ))}
                                     </div>
@@ -170,8 +175,9 @@ const JobInterviewScreen: React.FC<JobInterviewScreenProps> = ({ interview, isLo
                                     <span className="text-xs text-slate-500 uppercase font-bold">Chairman Type</span>
                                     <span className="px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-xs font-black text-blue-400">{interview.chairmanPersonality}</span>
                                 </div>
-                                <p className="text-xs text-slate-400 leading-relaxed font-sans mt-2">
-                                    💡 <strong className="text-slate-300">Preference:</strong> {getChairmanGuidance(interview.chairmanPersonality)}
+                                <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-400 font-sans">
+                                    <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={1.75} aria-hidden="true" />
+                                    <span><strong className="text-slate-300">Preference:</strong> {getChairmanGuidance(interview.chairmanPersonality)}</span>
                                 </p>
                             </div>
                         </div>

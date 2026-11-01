@@ -1,12 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { Star, Ambulance, Armchair, BadgeAlert, CircleAlert, ClipboardList, Flame, Frown, Handshake, Trophy, UsersRound } from 'lucide-react';
 import { GameState } from '../types';
 import type { Team, Tactic, Formation, Mentality, Player, PlayerPosition } from '../types';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { ArrowsRightLeftIcon } from './icons/ArrowsRightLeftIcon';
-import { GlobeAltIcon } from './icons/GlobeAltIcon';
-import { BrokenLinkIcon } from './icons/BrokenLinkIcon';
 import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
-import { UserGroupIcon } from './icons/UserGroupIcon';
 import TacticsBoard from './TacticsBoard';
 import { analyzeTactics } from '../utils';
 import { FORMATIONS, MENTALITIES, PLAYER_PERSONALITIES } from '../constants';
@@ -139,31 +137,27 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
         const isSelected = selectedListPlayer === player.name;
 
         // Effects & Status
-        const effects = [];
-        if (player.status.type === 'Injured') effects.push(<span key="inj" className="text-sm" title={`Injured (${player.status.weeks} wks)`}>🚑</span>);
-        if (player.status.type === 'Suspended') effects.push(<span key="sus" className="text-sm" title="Suspended">🟥</span>);
+        const effects: React.ReactNode[] = [];
+        if (player.status.type === 'Injured') effects.push(<Ambulance key="inj" className="h-3.5 w-3.5 text-red-400" strokeWidth={1.75} role="img" aria-label={`Injured (${player.status.weeks} weeks)`} />);
+        if (player.status.type === 'Suspended') effects.push(<BadgeAlert key="sus" className="h-3.5 w-3.5 text-red-400" strokeWidth={1.75} role="img" aria-label="Suspended" />);
 
         player.effects.forEach((eff, i) => {
             if (eff.type === 'PostTournamentMorale') {
-                if (eff.morale === 'FiredUp') effects.push(<span key={`m-${i}`} className="text-xs" title="Morale: Fired Up">🔥</span>);
-                if (eff.morale === 'Winner') effects.push(<span key={`m-${i}`} className="text-xs" title="Morale: Winner flex">🏆</span>);
-                if (eff.morale === 'Disappointed') effects.push(<span key={`m-${i}`} className="text-xs" title="Morale: Disappointed">😔</span>);
+                if (eff.morale === 'FiredUp') effects.push(<Flame key={`m-${i}`} className="h-3.5 w-3.5 text-orange-400" strokeWidth={1.75} role="img" aria-label="Morale: fired up" />);
+                if (eff.morale === 'Winner') effects.push(<Trophy key={`m-${i}`} className="h-3.5 w-3.5 text-amber-400" strokeWidth={1.75} role="img" aria-label="Morale: winner" />);
+                if (eff.morale === 'Disappointed') effects.push(<Frown key={`m-${i}`} className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} role="img" aria-label="Morale: disappointed" />);
             }
             if (eff.type === 'BadChemistry') {
-                effects.push(<span key={`c-${i}`} className="text-xs" title={`Chemistry Rift with ${eff.with}`}><BrokenLinkIcon className="w-3 h-3 text-orange-500 inline" /></span>);
+                effects.push(<CircleAlert key={`c-${i}`} className="h-3.5 w-3.5 text-orange-400" strokeWidth={1.75} role="img" aria-label={`Chemistry rift with ${eff.with}`} />);
             }
             if (eff.type === 'InternationalRift') {
                 const color = eff.severity === 'serious' ? 'text-red-500' : eff.severity === 'moderate' ? 'text-orange-500' : 'text-yellow-500';
                 effects.push(
-                    <span key={`ir-${i}`} className="text-xs" title={`International Rift (${eff.severity}) with ${eff.with}: ${eff.message}`}>
-                        <BrokenLinkIcon className={`w-3 h-3 ${color} inline`} />
-                    </span>
+                    <CircleAlert key={`ir-${i}`} className={`h-3.5 w-3.5 ${color}`} strokeWidth={1.75} role="img" aria-label={`International rift (${eff.severity}) with ${eff.with}: ${eff.message}`} />
                 );
             }
             if (eff.type === 'TeammateBond') {
-                effects.push(
-                    <span key={`tb-${i}`} className="text-xs" title={`Teammate Bond with ${eff.with}: ${eff.message}`}>🤝</span>
-                );
+                effects.push(<Handshake key={`tb-${i}`} className="h-3.5 w-3.5 text-cyan-400" strokeWidth={1.75} role="img" aria-label={`Teammate bond with ${eff.with}: ${eff.message}`} />);
             }
         });
 
@@ -220,9 +214,7 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
                         </p>
                         <div className="flex gap-1 items-center">{effects}</div>
                         {outOfPosition && (
-                            <span className="text-[10px] text-orange-400 font-bold" title={`Playing as ${assignment?.formationRole}`}>
-                                ⚠️
-                            </span>
+                            <CircleAlert className="h-3.5 w-3.5 text-orange-400" strokeWidth={1.75} role="img" aria-label={`Playing as ${assignment?.formationRole}`} />
                         )}
                     </div>
                     
@@ -253,7 +245,7 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
                         
                         {player.stats && player.stats.appearances > 0 && (
                             <span className="text-[8px] font-bold text-blue-300 bg-blue-950/40 px-1.5 py-0.5 border border-blue-900/60 rounded">
-                                Rating: ★{player.stats.averageRating} &bull; Goals: {player.stats.goals}
+                                Rating: <Star size={10} strokeWidth={1.75} className="inline-block align-middle" aria-hidden="true" /> {player.stats.averageRating} &bull; Goals: {player.stats.goals}
                             </span>
                         )}
                     </div>
@@ -278,7 +270,7 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
                     {/* Setup Toggles */}
                     <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-700/50">
                         <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                            <span>📋</span> Pitch Lineup & Tactics
+                            <ClipboardList className="h-4 w-4 text-slate-400" strokeWidth={1.75} /> Pitch Lineup & Tactics
                         </h3>
                         <div className="flex gap-3">
                             <div>
@@ -356,7 +348,7 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
                 <div className="bg-gray-800/60 border border-gray-700 p-5 rounded-xl shadow-xl backdrop-blur-md">
                     <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-700/50">
                         <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                            <span>👥</span> Starting XI ({starters.length}/11)
+                            <UsersRound className="h-4 w-4 text-slate-400" strokeWidth={1.75} /> Starting XI ({starters.length}/11)
                         </h3>
                         {isMatchLive && (
                             <span className="text-xs text-blue-400 font-bold bg-blue-950/45 px-2 py-0.5 rounded border border-blue-900">
@@ -409,7 +401,7 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
 
                 <div className="bg-gray-800/60 border border-gray-700 p-5 rounded-xl shadow-xl backdrop-blur-md">
                     <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest mb-4 pb-3 border-b border-gray-700/50 flex items-center gap-2">
-                        <span>🪑</span> Substitutes & Reserves ({bench.length})
+                        <Armchair className="h-4 w-4 text-slate-400" strokeWidth={1.75} /> Substitutes & Reserves ({bench.length})
                     </h3>
                     
                     <ul className="space-y-2 max-h-[350px] overflow-y-auto pr-1">

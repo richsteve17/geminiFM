@@ -189,8 +189,8 @@ const TacticsBoard: React.FC<TacticsBoardProps> = ({ assignments, formation, onS
                                 {/* Condition / Status Icons */}
                                 <div className="flex gap-0.5 mt-0.5">
                                     {player.condition < 90 && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" title="Tired"></span>}
-                                    {player.effects.some(e => e.type === 'PostTournamentMorale' && e.morale === 'FiredUp') && <span className="text-[8px]">🔥</span>}
-                                    {player.effects.some(e => e.type === 'PostTournamentMorale' && e.morale === 'Disappointed') && <span className="text-[8px]">⬇️</span>}
+                                    {player.effects.some(e => e.type === 'PostTournamentMorale' && e.morale === 'FiredUp') && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" role="img" aria-label="Morale: fired up" title="Morale: fired up" />}
+                                    {player.effects.some(e => e.type === 'PostTournamentMorale' && e.morale === 'Disappointed') && <span className="h-1.5 w-1.5 rounded-full bg-slate-400" role="img" aria-label="Morale: disappointed" title="Morale: disappointed" />}
                                 </div>
                             </div>
                         )}

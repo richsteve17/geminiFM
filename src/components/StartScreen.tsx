@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { FootballIcon } from './icons/FootballIcon';
 import { BriefcaseIcon } from './icons/BriefcaseIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
-import { TEAMS } from '../constants';
+import { FolderOpen, Mic, Video, AudioLines } from 'lucide-react';
+import KitCatalog from './KitCatalog';
 import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled, getPaidVoiceName, setPaidVoiceName } from '../services/geminiService';
 import { BUILD_INFO } from '../buildInfo';
-import { getSeasonKitThemes, hasVerifiedSeasonKits } from '../data/seasonThemes';
 
 interface StartScreenProps {
     onSelectTeam: () => void;
@@ -19,7 +19,6 @@ interface StartScreenProps {
 }
 
 const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect, onContinue, hasSave, saveMetadata, initialTeam = 'Manchester City' }) => {
-    const [selectedTeam, setSelectedTeam] = useState<string>(initialTeam);
     const [paidAudio, setPaidAudio] = useState(isPaidAudioEnabled());
     const [paidVideo, setPaidVideo] = useState(isPaidVideoEnabled());
     const [paidVoice, setPaidVoice] = useState(getPaidVoiceName());
@@ -40,21 +39,6 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
         setPaidVideo(newVal);
         setPaidVideoEnabled(newVal);
     };
-
-    const handleTeamChange = (teamName: string) => {
-        setSelectedTeam(teamName);
-    };
-
-    const handleKitSelect = (colors: { primary: string, secondary: string, text: string }) => {
-        if (onThemeSelect) onThemeSelect(colors);
-    };
-
-    const getKits = (teamName: string) => {
-        return getSeasonKitThemes(teamName);
-    };
-
-    const currentKits = getKits(selectedTeam);
-    const hasVerifiedKits = hasVerifiedSeasonKits(selectedTeam);
 
     return (
         <div className="relative flex flex-col items-center justify-center min-h-[88vh] px-4 py-8 w-full max-w-7xl mx-auto overflow-hidden rounded-2xl bg-slate-950 border border-slate-800/80 shadow-2xl">
@@ -116,7 +100,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                             <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
                         </span>
                         <div className="relative z-10 flex items-center gap-5">
-                            <div className="text-4xl shrink-0">💾</div>
+                            <FolderOpen size={36} strokeWidth={1.5} className="shrink-0 text-cyan-400" aria-hidden="true" />
                             <div className="flex-1">
                                 <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-1 block">Saved Career</span>
                                 <h3 className="text-xl font-extrabold text-white mb-1 group-hover:text-cyan-300 transition-colors">LOAD CAREER</h3>
@@ -192,7 +176,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     {/* Audio Toggle */}
                     <div className="flex items-center justify-between gap-4 flex-1 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50">
                         <div className="flex flex-col text-left">
-                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">🎙️ Paid AI Commentary</span>
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider"><Mic size={14} className="inline-block mr-1.5 align-middle" aria-hidden="true" />Paid AI Commentary</span>
                             <span className="text-[8px] text-slate-500 uppercase mt-0.5">
                                 {paidAudio ? 'Gemini API Voices' : 'Local Browser TTS (Free)'}
                             </span>
@@ -200,6 +184,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         <button
                             type="button"
                             onClick={togglePaidAudio}
+                            aria-label="Paid AI commentary" role="switch" aria-checked={paidAudio}
                             className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                                 paidAudio ? 'bg-emerald-500' : 'bg-slate-700'
                             }`}
@@ -215,7 +200,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     {/* Video Toggle */}
                     <div className="flex items-center justify-between gap-4 flex-1 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50">
                         <div className="flex flex-col text-left">
-                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">🎥 Paid 3D Replay Video</span>
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider"><Video size={14} className="inline-block mr-1.5 align-middle" aria-hidden="true" />Paid 3D Replay Video</span>
                             <span className="text-[8px] text-slate-500 uppercase mt-0.5">
                                 {paidVideo ? 'Google Veo Replay Generation' : 'Live 3D Pitch · No Video Generation'}
                             </span>
@@ -223,6 +208,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         <button
                             type="button"
                             onClick={togglePaidVideo}
+                            aria-label="Paid replay video" role="switch" aria-checked={paidVideo}
                             className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                                 paidVideo ? 'bg-emerald-500' : 'bg-slate-700'
                             }`}
@@ -240,7 +226,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                 {paidAudio && (
                     <div className="flex items-center justify-between gap-4 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50 mt-2">
                         <div className="flex flex-col text-left">
-                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">🗣️ Commentator Voice</span>
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider"><AudioLines size={14} className="inline-block mr-1.5 align-middle" aria-hidden="true" />Commentator Voice</span>
                             <span className="text-[8px] text-slate-500 uppercase mt-0.5">Select Gemini native voice personality</span>
                         </div>
                         <select
@@ -260,57 +246,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
 
             {/* --- CURRENT-SEASON CLUB THEME SELECTOR --- */}
             <div className="z-10 w-full max-w-4xl text-center flex flex-col items-center">
-                <div className="mb-6 w-full animate-in fade-in slide-in-from-bottom-4">
-                        
-                        <div className="flex flex-col items-center mb-4">
-                            <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">{BUILD_INFO.season} Verified Kit Catalog</label>
-                            <p className="text-[9px] text-slate-600 max-w-xl mb-2">Source-backed kit references drive the UI palette. No legacy-color fallback is presented as a current kit.</p>
-                            <div className="relative inline-block w-64">
-                                <select 
-                                    onChange={(e) => handleTeamChange(e.target.value)}
-                                    className="block appearance-none w-full bg-slate-900 border border-slate-800 hover:border-slate-700 px-4 py-2 pr-8 rounded shadow text-slate-300 text-xs font-bold uppercase cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                                    value={selectedTeam}
-                                >
-                                    {Object.keys(TEAMS).sort().map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                </div>
-                            </div>
-                        </div>
-
-                        {hasVerifiedKits ? (
-                            <div className="flex flex-wrap justify-center gap-4">
-                                {currentKits.map((kit) => (
-                                    <div key={kit.id} className="w-44 bg-slate-900/50 border border-slate-800 rounded-xl shadow-lg overflow-hidden flex flex-col">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleKitSelect({ primary: kit.bg, secondary: kit.accent, text: kit.text })}
-                                            disabled={!onThemeSelect}
-                                            className="group p-3 text-left transition-all hover:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-emerald-500/70 disabled:cursor-default disabled:opacity-90 disabled:hover:bg-transparent"
-                                            title={onThemeSelect ? `Apply ${kit.label} UI theme` : `${kit.label} source reference`}
-                                        >
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 mb-2 block">{kit.label}</span>
-                                            <div className="h-28 mb-2 rounded-md bg-slate-950/70 overflow-hidden flex items-center justify-center border border-slate-800">
-                                                <img src={kit.imageUrl} alt={`${selectedTeam} ${kit.label} reference`} className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105" loading="lazy" referrerPolicy="no-referrer" />
-                                            </div>
-                                            <p className="text-[9px] font-bold text-slate-200 uppercase tracking-wide leading-relaxed">{kit.colorNames.join(' · ')}</p>
-                                            <p className="mt-1 text-[8px] text-slate-500 leading-relaxed">{kit.design} · {kit.brand}</p>
-                                            <div className="mt-2 w-full text-center text-[9px] font-bold py-1 rounded bg-slate-950 border border-slate-800 text-slate-400 group-hover:text-emerald-400 group-hover:border-emerald-500/50 transition-colors uppercase tracking-wider">{onThemeSelect ? 'Apply UI Theme' : 'Reference Only'}</div>
-                                        </button>
-                                        <a href={kit.sourceUrl} target="_blank" rel="noreferrer" className="border-t border-slate-800 px-3 py-2 text-[8px] uppercase tracking-wider text-slate-500 hover:text-emerald-400 transition-colors">Source: {kit.sourceName} ↗</a>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="max-w-xl mx-auto rounded-lg border border-amber-900/60 bg-amber-950/20 px-4 py-3 text-left">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">No verified {BUILD_INFO.season} kit record</p>
-                                <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{selectedTeam} is intentionally excluded from the current-kit selector until an authoritative source record is imported. The old generic palette is not being passed off as a new kit.</p>
-                            </div>
-                        )}
-                </div>
+                <KitCatalog initialTeam={initialTeam} onThemeSelect={onThemeSelect} />
 
                 <details className="mt-2 w-full max-w-4xl text-left border border-slate-800 bg-slate-950/70 rounded-lg shadow-inner group">
                     <summary className="cursor-pointer list-none px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-widest text-slate-400 hover:text-emerald-300 transition-colors">

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { CheckCircle2, Megaphone, XCircle } from 'lucide-react';
 import type { Player, TransferBid } from '../types';
 import { negotiateTransferBid } from '../services/geminiService';
+import NationalityBadge from './NationalityBadge';
 
 interface TransferCenterProps {
     bids: TransferBid[];
@@ -133,7 +135,7 @@ const TransferCenter: React.FC<TransferCenterProps> = ({
 
             {delegationSummary && (
                 <div className="mb-6 p-4 bg-blue-950/60 border border-blue-800 rounded-lg text-blue-200 text-sm flex justify-between items-center animate-fade-in">
-                    <span>📢 <strong>Assistant Manager Report:</strong> {delegationSummary}</span>
+                    <span className="flex items-start gap-2"><Megaphone className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" /><span><strong>Assistant Manager Report:</strong> {delegationSummary}</span></span>
                     <button onClick={() => setDelegationSummary(null)} className="ml-4 font-bold hover:text-white">&times;</button>
                 </div>
             )}
@@ -157,7 +159,7 @@ const TransferCenter: React.FC<TransferCenterProps> = ({
                                 }`}>
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-2xl">{bid.player.nationality}</span>
+                                            <NationalityBadge nationality={bid.player.nationality} />
                                             <h4 className="font-bold text-lg text-white">{bid.player.name}</h4>
                                             <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-semibold">{bid.player.position}</span>
                                             {bid.player.transferRequested && (
@@ -281,12 +283,12 @@ const TransferCenter: React.FC<TransferCenterProps> = ({
                                     </button>
                                 </form>
                             ) : activeBid.status === 'accepted' ? (
-                                <div className="text-center py-2 bg-emerald-950/40 border border-emerald-900 text-emerald-300 rounded font-semibold text-sm">
-                                    ✓ Offer accepted! Finalize the sale above.
+                                <div role="status" className="flex items-center justify-center gap-1.5 text-center py-2 bg-emerald-950/40 border border-emerald-900 text-emerald-300 rounded font-semibold text-sm">
+                                    <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" /> Offer accepted! Finalize the sale above.
                                 </div>
                             ) : (
-                                <div className="text-center py-2 bg-red-950/40 border border-red-900 text-red-300 rounded font-semibold text-sm">
-                                    ❌ Deal collapsed. Negotiations are dead.
+                                <div className="flex items-center justify-center gap-1.5 text-center py-2 bg-red-950/40 border border-red-900 text-red-300 rounded font-semibold text-sm">
+                                    <XCircle className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" /> Deal collapsed. Negotiations are dead.
                                 </div>
                             )}
                         </>

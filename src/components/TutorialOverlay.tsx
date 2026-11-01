@@ -25,7 +25,7 @@ const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, onNext, onClose
         },
         {
             title: "Player Management",
-            content: "Keep an eye on player morale (🔥) and chemistry issues (🔗). Unhappy players perform worse. Click 'Squad' to see detailed stats.",
+            content: "Keep an eye on player morale and chemistry issues. Unhappy players perform worse. Click 'Squad' to see detailed stats.",
             position: "left"
         },
         {

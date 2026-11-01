@@ -25,7 +25,7 @@ engine tests close to their feature under `src/__tests__/`.
 ## Release Record and Season Theme Maintenance
 - The homepage release record is generated from `package.json` version, the Git revision, and build timestamp. Bump the patch/minor version for user-visible releases.
 - Update `CURRENT_BUILD_CHANGES` in `src/buildInfo.ts` with factual changes included in the release. Do not use placeholder status or invented patch notes.
-- The bottom homepage selector is a **current-season club-colour UI theme pack**, not licensed kit art. Keep its season label and palette rules in `src/data/seasonThemes.ts` aligned with the active catalog snapshot.
+- The bottom homepage selector uses **source-backed current-season shirt photographs** and separately applies approximate UI palettes. Keep `src/data/seasonThemes.ts`, `src/data/seasonKitCatalog.json`, and the asset provenance manifests aligned. Preserve MLS calendar-year seasons, null unknown metadata, and honest unavailable-image states; never relabel old colours as new kits or claim a blanket artwork licence.
 
 ## Commit & Pull Request Guidelines
 Commit history follows Conventional Commits (e.g., `feat(match): ...`, `fix(TeamDetails): ...`).

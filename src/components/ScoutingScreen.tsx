@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
+import { Check, Star } from 'lucide-react';
 import type { Player } from '../types';
 import { UserIcon } from './icons/UserIcon';
 import { FootballIcon } from './icons/FootballIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
+import NationalityBadge from './NationalityBadge';
 
 interface ScoutingScreenProps {
     onScout: (request: string, useRealWorld: boolean) => Promise<void>;
@@ -12,7 +14,7 @@ interface ScoutingScreenProps {
     onSignPlayer: (player: Player) => void;
     onBack: () => void;
     onGoToTransfers?: () => void;
-    isNationalTeam?: boolean; 
+    isNationalTeam?: boolean;
 }
 
 const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, isLoading, onSignPlayer, onBack, onGoToTransfers, isNationalTeam }) => {
@@ -34,13 +36,13 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                         {isNationalTeam ? "National Pool Selection" : "Global Scouting Network"}
                     </h2>
                     <p className="text-lg text-gray-400">
-                        {isNationalTeam 
-                            ? "Review the eligible player pool for your national squad." 
+                        {isNationalTeam
+                            ? "Review the eligible player pool for your national squad."
                             : "Tell your scout exactly what you are looking for."}
                     </p>
                 </div>
                 {onGoToTransfers && (
-                    <button 
+                    <button
                         onClick={onGoToTransfers}
                         className="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-4 rounded border border-gray-500 whitespace-nowrap"
                     >
@@ -52,22 +54,26 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
             {/* Input Section */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 mb-8 shadow-lg">
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    
+
                     {/* Toggle */}
                     {!isNationalTeam && (
-                        <div 
-                            className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${useRealWorld ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-700/30 border-gray-600'}`}
-                            onClick={() => setUseRealWorld(!useRealWorld)}
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-label="Use Real World Network"
+                            aria-checked={useRealWorld}
+                            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${useRealWorld ? 'bg-blue-900/30 border-blue-500' : 'bg-gray-700/30 border-gray-600'}`}
+                            onClick={() => setUseRealWorld(value => !value)}
                         >
-                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${useRealWorld ? 'bg-blue-500 border-blue-400' : 'border-gray-400'}`}>
-                                {useRealWorld && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                            </div>
-                            <div className="flex-1">
-                                <p className={`text-sm font-bold ${useRealWorld ? 'text-blue-300' : 'text-gray-300'}`}>Use Real World Network</p>
-                                <p className="text-xs text-gray-500">Searches live football databases via Google (Powered by Gemini Grounding)</p>
-                            </div>
+                            <span className={`w-5 h-5 rounded border flex items-center justify-center ${useRealWorld ? 'bg-blue-500 border-blue-400' : 'border-gray-400'}`} aria-hidden="true">
+                                {useRealWorld && <Check size={14} strokeWidth={1.75} />}
+                            </span>
+                            <span className="flex-1">
+                                <span className={`block text-sm font-bold ${useRealWorld ? 'text-blue-300' : 'text-gray-300'}`}>Use Real World Network</span>
+                                <span className="block text-xs text-gray-500">Searches live football databases via Google (Powered by Gemini Grounding)</span>
+                            </span>
                             <GlobeAltIcon className={`w-6 h-6 ${useRealWorld ? 'text-blue-400' : 'text-gray-600'}`} />
-                        </div>
+                        </button>
                     )}
 
                     <div className="flex flex-col sm:flex-row gap-4">
@@ -78,8 +84,8 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                                 id="scoutRequest"
                                 value={request}
                                 onChange={(e) => setRequest(e.target.value)}
-                                placeholder={isNationalTeam 
-                                    ? "e.g. 'Find me fit strikers playing in Premier League'" 
+                                placeholder={isNationalTeam
+                                    ? "e.g. 'Find me fit strikers playing in Premier League'"
                                     : "e.g. 'A tall, aggressive centre back from Italy under 25'"}
                                 className="w-full p-4 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
@@ -105,12 +111,12 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
             {/* Results Section */}
             <div className="space-y-4">
                 {scoutResults.length > 0 && <h3 className="text-xl font-bold text-gray-300 mb-4">{isNationalTeam ? "Eligible Players" : "Scouting Reports"}</h3>}
-                
+
                 {scoutResults.map((player, index) => (
                     <div key={index} className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col md:flex-row items-center gap-6 shadow-md hover:border-blue-500 transition-colors">
-                        {/* Avatar / Flag */}
+                        {/* Position and nationality */}
                         <div className="flex flex-col items-center">
-                            <span className="text-4xl mb-1">{player.nationality}</span>
+                            <NationalityBadge nationality={player.nationality} className="mb-1" />
                             <span className={`text-xs font-bold px-2 py-1 rounded text-white ${
                                 player.position === 'GK' ? 'bg-yellow-600' :
                                 ['LB', 'CB', 'RB', 'LWB', 'RWB'].includes(player.position) ? 'bg-blue-600' :
@@ -133,14 +139,14 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                                 {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Wage: <span className="text-white font-bold">${player.wage.toLocaleString()}/wk</span></span>}
                                 {!isNationalTeam && <span className="bg-gray-700 px-2 py-1 rounded text-gray-300">Value: <span className="text-white font-bold">${(player.marketValue || player.wage * 100).toLocaleString()}</span></span>}
                                 {player.stats && player.stats.appearances > 0 && (
-                                    <span 
+                                    <span
                                         className="bg-blue-900/50 border border-blue-800 px-2 py-1 rounded text-blue-300 font-mono cursor-help"
-                                        title={player.history && player.history.length > 0 
-                                            ? `Career History:\n` + player.history.map(h => `Year ${h.year} (${h.teamName || 'Club'}): ${h.appearances} Apps, ${h.goals} Goals, ${h.cleanSheets} CS, ★${h.averageRating}`).join('\n') 
+                                        title={player.history && player.history.length > 0
+                                            ? `Career History:\n` + player.history.map(h => `Year ${h.year} (${h.teamName || 'Club'}): ${h.appearances} Apps, ${h.goals} Goals, ${h.cleanSheets} CS, Rating ${h.averageRating}`).join('\n')
                                             : "No past season history."
                                         }
                                     >
-                                        Apps: {player.stats.appearances} | Goals: {player.stats.goals} | CS: {player.stats.cleanSheets} | Rating: ★{player.stats.averageRating}
+                                        Apps: {player.stats.appearances} | Goals: {player.stats.goals} | CS: {player.stats.cleanSheets} | Rating: <Star size={12} strokeWidth={1.75} className="inline-block align-middle" aria-hidden="true" /> {player.stats.averageRating}
                                     </span>
                                 )}
                             </div>

@@ -3,6 +3,7 @@ import type { PlayerTalk, NegotiationResult, ContractTerms, ContractBonusType, P
 import { FootballIcon } from './icons/FootballIcon';
 import { UserIcon } from './icons/UserIcon';
 import { DocumentCheckIcon } from './icons/DocumentCheckIcon';
+import NationalityBadge from './NationalityBadge';
 
 interface PlayerTalkScreenProps {
     talk: PlayerTalk | null;
@@ -330,6 +331,10 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                             <div className="flex justify-between items-center">
                                 <span className="text-xs text-slate-500 uppercase font-bold">Position</span>
                                 <span className="px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-xs font-mono font-black text-green-400">{talk.player.position}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-3">
+                                <span className="text-xs text-slate-500 uppercase font-bold">Nationality</span>
+                                <NationalityBadge nationality={talk.player.nationality} />
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-xs text-slate-500 uppercase font-bold">Rating</span>

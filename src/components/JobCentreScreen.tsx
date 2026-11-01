@@ -1,6 +1,7 @@
 
 import React from 'react';
 import type { Job } from '../types';
+import ClubCrest from './ClubIdentity';
 
 interface JobCentreScreenProps {
     jobs: Job[];
@@ -20,9 +21,12 @@ const JobCentreScreen: React.FC<JobCentreScreenProps> = ({ jobs, onApply, onBack
             <div className="space-y-3">
                 {sortedJobs.map(job => (
                     <div key={job.teamName} className="bg-gray-800/50 rounded-lg shadow-lg border border-gray-700 p-4 flex items-center justify-between">
-                        <div>
-                            <h3 className="text-xl font-bold text-blue-400">{job.teamName}</h3>
-                            <p className="text-sm text-gray-300">Prestige: <span className="font-bold">{job.prestige}</span></p>
+                        <div className="flex min-w-0 items-center gap-3">
+                            <ClubCrest name={job.teamName} size="h-10 w-10" />
+                            <div className="min-w-0">
+                                <h3 className="truncate text-xl font-bold text-blue-400">{job.teamName}</h3>
+                                <p className="text-sm text-gray-300">Prestige: <span className="font-bold">{job.prestige}</span></p>
+                            </div>
                         </div>
                         <button
                             onClick={() => onApply(job.teamName)}

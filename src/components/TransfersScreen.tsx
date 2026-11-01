@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Star } from 'lucide-react';
 import type { Player } from '../types';
 import { PLAYER_PERSONALITIES } from '../constants';
 import {
@@ -6,6 +7,7 @@ import {
     isFreeAgent,
     normalizePlayerStats,
 } from '../engine/freeAgency';
+import NationalityBadge from './NationalityBadge';
 
 interface TransfersScreenProps {
     targets: Player[];
@@ -105,7 +107,7 @@ const TransfersScreen: React.FC<TransfersScreenProps> = ({
                         <div key={player.name} className={`bg-gray-800/50 rounded-lg shadow-lg border border-gray-700 p-4 flex flex-col sm:flex-row items-center justify-between border-l-4 ${getPositionColor(player.position)}`}>
                             <div className="flex-grow sm:flex items-center text-center sm:text-left">
                                 <div className="flex items-center justify-center">
-                                    <span className="text-3xl mr-4">{player.nationality}</span>
+                                    <NationalityBadge nationality={player.nationality} className="mr-3 shrink-0" />
                                     <div>
                                         <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                                             <h3 className="text-xl font-bold text-green-400">{player.name}</h3>
@@ -133,11 +135,11 @@ const TransfersScreen: React.FC<TransfersScreenProps> = ({
                                         <p
                                             className="text-xs text-blue-400 font-mono mt-1 cursor-help"
                                             title={player.history && player.history.length > 0
-                                                ? `Career History:\n${player.history.map(h => `Year ${h.year} (${h.teamName}): ${h.appearances} Apps, ${h.goals} Goals, ${h.cleanSheets} CS, ★${h.averageRating}`).join('\n')}`
+                                                ? `Career History:\n${player.history.map(h => `Year ${h.year} (${h.teamName}): ${h.appearances} Apps, ${h.goals} Goals, ${h.cleanSheets} CS, Rating ${h.averageRating}`).join('\n')}`
                                                 : 'No past season history.'
                                             }
                                         >
-                                            Apps: {stats.appearances} | Goals: {stats.goals} | CS: {stats.cleanSheets} | Rating: ★{stats.averageRating}
+                                            Apps: {stats.appearances} | Goals: {stats.goals} | CS: {stats.cleanSheets} | Rating: <Star size={12} strokeWidth={1.75} className="inline-block align-middle" aria-hidden="true" /> {stats.averageRating}
                                         </p>
                                     )}
                                 </div>

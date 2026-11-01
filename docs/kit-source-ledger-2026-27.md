@@ -33,3 +33,17 @@ Each rendered card stores a direct source URL and the source page's Open Graph k
 ## Import rule
 
 A club not present in `src/data/seasonThemes.ts` must display the explicit **unverified** state. Do not derive a “current kit” by reusing `Team.colors` or a prior-season strip.
+
+## Build 3.2.1 expansion — 2026-11-01
+
+The runtime now imports `src/data/seasonKitCatalog.json`, with **235 locally packaged photographs across all 82 playable clubs**. All clubs have a sourced home reference; only variants actually present in the source albums are shown. Missing away/third references are not invented. MLS cards use `2026`; European cards use `2026/27`.
+
+Each card retains its individual archive record URL, original image URL, album URL, palette provenance and an explicit `archive-reference` publication status. Source-card metadata does not establish official release dates, sponsors or suppliers, so those newly imported fields remain null. The reviewed seven-club facts above are retained rather than erased by the bulk image import. Newly sampled UI palettes are approximations, not supplier-certified colour specifications.
+
+`docs/kit-asset-manifest-2026.json` contains every asset’s original SHA-256, original/packaged dimensions, byte count and source URLs. The packaging code uses local content-versioned WebP files, preserves source aspect ratio, never upscales and does not change kit artwork. Runtime photo rendering therefore does not depend on an external archive hotlink.
+
+### Repeatable import
+
+Run `node scripts/kit-import.mjs --help` for the deterministic source-album import. Parser regression: `node scripts/kit-import.test.mjs` uses the repository’s saved source fixture. `scripts/package-kit-assets.py` packages the candidate JSON; normal runs reuse matching verified local snapshots, and `--refresh` deliberately re-fetches them. Required Python packages: requests, Pillow, numpy. Source retrieval and explicit name aliases are separate from UI rendering. Source documents with non-200 status, mismatched seasons or ambiguous primary-kit identity do not become valid cards.
+
+The source-supported asset snapshot and metadata are not a licence to club trademarks or photography; individual provenance is retained for the project’s existing rights review.

@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { Link2 } from 'lucide-react';
 import { FootballIcon } from './icons/FootballIcon';
 
 interface MechanicsGuideProps {
@@ -120,7 +121,7 @@ const MechanicsGuide: React.FC<MechanicsGuideProps> = ({ onClose }) => {
                             </div>
 
                             <div className="bg-gray-900/50 p-3 rounded">
-                                <h4 className="font-bold text-white text-sm mb-2">Chemistry Rifts 🔗</h4>
+                                <h4 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-white"><Link2 className="h-4 w-4 text-slate-400" strokeWidth={1.75} aria-hidden="true" /> Chemistry Rifts</h4>
                                 <p className="text-xs text-gray-400">
                                     If two players have a "Bad Chemistry" status (visible in the squad list), the engine increases the chance of "Miscommunication" events leading to conceded goals.
                                 </p>

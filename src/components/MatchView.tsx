@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { LoaderCircle, Smartphone, Video, Volume2, X, Activity, ArrowDownUp, Banknote, BadgeCheck, Circle, Flag, Gauge, HeartPulse, Play, RectangleVertical, SkipForward } from 'lucide-react';
 import type { Fixture, MatchState, LeagueTableEntry, TouchlineShout, Team, MatchEvent, TacticalShout } from '../types';
 import { GameState } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
-import { DevicePhoneMobileIcon } from './icons/DevicePhoneMobileIcon';
 import { HeartIcon } from './icons/HeartIcon';
 import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 import { ShareIcon } from './icons/ShareIcon';
@@ -12,6 +12,7 @@ import { getAssistantAnalysis, playMatchCommentary, generateReplayVideo, getCont
 import { UserIcon } from './icons/UserIcon';
 import PitchView from './PitchView';
 import AtmosphereWidget from './AtmosphereWidget';
+import ClubCrest from './ClubCrest';
 import { createChantForCue, type Chant } from '../services/chantService';
 import { createAtmosphereCueMemory, selectAtmosphereCues } from '../engine/atmosphereCues';
 import { stadiumAudio } from '../services/audioDirector';
@@ -230,23 +231,23 @@ export default function MatchView({
 
     const renderEvent = (event: MatchEvent) => {
         let color = 'text-gray-300';
-        let icon = '•';
+        let icon: React.ReactNode = <Circle size={12} strokeWidth={1.75} aria-hidden="true" />;
 
-        if (event.type === 'goal') { color = 'text-green-400 font-bold'; icon = '⚽'; }
+        if (event.type === 'goal') { color = 'text-green-400 font-bold'; icon = <FootballIcon className="h-4 w-4" />; }
         if (event.type === 'card') {
-            if (event.cardType === 'red') { color = 'text-red-500 font-bold'; icon = '🟥'; }
-            else { color = 'text-yellow-400'; icon = '🟨'; }
+            if (event.cardType === 'red') { color = 'text-red-500 font-bold'; icon = <RectangleVertical size={15} fill="currentColor" aria-hidden="true" />; }
+            else { color = 'text-yellow-400'; icon = <RectangleVertical size={15} fill="currentColor" aria-hidden="true" />; }
         }
-        if (event.type === 'injury') { color = 'text-red-500 font-bold animate-pulse'; icon = '🚑'; }
-        if (event.type === 'sub') { color = 'text-blue-400'; icon = '🔄'; }
-        if (event.type === 'whistle') { color = 'text-gray-500 italic'; icon = '📢'; }
+        if (event.type === 'injury') { color = 'text-red-500 font-bold'; icon = <HeartPulse size={16} strokeWidth={1.75} aria-hidden="true" />; }
+        if (event.type === 'sub') { color = 'text-blue-400'; icon = <ArrowDownUp size={16} strokeWidth={1.75} aria-hidden="true" />; }
+        if (event.type === 'whistle') { color = 'text-gray-500 italic'; icon = <Flag size={16} strokeWidth={1.75} aria-hidden="true" />; }
 
         return (
             <div key={event.id} className={`flex gap-2 sm:gap-3 items-start py-2 border-b border-gray-800 ${event.type === 'goal' ? 'bg-green-900/10' : ''}`}>
                 <span className="w-7 sm:w-8 text-right font-mono text-gray-500 text-[10px] sm:text-xs pt-1 flex-shrink-0">{event.minute}'</span>
                 <div className="flex-1 min-w-0">
                      <p className={`text-xs sm:text-sm ${color} break-words whitespace-normal`}>
-                        <span className="mr-2">{icon}</span>
+                        <span className="mr-2 inline-flex align-middle" title={event.type === 'card' ? `${event.cardType || 'yellow'} card` : event.type}>{icon}</span>
                         {event.description}
                         {event.scoreAfter && <span className="ml-2 text-white border border-gray-600 px-1 rounded bg-gray-800 inline-block">{event.scoreAfter}</span>}
                     </p>
@@ -254,13 +255,13 @@ export default function MatchView({
                 {event.type === 'goal' && (
                     <div className="flex gap-2 mr-2 flex-shrink-0">
                         <button onClick={() => handlePlayAudio(event)} disabled={playingAudioId === event.id} className={`p-1 rounded hover:bg-gray-700 transition-colors ${playingAudioId === event.id ? 'text-green-400 animate-pulse' : 'text-gray-500'}`} title="Listen">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 1 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z" /></svg>
+                            <Volume2 size={16} strokeWidth={1.75} aria-hidden="true" />
                         </button>
                         <button onClick={() => handleGenerateVideo(event, 'landscape')} disabled={!isPaidVideo || generatingVideoId === event.id} className={`p-1 rounded hover:bg-gray-700 transition-colors ${generatingVideoId === event.id ? 'text-yellow-400 animate-spin' : 'text-gray-500'} ${!isPaidVideo ? 'opacity-50 cursor-not-allowed' : ''}`} title={!isPaidVideo ? "Video disabled in settings" : "Replay"}>
-                            {generatingVideoId === event.id ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M4.5 4.5a3 3 0 0 0-3 3v9a3 3 0 0 0 3 3h8.25a3 3 0 0 0 3-3v-9a3 3 0 0 0-3-3H4.5ZM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06Z" /></svg>}
+                            {generatingVideoId === event.id ? <LoaderCircle size={16} strokeWidth={1.75} aria-hidden="true" /> : <Video size={16} strokeWidth={1.75} aria-hidden="true" />}
                         </button>
                         <button onClick={() => handleGenerateVideo(event, 'portrait')} disabled={!isPaidVideo || generatingVideoId === event.id} className={`p-1 rounded hover:bg-purple-900/50 transition-colors ${generatingVideoId === event.id ? 'text-purple-400 animate-spin' : 'text-purple-400 hover:text-purple-300'} ${!isPaidVideo ? 'opacity-50 cursor-not-allowed' : ''}`} title={!isPaidVideo ? "Video disabled in settings" : "Clip It"}>
-                            <DevicePhoneMobileIcon className="w-4 h-4" />
+                            <Smartphone size={16} strokeWidth={1.75} aria-hidden="true" />
                         </button>
                     </div>
                 )}
@@ -291,8 +292,8 @@ export default function MatchView({
         <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden flex flex-col relative h-[78vh] min-h-[520px] sm:h-[640px] lg:h-auto lg:min-h-[600px]">
             {videoUrl && (
                 <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-4 animate-in fade-in backdrop-blur-md">
-                    <button onClick={() => setVideoUrl(null)} className="absolute top-4 right-4 text-white hover:text-gray-300 z-50 bg-gray-800/50 rounded-full p-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                    <button onClick={() => setVideoUrl(null)} aria-label="Close replay" className="absolute top-4 right-4 text-white hover:text-gray-300 z-50 bg-gray-800/50 rounded-full p-2">
+                        <X size={24} strokeWidth={1.75} aria-hidden="true" />
                     </button>
 
                     <div className={`relative ${videoFormat === 'portrait' ? 'max-w-[320px] aspect-[9/16] rounded-3xl border-0 ring-4 ring-gray-800' : 'w-full max-w-4xl aspect-[16/9] rounded-lg border-2 border-green-600'} shadow-2xl bg-black overflow-hidden`}>
@@ -303,7 +304,7 @@ export default function MatchView({
                                     <div>
                                         <h4 className="font-bold text-sm shadow-black drop-shadow-md flex items-center gap-1">
                                             @{userTeamName?.replace(/\s/g, '').toLowerCase()}_official
-                                             <span className="text-blue-400 text-[10px]">✓</span>
+                                             <BadgeCheck size={14} className="text-blue-400" aria-hidden="true" />
                                         </h4>
                                         <p className="text-xs mt-1 leading-snug drop-shadow-md opacity-90">
                                             {socialPost.caption}
@@ -319,7 +320,7 @@ export default function MatchView({
                                         </div>
                                         {/* REVENUE PILL */}
                                         <div className="bg-green-900/80 border border-green-500 text-green-300 px-2 py-1 rounded-full flex items-center gap-1">
-                                            <span>💰</span> {socialPost.estimatedEarnings}
+                                            <Banknote size={14} strokeWidth={1.75} aria-hidden="true" /> {socialPost.estimatedEarnings}
                                         </div>
                                     </div>
 
@@ -347,11 +348,17 @@ export default function MatchView({
                     <span>{isLoading ? 'Thinking...' : (matchState?.isFinished ? 'Full Time' : `${currentMinute}' (LIVE)`)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                     <h3 className="text-base sm:text-xl lg:text-2xl font-bold w-1/3 text-right text-white truncate px-1 sm:px-2">{fixture?.homeTeam}</h3>
+                     <div className="flex w-1/3 min-w-0 items-center justify-end gap-2">
+                         <h3 className="text-xs sm:text-base lg:text-lg font-semibold text-right text-white truncate" title={fixture?.homeTeam}>{fixture?.homeTeam}</h3>
+                         <ClubCrest teamName={fixture?.homeTeam || 'Home'} className="w-7 h-7 sm:w-9 sm:h-9 shrink-0" />
+                     </div>
                      <div className="px-3 sm:px-4 py-1 bg-gray-800 rounded text-2xl sm:text-3xl font-mono font-bold text-yellow-500 mx-1 sm:mx-2 flex-shrink-0">
                         {score}
                     </div>
-                     <h3 className="text-base sm:text-xl lg:text-2xl font-bold w-1/3 text-left text-white truncate px-1 sm:px-2">{fixture?.awayTeam}</h3>
+                     <div className="flex w-1/3 min-w-0 items-center gap-2">
+                         <ClubCrest teamName={fixture?.awayTeam || 'Away'} className="w-7 h-7 sm:w-9 sm:h-9 shrink-0" />
+                         <h3 className="text-xs sm:text-base lg:text-lg font-semibold text-left text-white truncate" title={fixture?.awayTeam}>{fixture?.awayTeam}</h3>
+                     </div>
                 </div>
                 {matchState && <div className="mt-3 grid grid-cols-3 text-center text-xs text-slate-300 gap-1">
                     <span>{matchStats.home.shots} / {matchStats.home.onTarget}</span><span className="text-slate-500">Shots / on target</span><span>{matchStats.away.shots} / {matchStats.away.onTarget}</span>
@@ -359,10 +366,9 @@ export default function MatchView({
                 </div>}
                 {matchState?.presentation && <p className={`mt-2 text-center text-xs ${matchState.presentation.mode === 'ai' ? 'text-emerald-400' : 'text-amber-300'}`}>{matchState.presentation.mode === 'ai' ? 'AI match director connected' : matchState.presentation.reason || 'Local match commentary'}</p>}
                 {(!isPaidAudio || !isPaidVideo) && (
-                    <div className="text-center text-slate-400 text-[10px] mt-2 font-bold uppercase tracking-wider">
-                        {!isPaidAudio && "🔊 Free Speech Engine Active"}
-                        {!isPaidAudio && !isPaidVideo && " · "}
-                        {!isPaidVideo && "🎥 3D Replay Videos Disabled"}
+                    <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-slate-400 text-[10px] mt-2 font-bold uppercase tracking-wider">
+                        {!isPaidAudio && <span className="inline-flex items-center gap-1"><Volume2 size={13} aria-hidden="true" />Free Speech Engine Active</span>}
+                        {!isPaidVideo && <span className="inline-flex items-center gap-1"><Video size={13} aria-hidden="true" />3D Replay Videos Disabled</span>}
                     </div>
                 )}
                 {mediaError && <div className="text-center text-red-400 text-xs mt-2 animate-pulse font-bold">{mediaError}</div>}
@@ -435,13 +441,16 @@ export default function MatchView({
                                         <button
                                             key={speed}
                                             onClick={() => onMatchSpeedChange(speed)}
+                                            aria-label={`Match speed: ${speed}`}
+                                            aria-pressed={matchSpeed === speed}
+                                            title={`${speed[0].toUpperCase()}${speed.slice(1)} speed`}
                                             className={`text-[9px] uppercase px-2 py-0.5 rounded font-bold transition-all ${
                                                 matchSpeed === speed
                                                 ? 'bg-green-600 text-white'
                                                 : 'text-gray-400 hover:text-white hover:bg-gray-700'
                                             }`}
                                         >
-                                            {speed === 'slow' ? '🐢' : speed === 'normal' ? '▶' : speed === 'fast' ? '⚡' : '🚀'}
+                                            {speed === 'slow' ? <Activity size={15} aria-hidden="true" /> : speed === 'normal' ? <Play size={15} aria-hidden="true" /> : speed === 'fast' ? <Gauge size={15} aria-hidden="true" /> : <SkipForward size={15} aria-hidden="true" />}
                                         </button>
                                     ))}
                                 </div>

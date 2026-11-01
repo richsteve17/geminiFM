@@ -1,3 +1,4 @@
+import { Gamepad2, ClipboardList, Newspaper, Search, Handshake, Trophy, Globe2, Shield } from 'lucide-react';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
@@ -2539,24 +2540,24 @@ export default function App() {
                         <div className="lg:col-span-9 flex flex-col gap-6">
                             {/* PC Glassmorphic Navigation Tabs */}
                             <div className="flex overflow-x-auto border-b border-gray-800 bg-gray-950/60 p-1.5 rounded-lg gap-2 shadow-inner border border-slate-800/40 backdrop-blur-md">
-                                <button onClick={() => setGameplayTab('match')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'match' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <span>🎮</span> Match Center
+                                <button onClick={() => setGameplayTab('match')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'match' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <Gamepad2 aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Match Center
                                 </button>
-                                <button onClick={() => setGameplayTab('tactics')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'tactics' ? 'bg-gradient-to-r from-yellow-600 to-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <span>📋</span> Roster & Tactics
+                                <button onClick={() => setGameplayTab('tactics')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'tactics' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <ClipboardList aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Roster & Tactics
                                 </button>
-                                <button onClick={() => setGameplayTab('news')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'news' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <span>📰</span> Inbox Feed
+                                <button onClick={() => setGameplayTab('news')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'news' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <Newspaper aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Inbox Feed
                                 </button>
-                                <button onClick={() => setGameplayTab('scouting')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'scouting' || gameplayTab === 'scouting_market' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <span>🔍</span> Scout Network
+                                <button onClick={() => setGameplayTab('scouting')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'scouting' || gameplayTab === 'scouting_market' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <Search aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Scout Network
                                 </button>
                                 <button onClick={() => setGameplayTab('scouting_market')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all whitespace-nowrap ${gameplayTab === 'scouting_market' ? 'bg-emerald-700 text-white' : 'text-slate-400 hover:bg-slate-900/40'}`}>Free Agency</button>
-                                <button onClick={() => setGameplayTab('transfers')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'transfers' ? 'bg-gradient-to-r from-green-700 to-emerald-700 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <span>🤝</span> Negotiations
+                                <button onClick={() => setGameplayTab('transfers')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'transfers' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <Handshake aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Negotiations
                                 </button>
-                                <button onClick={() => setGameplayTab('honors')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'honors' ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <span>🏆</span> Trophy Room
+                                <button onClick={() => setGameplayTab('honors')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'honors' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
+                                    <Trophy aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Trophy Room
                                 </button>
                             </div>
 
@@ -2643,7 +2644,7 @@ export default function App() {
                             {gameplayTab === 'honors' && (
                                 <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
                                     <div className="text-center mb-8">
-                                        <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-widest bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">🏆 Trophy Room & Career Honors</h2>
+                                        <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-widest bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"><Trophy aria-hidden="true" className="inline-block mr-2 align-middle" size={28} strokeWidth={1.75} />Trophy Room & Career Honors</h2>
                                         <p className="text-gray-400 text-sm">Your permanent historical record of managerial accomplishments.</p>
                                     </div>
 
@@ -2657,20 +2658,20 @@ export default function App() {
                                             }, {} as Record<string, number>);
 
                                             const trophyTypes = [
-                                                { key: 'World Cup Champion', label: 'World Cups', icon: '🌎' },
-                                                { key: 'Euro Champion', label: 'Euros', icon: '🇪🇺' },
-                                                { key: 'Premier League Champion', label: 'Premier Leagues', icon: '🦁' },
-                                                { key: 'La Liga Champion', label: 'La Liga Titles', icon: '🇪🇸' },
-                                                { key: 'Serie A Champion', label: 'Serie A Titles', icon: '🇮🇹' },
-                                                { key: 'Bundesliga Champion', label: 'Bundesligas', icon: '🇩🇪' },
-                                                { key: 'Ligue 1 Champion', label: 'Ligue 1 Titles', icon: '🇫🇷' },
+                                                { key: 'World Cup Champion', label: 'World Cups', icon: Globe2 },
+                                                { key: 'Euro Champion', label: 'Euros', icon: Shield },
+                                                { key: 'Premier League Champion', label: 'Premier Leagues', icon: Trophy },
+                                                { key: 'La Liga Champion', label: 'La Liga Titles', icon: Trophy },
+                                                { key: 'Serie A Champion', label: 'Serie A Titles', icon: Trophy },
+                                                { key: 'Bundesliga Champion', label: 'Bundesligas', icon: Trophy },
+                                                { key: 'Ligue 1 Champion', label: 'Ligue 1 Titles', icon: Trophy },
                                             ];
 
                                             return trophyTypes.map(t => {
                                                 const count = counts[t.key] || 0;
                                                 return (
                                                     <div key={t.key} className="bg-gray-800 border border-gray-700 p-4 rounded-lg text-center shadow-inner">
-                                                        <div className="text-3xl mb-1">{t.icon}</div>
+                                                        <div className="flex justify-center mb-2 text-amber-400"><t.icon aria-hidden="true" size={24} strokeWidth={1.75} /></div>
                                                         <div className="text-2xl font-mono font-black text-yellow-400">{count}</div>
                                                         <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">{t.label}</div>
                                                     </div>
@@ -2701,7 +2702,7 @@ export default function App() {
                                                             <div className="mt-2 sm:mt-0 flex flex-wrap gap-1.5">
                                                                 {entry.trophies.map((t, tIdx) => (
                                                                     <span key={tIdx} className="px-2 py-0.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-200 text-[10px] font-black uppercase rounded flex items-center gap-1">
-                                                                        🏆 {t}
+                                                                        <Trophy aria-hidden="true" size={12} strokeWidth={1.75} /> {t}
                                                                     </span>
                                                                 ))}
                                                             </div>
@@ -2735,7 +2736,7 @@ export default function App() {
                 return (
                     <div className="mt-8 max-w-4xl mx-auto p-6 bg-gray-900/80 rounded-xl border border-gray-800 backdrop-blur shadow-2xl">
                         <div className="text-center mb-8">
-                            <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-widest bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">🏆 Trophy Room & Career Honors</h2>
+                            <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-widest bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"><Trophy aria-hidden="true" className="inline-block mr-2 align-middle" size={28} strokeWidth={1.75} />Trophy Room & Career Honors</h2>
                             <p className="text-gray-400 text-sm">Your permanent historical record of managerial accomplishments.</p>
                         </div>
 
@@ -2749,20 +2750,20 @@ export default function App() {
                                 }, {} as Record<string, number>);
 
                                 const trophyTypes = [
-                                    { key: 'World Cup Champion', label: 'World Cups', icon: '🌎' },
-                                    { key: 'Euro Champion', label: 'Euros', icon: '🇪🇺' },
-                                    { key: 'Premier League Champion', label: 'Premier Leagues', icon: '🦁' },
-                                    { key: 'La Liga Champion', label: 'La Liga Titles', icon: '🇪🇸' },
-                                    { key: 'Serie A Champion', label: 'Serie A Titles', icon: '🇮🇹' },
-                                    { key: 'Bundesliga Champion', label: 'Bundesligas', icon: '🇩🇪' },
-                                    { key: 'Ligue 1 Champion', label: 'Ligue 1 Titles', icon: '🇫🇷' },
+                                    { key: 'World Cup Champion', label: 'World Cups', icon: Globe2 },
+                                    { key: 'Euro Champion', label: 'Euros', icon: Shield },
+                                    { key: 'Premier League Champion', label: 'Premier Leagues', icon: Trophy },
+                                    { key: 'La Liga Champion', label: 'La Liga Titles', icon: Trophy },
+                                    { key: 'Serie A Champion', label: 'Serie A Titles', icon: Trophy },
+                                    { key: 'Bundesliga Champion', label: 'Bundesligas', icon: Trophy },
+                                    { key: 'Ligue 1 Champion', label: 'Ligue 1 Titles', icon: Trophy },
                                 ];
 
                                 return trophyTypes.map(t => {
                                     const count = counts[t.key] || 0;
                                     return (
                                         <div key={t.key} className="bg-gray-800/40 border border-gray-700/50 p-4 rounded-lg text-center backdrop-blur-sm">
-                                            <div className="text-3xl mb-1">{t.icon}</div>
+                                            <div className="flex justify-center mb-2 text-amber-400"><t.icon aria-hidden="true" size={24} strokeWidth={1.75} /></div>
                                             <div className="text-2xl font-mono font-black text-yellow-400">{count}</div>
                                             <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">{t.label}</div>
                                         </div>
@@ -2793,7 +2794,7 @@ export default function App() {
                                                 <div className="mt-2 sm:mt-0 flex flex-wrap gap-1.5">
                                                     {entry.trophies.map((t, tIdx) => (
                                                         <span key={tIdx} className="px-2 py-0.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-200 text-[10px] font-black uppercase rounded flex items-center gap-1">
-                                                            🏆 {t}
+                                                            <Trophy aria-hidden="true" size={12} strokeWidth={1.75} /> {t}
                                                         </span>
                                                     ))}
                                                 </div>
