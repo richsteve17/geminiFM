@@ -10,7 +10,9 @@ const projectRoot = process.env.NODE_ENV === 'production'
     : path.resolve(import.meta.dirname, '../..');
 
 export async function setupVite(app: Express, server: Server) {
-    const { default: viteConfig } = await import('../../vite.config');
+    const imported = await import('../../vite.config');
+    const viteConfig = (imported.default as unknown as { default?: typeof imported.default }).default ?? imported.default;
+    if (!viteConfig.define?.__MANUS_FM_VERSION__) throw new Error('Missing preview build metadata');
     const vite = await createViteServer({
         ...viteConfig,
         configFile: false,

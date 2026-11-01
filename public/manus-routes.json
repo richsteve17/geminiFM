@@ -1,13 +1,5 @@
 {
   "routes": [
-    { "path": "/", "title": "Manus FM Command Centre" },
-    { "path": "/career", "title": "Career Command Centre" },
-    { "path": "/match", "title": "Match Centre" },
-    { "path": "/squad", "title": "Squad & Tactics" },
-    { "path": "/scouting", "title": "Gemini Scout" },
-    { "path": "/news", "title": "Newsroom" },
-    { "path": "/transfers", "title": "Transfer Centre" },
-    { "path": "/jobs", "title": "Job Centre" },
-    { "path": "/honors", "title": "Trophy Room" }
+    { "path": "/", "title": "Manus FM Command Centre" }
   ]
 }
