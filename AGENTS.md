@@ -64,3 +64,5 @@ All AI requests must transit the validated `/api/ai` gateway.
 - `clubRosters.ts` is a fresh-start factory, never a Continue migration. Keep complete sourced membership, stable identities and source metadata; game-derived ratings/economics/age fallbacks must not be presented as observed football facts.
 - Owned squad capacity is a game limit, not a 25-player senior registration limit. Full source squads include reserves/youth and must not be truncated or prevented from recruiting by an unrelated registration cap.
 - Use `careerStorage.ts` for application persistence: bounded gzip with legacy JSON decoding and lightweight preview metadata. Backup quota failure is nonfatal. Canonical career football/history/relationships survive source-payload compaction.
+
+Mode entry: Career selection is unrestricted for all playable clubs. Only hardcore RTG initial vacancies/reputation use the World Cup gates. Do not reapply those gates to normal Career. Existing in-career results/transfers remain untouched.

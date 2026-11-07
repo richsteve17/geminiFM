@@ -6,6 +6,8 @@ declare const __MANUS_FM_BUILT_AT__: string;
 
 export const ACTIVE_SEASON = '2026/27';
 export const CURRENT_BUILD_CHANGES = [
+    'Career mode allows any playable club; only hardcore RTG uses World Cup-earned initial club access and reputation.',
+
     'Complete current membership for 150 clubs across seven supported leagues; 4,601 unique playable source athletes.',
     'European home/away seasons and MLS 34-game conference schedule plus MLS Cup playoff progression. Opponent calendars are simulated.',
     'Separate continental and domestic standings, replay guards, corrected league-size evaluation and safe unemployed rollover.',

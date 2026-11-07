@@ -1,3 +1,4 @@
+import { canEnterClub } from './engine/tutorialProgression';
 import { Gamepad2, ClipboardList, Newspaper, Search, Handshake, Trophy, Globe2, Shield } from 'lucide-react';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -587,11 +588,11 @@ export default function App() {
         setCurrentFixture(userMatch); setWeeklyResults([]); startTutorial();
     };
 
-    const initializeGame = useCallback((selectedTeamName: string) => {
+    const initializeGame = useCallback((selectedTeamName: string, entry: 'Career' | 'RTG' = 'RTG') => {
         careerGenerationRef.current++;
         const selected = allTeams[selectedTeamName];
         if (!selected) { setError('Club not found.'); return; }
-        if (!hasClubCareer && !canStartAtClub(selected, tutorialCompletion)) {
+        if (!hasClubCareer && !canEnterClub(selected, tutorialCompletion, entry)) {
             setError(careerGateLabel(tutorialCompletion));
             return;
         }
@@ -601,17 +602,18 @@ export default function App() {
             setGameState(GameState.PRE_MATCH); setMatchState(null); setPendingEvents([]); return;
         }
         setGameMode('Club');
-        if (!hasClubCareer) setManagerReputation(tutorialCompletion?.reputation ?? 15);
+        if (!hasClubCareer) setManagerReputation(entry === 'Career' ? selected.prestige : tutorialCompletion?.reputation ?? 15);
         setTransferMarket(structuredClone(freshFreeAgents));
         setIncomingBids([]);
         setIsPrologue(false);
         setHasClubCareer(true);
+        if (entry === 'Career') { relationshipsRef.current = []; setRelationshipIncidents([]); }
         const season = createClubSeason(linkNationalRosterIdentitiesToClubTeams(ensureTeamAndPlayerFields(structuredClone(allTeams))));
         let finalTeamsState = season.teams;
         const finalFixtures = season.fixtures;
         setWeeksInSeason(season.weeks);
         setLeagueTable(season.table); setFixtures(finalFixtures); setCurrentWeek(1);
-        if (prologueArchive && !hasClubCareer) {
+        if (prologueArchive && !hasClubCareer && entry === 'RTG') {
             const played = prologueArchive.fixtures.filter(f => f.played).map(f => ({ ...f, week: 1, tournamentId: 'tutorial-worldcup', year: 1 }));
             const carried = buildRelationshipIncidents({ clubTeams: finalTeamsState, nationalTeams: prologueArchive.teams, fixtures: played, tournamentType: 'WorldCup', year: 1, week: 1, weeksPerYear: season.weeks });
             relationshipsRef.current = carried; setRelationshipIncidents(carried);
@@ -2339,7 +2341,7 @@ export default function App() {
     };
 
     const worldCupTeams = React.useMemo(() => Object.values(generateWorldCupStructure()), []);
-    const clubTeams = Object.values(allTeams).filter(t => canStartAtClub(t, tutorialCompletion));
+    const clubTeams = Object.values(allTeams).filter(t => canEnterClub(t, tutorialCompletion, 'Career'));
 
     const workspaceTabs = [
         { id: 'match' as const, label: 'Match centre' },
@@ -2373,7 +2375,7 @@ export default function App() {
                     })()}
                 />
             );
-            case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={clubTeams} onTeamSelect={initializeGame} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
+            case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={clubTeams} onTeamSelect={name => initializeGame(name, 'Career')} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={worldCupTeams} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.CREATE_MANAGER: return <CreateManagerScreen tutorialSummary={careerGateLabel(tutorialCompletion)} onCreate={handleCreateManager} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_CENTRE: return <JobCentreScreen careerSummary={hasClubCareer ? `Earned career reputation: ${managerReputation}` : careerGateLabel(tutorialCompletion)} jobs={availableJobs} onApply={handleApplyForJob} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;

@@ -55,7 +55,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         </button>
                         <button type="button" onClick={onSelectTeam} className="fm-mode">
                             <span className="fm-mode-number" aria-hidden="true">02</span>
-                            <span><span className="fm-eyebrow">Career mode</span><h2>Club career</h2><p>Choose from your earned starting clubs. Without the World Cup tutorial, only Championship clubs are available.</p></span>
+                            <span><span className="fm-eyebrow">Career mode</span><h2>Club career</h2><p>Choose any club. World Cup results do not restrict Career mode.</p></span>
                             <ArrowUpRight size={22} aria-hidden="true" />
                         </button>
                         <button type="button" onClick={onStartUnemployed} className="fm-mode">

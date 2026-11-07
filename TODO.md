@@ -72,3 +72,9 @@ Evidence for v3.5.0: 82/82 current club squads and 2,538 unique source players; 
 - [ ] Keep tutorial/job/match/audio/consequences/transfer/save loop connected; fix confirmed regressions and preserve historical saves. Verify with existing checks and one bounded connection review. Keep xGaffer ’28 as the edition name without debating its calendar date.
 
 Evidence v3.6.0: 150 current clubs, 4,601 unique playable athletes; 259 tests across 41 files, 17 offline importer tests. Bounded independent review completed; confirmed empty-week, duplicate-advance, intermediate-save and odd-field bugs fixed. Full career completion remains open: continental knockout progression and official fixture calendars are not implemented; MLS discipline tiebreak input is incomplete and source schedules are explicitly simulated. No new paid media or aesthetic rebuild.
+
+## Mode-entry correction — 2026-11-07
+
+- [x] Career mode allows selection of any playable club, independent of World Cup results. Only hardcore RTG initial job access/reputation is determined by the World Cup tutorial; preserve that reward ladder and existing careers. Match visible mode text to actual callbacks.
+
+Mode-fix evidence v3.6.1: explicit Career/RTG entry policy and selection binding tests; full 262-test regression pass, TypeScript pass. World Cup reward ladder retained; no save-schema or roster changes.

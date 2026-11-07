@@ -60,3 +60,9 @@ export function finishFromStage(stage: TournamentStage, wonFinal = false): Tutor
 export function shouldRollClubSeason(mode: string, week: number, seasonLength: number): boolean {
     return mode === 'Club' && week >= seasonLength;
 }
+
+/** Career is unrestricted; only the hardcore RTG entry earns its starting tier. */
+export function canEnterClub(team: Team, result: TutorialResult | null, entry: 'Career' | 'RTG' = 'RTG'): boolean {
+    if (team.league === 'International' || team.league === 'Champions League') return false;
+    return entry === 'Career' || canStartAtClub(team, result);
+}
