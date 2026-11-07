@@ -4,6 +4,7 @@ import { ArrowLeftStartOnRectangleIcon } from './icons/ArrowLeftStartOnRectangle
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
 import { CommandLineIcon } from './icons/CommandLineIcon';
+import { PRODUCT_NAME, EDITION_LABEL } from '../product';
 
 interface HeaderProps {
     onQuit?: () => void;
@@ -17,7 +18,7 @@ const Header: React.FC<HeaderProps> = ({ onQuit, onSave, onToggleGuide, onToggle
     <header className="fm-header">
         <div className="fm-header-brand min-w-0">
             <FootballIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <h1 className="whitespace-nowrap">Manus FM <span className="text-[#A47837]">'27</span></h1>
+            <h1 className="whitespace-nowrap">{PRODUCT_NAME} <span className="text-[#A47837]">{EDITION_LABEL}</span></h1>
             {managerReputation !== undefined && <div className="hidden md:block ml-2 border-l border-[#172B24]/20 pl-3 text-sm tabular-nums" title="Manager Reputation"><span className="mr-1 text-[#637169]">Rep</span><strong>{managerReputation}</strong></div>}
         </div>
         <nav className="fm-header-actions" aria-label="Game controls">

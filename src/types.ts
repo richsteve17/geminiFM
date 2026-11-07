@@ -78,6 +78,8 @@ export interface Player {
   externalId?: string;
   nationalTeamCode?: string;
   position: PlayerPosition;
+  /** Actual source squad number when supplied; absent on legacy/unknown records. */
+  squadNumber?: number;
   rating: number;
   age: number;
   nationality: string;

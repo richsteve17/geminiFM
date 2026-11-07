@@ -1,3 +1,4 @@
+import { formatRosterAge } from '../engine/playerDataPresentation';
 import React, { useState } from 'react';
 import { CheckCircle2, Megaphone, XCircle } from 'lucide-react';
 import type { Player, TransferBid } from '../types';
@@ -110,7 +111,7 @@ const TransferCenter: React.FC<TransferCenterProps> = ({ bids, onAcceptBid, onRe
                                 <article key={bid.id} className={`border-l-2 p-5 ${activeBidId === bid.id ? 'border-l-[#A47837] bg-[#18392F]/5' : 'border-l-transparent'}`}>
                                     <div className="flex items-start gap-3">
                                         <NationalityBadge nationality={bid.player.nationality} className="mt-1 shrink-0" />
-                                        <div className="min-w-0"><h4 className="break-words text-2xl font-bold leading-tight" style={{ fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif" }}>{bid.player.name}</h4><p className="mt-1 text-sm text-[#637169]">{bid.player.position} <span aria-hidden="true">/</span> Age/Rating: {bid.player.age} y/o ({bid.player.rating})</p></div>
+                                        <div className="min-w-0"><h4 className="break-words text-2xl font-bold leading-tight" style={{ fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif" }}>{bid.player.name}</h4><p className="mt-1 text-sm text-[#637169]">{bid.player.position} <span aria-hidden="true">/</span> Age/Rating: {formatRosterAge(bid.player)} y/o ({bid.player.rating})</p></div>
                                     </div>
                                     {bid.player.transferRequested && <p className="mt-3 text-sm font-medium text-[#8B554A]">Transfer Requested</p>}
                                     <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">

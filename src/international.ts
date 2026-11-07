@@ -1,35 +1,33 @@
 import type { NationalTeam, Team, LeagueTableEntry, Fixture, TournamentStage, MatchState, MatchPenalty } from './types';
 import { hashSeed, simulateDeterministicQuickMatch, simulateDeterministicSegment, simulateDeterministicShootout } from './engine/matchEngine';
-import { createNationalRosterTeam, createNationalTeamTemplate, NATIONAL_ROSTER_CATALOG, type NationalRosterTeam } from './engine/nationalRosters';
+import { createNationalRosterTeam, createNationalTeamTemplate, NATIONAL_ROSTER_CATALOG, NATIONAL_GAME_CATALOG, type NationalRosterTeam, type NationalSelectionMode } from './engine/nationalRosters';
+import { WORLD_CUP_COUNTRY_CODES } from './engine/rosterIdentity';
 
-export { hydrateNationalTeamsFromCareer, linkNationalRosterIdentitiesToClubTeams, getNationalSquadPool, getRawNationalSquadPool, selectNationalSquad, selectNationalStartingXI, NATIONAL_ROSTER_SNAPSHOT_DATE } from './engine/nationalRosters';
+export { hydrateNationalTeamsFromCareer, linkNationalRosterIdentitiesToClubTeams, getNationalSquadPool, getRawNationalSquadPool, getWorldCup2026Squad, selectNationalSquad, selectNationalStartingXI, NATIONAL_ROSTER_SNAPSHOT_DATE } from './engine/nationalRosters';
 
-// These are explicit GAME participants. Neither format nor catalog claims real qualification.
-// Existing 16 base nations + 15 European extras + the first 17 global extras = 48 unique countries.
-export const WORLD_CUP_GAME_COUNTRY_CODES = [
-    'ENG', 'FRA', 'BRA', 'ARG', 'ESP', 'GER', 'POR', 'NED', 'ITA', 'USA', 'JPN', 'MAR', 'BEL', 'CRO', 'URU', 'COL',
-    'DEN', 'SUI', 'AUT', 'TUR', 'POL', 'HUN', 'SCO', 'CZE', 'SRB', 'ROU', 'SVK', 'SVN', 'GEO', 'UKR', 'ALB',
-    'SEN', 'KOR', 'AUS', 'MEX', 'CAN', 'NGA', 'EGY', 'CMR', 'ALG', 'CIV', 'GHA', 'KSA', 'IRN', 'CHI', 'PER', 'ECU', 'CRC',
-] as const;
+// Supplied WC2026 country/order authority; groups A–L follow each consecutive four supplied squads.
+export const WORLD_CUP_GAME_COUNTRY_CODES = WORLD_CUP_COUNTRY_CODES;
+// Compatible future game format: explicitly the existing 64, not the 73-country playable union.
+export const EXPANDED_WORLD_CUP_GAME_COUNTRY_CODES = NATIONAL_ROSTER_CATALOG.map(nation => nation.countryCode);
 export const EURO_GAME_COUNTRY_CODES = [
     'ENG', 'FRA', 'ESP', 'GER', 'POR', 'NED', 'ITA', 'BEL', 'CRO',
     'DEN', 'SUI', 'AUT', 'TUR', 'POL', 'HUN', 'SCO', 'CZE', 'SRB', 'ROU', 'SVK', 'SVN', 'GEO', 'UKR', 'ALB',
 ] as const;
 
-// All 48 selectable teams have actual sourced identities, a full source pool and manager-selected roster.
+// Exactly the 48 approved squads, including their actual 23/25-player selections.
 export const NATIONAL_TEAMS: NationalTeam[] = WORLD_CUP_GAME_COUNTRY_CODES.map(createNationalTeamTemplate);
 export const EXTRA_EUROPEAN_TEAMS = NATIONAL_ROSTER_CATALOG.filter(n => n.catalogTier === 'european')
     .map(n => ({ name: n.name, flag: n.flag, code: n.countryCode, prestige: n.prestige }));
-export const EXTRA_GLOBAL_TEAMS = NATIONAL_ROSTER_CATALOG.filter(n => n.catalogTier === 'global')
+export const EXTRA_GLOBAL_TEAMS = NATIONAL_GAME_CATALOG.filter(n => n.catalogTier === 'global')
     .map(n => ({ name: n.name, flag: n.flag, code: n.countryCode, prestige: n.prestige }));
 
-function createTournament(codes: readonly string[], groupCount: number): Record<string, NationalRosterTeam> {
+function createTournament(codes: readonly string[], groupCount: number, mode: NationalSelectionMode = 'world-cup-2026'): Record<string, NationalRosterTeam> {
     if (codes.length !== groupCount * 4 || new Set(codes).size !== codes.length) {
         throw new Error('National game format requires four distinct real countries per group.');
     }
     const teams: Record<string, NationalRosterTeam> = {};
     codes.forEach((code, index) => {
-        const team = createNationalRosterTeam(code, String.fromCharCode(65 + Math.floor(index / 4)));
+        const team = createNationalRosterTeam(code, String.fromCharCode(65 + Math.floor(index / 4)), mode);
         if (teams[team.name]) throw new Error(`Duplicate national country: ${team.name}`);
         teams[team.name] = team;
     });
@@ -37,9 +35,9 @@ function createTournament(codes: readonly string[], groupCount: number): Record<
 }
 
 export const generateWorldCupStructure = (): Record<string, NationalRosterTeam> => createTournament(WORLD_CUP_GAME_COUNTRY_CODES, 12);
-export const generateEurosStructure = (): Record<string, NationalRosterTeam> => createTournament(EURO_GAME_COUNTRY_CODES, 6);
+export const generateEurosStructure = (): Record<string, NationalRosterTeam> => createTournament(EURO_GAME_COUNTRY_CODES, 6, 'source-pool');
 export const generateExpandedWorldCupStructure = (): Record<string, NationalRosterTeam> =>
-    createTournament(NATIONAL_ROSTER_CATALOG.map(n => n.countryCode), 16);
+    createTournament(EXPANDED_WORLD_CUP_GAME_COUNTRY_CODES, 16, 'source-pool');
 
 export const getGroupStandings = (table: LeagueTableEntry[], groups: string[]): Record<string, LeagueTableEntry[]> => {
     const standings: Record<string, LeagueTableEntry[]> = {};
@@ -113,7 +111,13 @@ export const sortQualifiedTeams = (
     return filtered.map(t => t.teamName);
 };
 
-export const simulateKnockoutQuickMatch = (homeTeam: Team, awayTeam: Team, fixtureKey = ''): ReturnType<typeof simulateDeterministicQuickMatch> & { wentToExtraTime?: boolean; penaltyWinner?: 'home' | 'away'; penaltyScore?: string; penalties?: MatchPenalty[] } => {
+export type KnockoutQuickMatchResult = ReturnType<typeof simulateDeterministicQuickMatch> & {
+    wentToExtraTime?: boolean;
+    penaltyWinner?: 'home' | 'away';
+    penaltyScore?: string;
+    penalties?: MatchPenalty[];
+};
+export const simulateKnockoutQuickMatch = (homeTeam: Team, awayTeam: Team, fixtureKey = ''): KnockoutQuickMatchResult => {
     const regulation = simulateDeterministicQuickMatch(homeTeam, awayTeam, fixtureKey);
     if (regulation.homeGoals !== regulation.awayGoals) return regulation;
     const state: MatchState = {

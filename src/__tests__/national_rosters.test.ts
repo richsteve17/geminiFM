@@ -53,14 +53,14 @@ describe('Source-backed international game rosters', () => {
                 expect(team.players).toHaveLength(Math.min(26, team.nationalSquadPool.length));
                 expect(team.players.filter(p => p.isStarter)).toHaveLength(11);
                 expect(team.players.every(p => p.nationality === team.flag)).toBe(true);
-                expect(team.nationalRosterSource.officialFinalSelection).toBe(false);
+                expect(team.nationalRosterSource.officialFinalSelection).toBe(label === 'world game');
                 expect(ids(team.players).every(id => ids(team.nationalSquadPool).includes(id))).toBe(true);
                 if (team.nationalSquadPool.filter(p => p.position === 'GK').length >= 3) {
                     expect(team.players.filter(p => p.position === 'GK')).toHaveLength(3);
                 }
-                expect(team.players.filter(p => !p.isStarter).some(p => ['LB', 'CB', 'RB', 'LWB', 'RWB'].includes(p.position))).toBe(true);
-                expect(team.players.filter(p => !p.isStarter).some(p => ['DM', 'CM', 'AM', 'LM', 'RM'].includes(p.position))).toBe(true);
-                expect(team.players.filter(p => !p.isStarter).some(p => ['LW', 'RW', 'ST', 'CF'].includes(p.position))).toBe(true);
+                // Exact factual roles can leave a source pool without a particular reserve family.
+                // Neither observed nor approved selections may manufacture a replacement player/role.
+                expect(team.players.every(player => team.nationalSquadPool.some(source => source.externalId === player.externalId && source.position === player.position))).toBe(true);
             }
         });
     }
@@ -69,8 +69,8 @@ describe('Source-backed international game rosters', () => {
         expect(NATIONAL_TEAMS).toHaveLength(48);
         expect(NATIONAL_TEAMS.find(t => t.name === 'Belgium')?.players.some(p => p.name === 'Thibaut Courtois')).toBe(true);
         const france = NATIONAL_TEAMS.find(t => t.name === 'France')!;
-        expect(france.players.some(p => p.name === 'Kylian Mbappé')).toBe(true);
-        expect(france.players.some(p => p.name === 'Aurélien Tchouaméni')).toBe(true);
+        expect(france.players.some(p => p.name === 'Kylian Mbappe')).toBe(true);
+        expect(france.players.some(p => p.name === 'Aurelien Tchouameni')).toBe(true);
         expect(NATIONAL_TEAMS.find(t => t.name === 'England')?.players.some(p => p.name === 'Jude Bellingham')).toBe(true);
     });
 
@@ -179,6 +179,17 @@ describe('International knockout fact continuity', () => {
             if (result.penaltyWinner) {
                 expect(result.homeGoals).toBe(result.awayGoals);
                 expect(result.penaltyScore).toMatch(/^\d+-\d+$/);
+                expect(result.penalties?.length).toBeGreaterThan(0);
+                for (const kick of result.penalties!) {
+                    const takers = kick.teamName === home.name ? home : away;
+                    const defending = kick.teamName === home.name ? away : home;
+                    expect(takers.players.filter(player => player.isStarter).map(player => player.name)).toContain(kick.taker);
+                    expect(defending.players.find(player => player.isStarter && player.position === 'GK')?.name).toBe(kick.goalkeeper);
+                    expect(kick.shootout).toBe(true);
+                }
+                const homeScored = result.penalties!.filter(kick => kick.teamName === home.name && kick.outcome === 'scored').length;
+                const awayScored = result.penalties!.filter(kick => kick.teamName === away.name && kick.outcome === 'scored').length;
+                expect(result.penaltyScore).toBe(`${homeScored}-${awayScored}`);
             }
         }
         expect(simulateKnockoutQuickMatch(home, away, 'stable')).toEqual(simulateKnockoutQuickMatch(home, away, 'stable'));

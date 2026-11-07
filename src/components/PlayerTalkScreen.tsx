@@ -1,3 +1,4 @@
+import { formatRosterAge } from '../engine/playerDataPresentation';
 import React, { useState, useEffect, useMemo } from 'react';
 import type { PlayerTalk, NegotiationResult, ContractTerms, ContractBonusType, PlayerPosition } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
@@ -192,7 +193,7 @@ const PlayerTalkScreen: React.FC<PlayerTalkScreenProps> = ({ talk, isLoading, er
                         <div className="flex justify-between items-center gap-4 py-3"><dt>Position</dt><dd className="font-semibold">{talk.player.position}</dd></div>
                         <div className="flex justify-between items-center gap-4 py-3"><dt>Nationality</dt><dd><NationalityBadge nationality={talk.player.nationality} /></dd></div>
                         <div className="flex justify-between items-center gap-4 py-3"><dt>Rating</dt><dd className="font-semibold tabular-nums">{talk.player.rating} OVR</dd></div>
-                        <div className="flex justify-between items-center gap-4 py-3"><dt>Age</dt><dd className="font-semibold tabular-nums">{talk.player.age} Years</dd></div>
+                        <div className="flex justify-between items-center gap-4 py-3"><dt>Age</dt><dd className="font-semibold tabular-nums">{formatRosterAge(talk.player)} Years</dd></div>
                         <div className="flex justify-between items-center gap-4 py-3"><dt>Personality</dt><dd className="font-semibold text-right">{talk.player.personality}</dd></div>
                         <div className="flex justify-between items-center gap-4 py-3"><dt>Current Wage</dt><dd className="font-semibold tabular-nums">{formatMoney(talk.player.wage)}/wk</dd></div>
                     </dl>

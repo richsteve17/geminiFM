@@ -4,6 +4,8 @@ import KitCatalog from './KitCatalog';
 import ClubCrest from './ClubCrest';
 import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled, getPaidVoiceName, setPaidVoiceName } from '../services/geminiService';
 import { BUILD_INFO } from '../buildInfo';
+import { CLUB_ROSTER_SNAPSHOT_DATE } from '../engine/clubRosters';
+import { PRODUCT_TITLE } from '../product';
 
 interface StartScreenProps {
     onSelectTeam: () => void;
@@ -33,9 +35,10 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
             </div>
             <section className="fm-home-layout" aria-label="Career setup">
                 <div className="fm-home-careers">
-                    <p className="fm-eyebrow">Manus FM '27</p>
+                    <p className="fm-eyebrow">{PRODUCT_TITLE}</p>
                     <h1 className="fm-home-title">Football<br />Management</h1>
                     <p className="fm-home-deck">AI scouting, press conferences, negotiations and player relationships.</p>
+                    <p className="fm-eyebrow mb-4">New-career rosters · {CLUB_ROSTER_SNAPSHOT_DATE}</p>
                     {hasSave && onContinue && (
                         <button type="button" onClick={onContinue} className="fm-resume">
                             {saveMetadata?.teamName && saveMetadata.teamName !== 'Unemployed' ? <ClubCrest teamName={saveMetadata.teamName} className="h-10 w-10 shrink-0" /> : <FolderOpen size={28} aria-hidden="true" />}
@@ -43,6 +46,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                             <ArrowUpRight size={22} aria-hidden="true" />
                         </button>
                     )}
+                    {hasSave && <p className="mb-4 text-sm">Load preserves your existing career. Start a new career to use the refreshed rosters.</p>}
                     <div className="fm-mode-list">
                         <button type="button" onClick={onStartWorldCup} className="fm-mode fm-mode-tutorial">
                             <span className="fm-mode-number" aria-hidden="true">01</span>

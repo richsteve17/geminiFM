@@ -1,7 +1,8 @@
 import { Gamepad2, ClipboardList, Newspaper, Search, Handshake, Trophy, Globe2, Shield } from 'lucide-react';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './constants';
+import { TEAMS as clubSeedTeams, EXPERIENCE_LEVELS } from './constants';
+import { createCurrentFreeAgentMarket, getCurrentClubTeams } from './engine/clubRosters';
 import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ContractTerms, TransferBid, CareerHistoryEntry, LeagueTier, PlayerEffect } from './types';
 import { AppScreen, GameState } from './types';
 import { hashSeed, simulateDeterministicShootout } from './engine/matchEngine';
@@ -11,7 +12,7 @@ import { isFreeAgent, mergeFreeAgentsIntoMarket, signFreeAgent, toFreeAgent } fr
 import { applyPressConferenceTransition } from './engine/pressConference';
 import { buildPressContext } from './engine/pressContext';
 import { completeTutorialTournament } from './engine/tutorialTournament';
-import { serializeCareerSave } from './engine/careerSerialization';
+import { encodeCareerSave, decodeCareerSave, readCareerSaveMetadata, preserveCareerBackup } from './engine/careerStorage';
 import { CAREER_SAVE_VERSION, migrateCareerSave } from './engine/careerSave';
 import { applyIncidentEffects, advanceRelationship, buildRelationshipIncidents, getIncidentEffects, interveneRelationship, relationshipPlayerKey, type RelationshipIncident, type InternationalRelationshipFixture } from './engine/internationalRelationships';
 import { hydrateNationalTeamsFromCareer, linkNationalRosterIdentitiesToClubTeams, NATIONAL_ROSTER_SNAPSHOT_DATE } from './engine/nationalRosters';
@@ -59,6 +60,10 @@ import { logger, LogEntry } from './utils/logger';
 const INTERNATIONAL_BREAK_WEEKS = [10, 20, 30];
 const SIMULATION_CHUNK_MINUTES = 10; 
 const CLEAN_SHEET_POSITIONS = new Set(['GK', 'LB', 'CB', 'RB', 'LWB', 'RWB']);
+
+// Immutable NEW-career source baseline. Continue restores parsed.teams instead.
+const allTeams = linkNationalRosterIdentitiesToClubTeams(getCurrentClubTeams(ensureTeamAndPlayerFields(structuredClone(clubSeedTeams))));
+const freshFreeAgents = createCurrentFreeAgentMarket();
 
 const deterministicUnit = (...parts: Array<string | number>) => hashSeed(parts.join('|')) / 0xFFFFFFFF;
 
@@ -135,7 +140,7 @@ export default function App() {
     const [pendingContractTerms, setPendingContractTerms] = useState<ContractTerms | null>(null);
     
     // Transfer Market State (Mutable!)
-    const [transferMarket, setTransferMarket] = useState<Player[]>(TRANSFER_TARGETS);
+    const [transferMarket, setTransferMarket] = useState<Player[]>(() => structuredClone(freshFreeAgents));
     const [incomingBids, setIncomingBids] = useState<TransferBid[]>([]);
 
     const [activeShout, setActiveShout] = useState<TouchlineShout | undefined>(undefined);
@@ -380,7 +385,7 @@ export default function App() {
                 matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute,
                 version: CAREER_SAVE_VERSION, pressInput, pressQuestionResult, pressProgress, appliedPressEvaluationIds: [...appliedPressEvaluationIdsRef.current]
             };
-            try { localStorage.setItem('gfm_save_v1', serializeCareerSave(stateToSave)); } catch { setError('Browser storage could not save this career. The previous save is preserved; free browser storage before continuing.'); return; }
+            try { localStorage.setItem('gfm_save_v1', encodeCareerSave(stateToSave)); } catch { setError('Browser storage could not save this career. The previous save is preserved; free browser storage before continuing.'); return; }
             logger.success("Game Saved Successfully!");
             alert("Game Saved Successfully!");
         }
@@ -395,7 +400,7 @@ export default function App() {
                 matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute,
                 version: CAREER_SAVE_VERSION, pressInput, pressQuestionResult, pressProgress, appliedPressEvaluationIds: [...appliedPressEvaluationIdsRef.current]
             };
-            try { localStorage.setItem('gfm_save_v1', serializeCareerSave(stateToSave)); } catch { setError('Browser storage could not save this career. The previous save is preserved; free browser storage before continuing.'); return; }
+            try { localStorage.setItem('gfm_save_v1', encodeCareerSave(stateToSave)); } catch { setError('Browser storage could not save this career. The previous save is preserved; free browser storage before continuing.'); return; }
         }
     }, [currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory, matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute, transferMarket, pressInput, pressQuestionResult, pressProgress, appScreen, tutorialCompletion, hasClubCareer, prologueArchive, availableJobs, relationshipIncidents]);
 
@@ -410,7 +415,7 @@ export default function App() {
         setPrologueArchive(null);
         setRelationshipIncidents([]); relationshipsRef.current = [];
         setTeams(ensureTeamAndPlayerFields(structuredClone(allTeams)));
-        setTransferMarket(TRANSFER_TARGETS);
+        setTransferMarket(structuredClone(freshFreeAgents));
         setIncomingBids([]);
         setCurrentYear(1);
         setInternationalTournament(null);
@@ -444,8 +449,8 @@ export default function App() {
         const savedData = localStorage.getItem('gfm_save_v1');
         if (savedData) {
             try {
-                const parsed = migrateCareerSave(JSON.parse(savedData));
-                localStorage.setItem('gfm_save_v1_backup', savedData);
+                const parsed = migrateCareerSave(decodeCareerSave(savedData));
+                if (!preserveCareerBackup(localStorage, savedData)) logger.warn('Backup storage is full; loading the valid primary career without replacing it.');
                 appliedPressEvaluationIdsRef.current = new Set(parsed.appliedPressEvaluationIds);
                 setPressInput(parsed.pressInput || null);
                 setPressQuestionResult(parsed.pressQuestionResult || null);
@@ -549,7 +554,7 @@ export default function App() {
         const initialTable = allWcTeams.map((t: Team) => ({ teamName: t.name, league: 'International' as const, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, group: t.group }));
         setLeagueTable(initialTable);
         setCurrentWeek(1); setGameState(GameState.PRE_MATCH);
-        setNews([{ id: Date.now(), week: 1, title: 'World Cup Tutorial Begins', body: '48 unique nations in a simulated 12-group draw. Your finish unlocks RTG clubs. These squads are source-supported national pools, not a claim of official final tournament selection.', type: 'tournament-result' }]);
+        setNews([{ id: Date.now(), week: 1, title: 'World Cup Tutorial Begins', body: 'The verified 2026 World Cup squads enter a simulated 12-group draw. Your finish unlocks RTG clubs; your results create the tournament history carried into that career.', type: 'tournament-result' }]);
         setAppScreen(AppScreen.GAMEPLAY);
         const week1Fixtures = groupFixtures.filter(f => f.week === 1);
         const userMatch = week1Fixtures.find(f => f.homeTeam === actualTeamName || f.awayTeam === actualTeamName);
@@ -571,6 +576,8 @@ export default function App() {
         }
         setGameMode('Club');
         if (!hasClubCareer) setManagerReputation(tutorialCompletion?.reputation ?? 15);
+        setTransferMarket(structuredClone(freshFreeAgents));
+        setIncomingBids([]);
         setIsPrologue(false);
         setHasClubCareer(true);
         let finalTeamsState = linkNationalRosterIdentitiesToClubTeams(ensureTeamAndPlayerFields(structuredClone(allTeams)));
@@ -2338,8 +2345,7 @@ export default function App() {
                         const raw = localStorage.getItem('gfm_save_v1');
                         if (!raw) return null;
                         try {
-                            const p = JSON.parse(raw);
-                            return { teamName: p.userTeamName || 'Unemployed', week: p.currentWeek, year: p.currentYear || 1 };
+                            return readCareerSaveMetadata(raw);
                         } catch { return null; }
                     })()}
                 />

@@ -1,3 +1,4 @@
+import { formatRosterAge } from '../engine/playerDataPresentation';
 import React, { useMemo, useState } from 'react';
 import { Star } from 'lucide-react';
 import type { Player } from '../types';
@@ -42,7 +43,7 @@ const TransfersScreen: React.FC<TransfersScreenProps> = ({ targets, onApproachPl
                 </div>
                 <button type="button" onClick={() => setFreeAgentsOnly(value => !value)} className={`${freeAgentsOnly ? 'fm-button' : 'fm-button-secondary'} min-h-11 px-4 text-sm`} aria-pressed={freeAgentsOnly}>Free Agents ({freeAgentCount})</button>
             </div>
-            <p className="mb-5 max-w-3xl border-l-2 border-[#A47837] pl-3 text-xs leading-relaxed text-[#637169]">Inherited seeded game market — not a verified current-season player-contract feed. Eligibility shown here is in-game.</p>
+            <p className="mb-5 max-w-3xl border-l-2 border-[#A47837] pl-3 text-xs leading-relaxed text-[#637169]">Career market: new careers start with the supplied unattached players, then add actual career releases. Continued careers retain their own market history.</p>
             <div className="mb-3 hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(10rem,0.9fr)] gap-5 px-5 lg:grid">
                 <span className="fm-eyebrow">Player</span><span className="fm-eyebrow">Club / Contract</span><span className="fm-eyebrow text-right">Rating / Approach</span>
             </div>
@@ -61,7 +62,7 @@ const TransfersScreen: React.FC<TransfersScreenProps> = ({ targets, onApproachPl
                                 <NationalityBadge nationality={player.nationality} className="mt-1 shrink-0" />
                                 <div className="min-w-0">
                                     <h3 className="break-words text-2xl font-bold leading-tight">{player.name}</h3>
-                                    <p className="mt-1 text-sm text-[#637169]">{player.age} y/o <span aria-hidden="true">/</span> {player.position}</p>
+                                    <p className="mt-1 text-sm text-[#637169]">{formatRosterAge(player)} y/o <span aria-hidden="true">/</span> {player.position}</p>
                                     {freeAgent && <p className="mt-2 text-xs font-semibold text-[#18392F]">Free Agent · €0 Club Fee</p>}
                                     <p className="mt-2 text-sm text-[#637169]" title={PLAYER_PERSONALITIES[player.personality]}>Personality: <span className="font-medium text-[#172B24]">{player.personality}</span></p>
                                 </div>

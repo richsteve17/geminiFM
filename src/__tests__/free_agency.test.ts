@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ContractTerms, Player, PlayerStats, Team } from '../types';
 import {
+    DEFAULT_MAX_OWNED_PLAYERS,
     getFreeAgentEligibility,
     isFreeAgent,
     mergeFreeAgentsIntoMarket,
@@ -125,6 +126,18 @@ describe('free-agency state transition', () => {
             maxSquadSize: 1,
         });
         expect(squadFull).toMatchObject({ eligible: false, reason: 'squad-full' });
+    });
+
+    it('does not treat a complete 39-player owned source squad as 25 senior registrations', () => {
+        const player = makePlayer();
+        const players = Array.from({ length: 39 }, (_, index) => makePlayer({ name: `Owned ${index}`, currentClub: 'Test FC', wage: 1000 }));
+        const team = makeTeam({ players });
+        expect(getFreeAgentEligibility({ player, squadPlayers: players, transferWindowOpen: false }).eligible).toBe(true);
+        const result = signFreeAgent({ team, market: [player], player, terms, negotiationAccepted: true, weeklyWageBudget: 100000 });
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.team.players).toHaveLength(40);
+        const full = Array.from({ length: DEFAULT_MAX_OWNED_PLAYERS }, (_, index) => makePlayer({ name: `Owned ${index}`, currentClub: 'Test FC' }));
+        expect(getFreeAgentEligibility({ player, squadPlayers: full, transferWindowOpen: false }).reason).toBe('squad-full');
     });
 
     it('returns actual released players to the free-agent market once without inventing replacements', () => {

@@ -3,6 +3,7 @@ import { Gamepad2, ClipboardList, Newspaper, Search, Handshake, Trophy, House, P
 import { GameState } from '../types';
 import type { Team, Fixture } from '../types';
 import ClubCrest from './ClubIdentity';
+import { getClubRosterSource } from '../engine/clubRosters';
 
 interface TeamDetailsProps {
     team: Team;
@@ -34,6 +35,7 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, gameState, managerReput
     const totalWageBill = team.players.reduce((sum, player) => sum + player.wage, 0);
     const isHome = nextFixture ? nextFixture.homeTeam === team.name : true;
     const opponentName = nextFixture ? (isHome ? nextFixture.awayTeam : nextFixture.homeTeam) : 'No Match';
+    const rosterSource = getClubRosterSource(team);
 
     return (
         <aside className="fm-club-rail fm-inverse flex flex-col px-4 py-4 md:max-h-[calc(100vh-68px)] md:overflow-y-auto md:px-5 md:py-6" aria-label="Club workspace">
@@ -81,6 +83,10 @@ const TeamDetails: React.FC<TeamDetailsProps> = ({ team, gameState, managerReput
                     </div>
                     {!isNationalTeam && (
                         <>
+                            <div className="flex flex-wrap justify-between gap-2 border-t border-white/15 pt-3">
+                                <dt className="text-white/65">Roster baseline</dt>
+                                <dd className="tabular-nums">{rosterSource?.snapshotDate || 'Preserved career'}</dd>
+                            </div>
                             <div className="flex flex-wrap justify-between gap-2 border-t border-white/15 pt-3">
                                 <dt className="text-white/65">Balance</dt>
                                 <dd className="font-semibold tabular-nums">${team.balance.toLocaleString()}</dd>

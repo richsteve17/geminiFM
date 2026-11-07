@@ -1,14 +1,21 @@
+import { PRODUCT_TITLE } from './product';
+
 declare const __MANUS_FM_VERSION__: string;
 declare const __MANUS_FM_CHECKPOINT__: string;
 declare const __MANUS_FM_BUILT_AT__: string;
 
 export const ACTIVE_SEASON = '2026/27';
 export const CURRENT_BUILD_CHANGES = [
+    "xGaffer '28 is the approved product name and edition. The edition is distinct from the 2026/27 roster season and the 2026 World Cup tutorial; historic save/profile keys remain compatible.",
+    'New careers use refreshed current-source squads for all 82 playable clubs: 2,538 unique players, snapshot 2026-11-07. Actual membership, names, supplied/source identities, source ages/DOB and shirt numbers are separate from versioned game-derived ratings and contract economics.',
+    'The tutorial uses the supplied authoritative 48 national squads / 1,244 players, with their exact membership and corrected Jordan/Panama entries. World Cup selection is no longer a generic 26-player cut from an observed pool.',
+    'Continue retains the existing simulated career. New roster data does not reset transfers, stats, balances, history or relationships. Compact gzip saves reduce browser-storage pressure; legacy plain-JSON saves remain readable and a failed backup cannot block loading.',
+    'Fresh free-agent markets use the supplied explicitly unattached players, then actual career releases—not the stale transfer-target list. Full owned source squads no longer inherit an incorrect 25-player registration cap; game ownership limit is separate.',
     'Whole-interface football-editorial redesign: paper/ink/forest/brass tokens, local Barlow Condensed and IBM Plex Sans typography, ruled surfaces and compact masthead replace the inherited navy-glass layout.',
     'Asymmetric career entry with a credited Wembley photograph; permanent club dossier/navigation, readable market and recruitment registers, staff transcripts, press editorial sheets and international reports. All existing entry gates, factual data, consequences and callbacks retained.',
     'Dark broadcast scorebug and consolidated match controls, a larger pitch at desktop widths, ruled live notes, flat squad/tactical worksheets and integrated stadium audio controls. Phone navigation/disclosures preserved; no simulation, roster, save-schema or paid-AI setting changes.',
     'World Cup is the RTG tutorial. Skip: unemployed/Championship; elimination unlocks lower clubs; a title unlocks elite clubs including Real Madrid. Best completed tutorial rewards persist; existing club careers retain earned mobility.',
-    '64 distinct source-backed national pools with 2,015 identified athletes, a 48-nation tutorial and positional squad selection. Snapshot observed 2026-11-07, not official final World Cup rosters; four source pools contain 23–25 players rather than invented fill.',
+    '64 observed national pools remain available for the separate expanded background format. The 48-nation tutorial instead uses the authoritative supplied tournament squads; observed pools and final-squad authority stay distinct.',
     'International return relationships use actual scorers, keeper/penalty duels, tournament stakes and participation. Shared national success/failure, persistent chemistry/training effects, grounded AI mediation, separation and repeated-co-selection transfer escalation replace random national-pair feuds.',
     'International results and recorded highlights remain viewable. Actual penalty sheets and substitute participation persist; compact saves omit duplicate source pools without resetting career football facts. The World Cup final now reaches its RTG award branch.',
     '235 locally packaged current-season kit photos across all 82 playable clubs. European 2026/27 and MLS 2026 labels remain distinct; unknown release/sponsor facts stay blank.',
@@ -23,6 +30,6 @@ export const CURRENT_BUILD_CHANGES = [
     'Versioned older-save migration, halftime and extra-time interval repairs. Source-backed kit catalog preserved. Full world/regen/atmosphere systems remain unfinished.',
 ] as const;
 export const BUILD_INFO = {
-    product: "Manus FM '27", version: __MANUS_FM_VERSION__, checkpoint: __MANUS_FM_CHECKPOINT__,
+    product: PRODUCT_TITLE, version: __MANUS_FM_VERSION__, checkpoint: __MANUS_FM_CHECKPOINT__,
     builtAt: __MANUS_FM_BUILT_AT__, season: ACTIVE_SEASON, changes: CURRENT_BUILD_CHANGES,
 } as const;

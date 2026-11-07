@@ -1,5 +1,11 @@
 import snapshotJson from '../data/nationalRosterSnapshot.json';
 import type { Formation, Mentality, NationalTeam, Player, PlayerPosition, Team } from '../types';
+import {
+    AUTHORITATIVE_WORLD_CUP_DATA, WORLD_CUP_COUNTRY_CATALOG, authoritativeWorldCupPosition,
+    getAuthoritativeWorldCupPlayer, getAuthoritativeWorldCupSquad, normalizeRosterName, resolveRosterAthlete,
+    type AuthoritativeWorldCupPlayer, type SourceAthlete,
+} from './rosterIdentity';
+export type { SourceAthlete } from './rosterIdentity';
 
 export interface NationalRosterSource {
     provider: string;
@@ -8,24 +14,6 @@ export interface NationalRosterSource {
     sourceTimestamp?: string | null;
     competition: string;
     season?: { year?: number; displayName?: string; name?: string; type?: number } | null;
-}
-export interface SourceAthlete {
-    externalId: string;
-    sourceAthleteId: string;
-    name: string;
-    fullName?: string | null;
-    shortName?: string | null;
-    firstName?: string | null;
-    lastName?: string | null;
-    age?: number | null;
-    dateOfBirth?: string | null;
-    citizenship?: string | null;
-    sourcePosition?: { id?: string; name?: string; displayName?: string; abbreviation?: string } | null;
-    currentClub?: string | null;
-    clubSource?: { id: string; name: string; url: string; retrievedAt: string } | null;
-    athleteUrl?: string | null;
-    jersey?: string | null;
-    sourceOccurrences: Array<{ url: string; competition: string; season?: NationalRosterSource['season']; statistics: Record<string, number | null> }>;
 }
 export interface NationRosterRecord {
     name: string;
@@ -52,15 +40,27 @@ export interface NationalRosterPlayer extends Player {
     sourceShortName?: string;
     nationalCountryCode: string;
     nationalRosterFacts: Pick<SourceAthlete, 'externalId' | 'sourceAthleteId' | 'name' | 'sourcePosition' | 'sourceOccurrences' | 'dateOfBirth' | 'jersey' | 'athleteUrl'>;
+    authoritativeWorldCupFacts?: AuthoritativeWorldCupPlayer;
+    datasetPlayerId?: string;
     gameDerived: { rating: true; personality: true; wage: true; position: boolean; ageFallback: boolean };
 }
 export interface NationalRosterTeam extends Team {
+    players: NationalRosterPlayer[];
     countryCode: string;
     flag: string;
     confederation: string;
     sourceTeamId: string;
     crestUrl?: string;
-    nationalRosterSource: { snapshotDate: string; kind: 'source-squad-pool'; officialFinalSelection: false; sources: NationalRosterSource[] };
+    nationalRosterSource: {
+        snapshotDate: string;
+        kind: 'source-squad-pool' | 'authoritative-tournament-squad';
+        officialFinalSelection: boolean;
+        sources: NationalRosterSource[];
+        selectionAuthority?: 'user-approved-WC2026';
+        dataset?: string;
+        suppliedSquadSize?: number;
+        observedPool?: { snapshotDate: string; kind: 'source-squad-pool'; sources: NationalRosterSource[] };
+    };
     nationalSquadPool: NationalRosterPlayer[];
     rosterWarnings: string[];
 }
@@ -74,9 +74,24 @@ export const NATIONAL_ROSTER_SNAPSHOT = snapshotJson as unknown as Snapshot;
 export const NATIONAL_ROSTER_CATALOG = NATIONAL_ROSTER_SNAPSHOT.nations;
 export const NATIONAL_ROSTER_SNAPSHOT_DATE = NATIONAL_ROSTER_SNAPSHOT.snapshotDate;
 
+/** Playable country union; the observed source catalog itself deliberately remains 64 nations. */
+export const NATIONAL_GAME_CATALOG: NationRosterRecord[] = [
+    ...NATIONAL_ROSTER_CATALOG,
+    ...WORLD_CUP_COUNTRY_CATALOG.filter(nation => !NATIONAL_ROSTER_CATALOG.some(source => source.countryCode === nation.countryCode)).map(nation => ({
+        name: nation.country, countryCode: nation.countryCode, flag: nation.flag,
+        confederation: AUTHORITATIVE_WORLD_CUP_DATA.squads[nation.country].confederation,
+        prestige: 80 - AUTHORITATIVE_WORLD_CUP_DATA.squads[nation.country].ranking_tier * 3,
+        catalogTier: 'global' as const, formation: '4-3-3' as Formation, mentality: 'Balanced' as Mentality,
+        sourceTeamId: `wc2026:nation:${nation.countryCode}`, sourceName: nation.country, sourceCountryCode: nation.countryCode,
+        sources: [], players: [], warnings: [], coverage: 'User-approved WC2026 squad; no observed national source pool bundled.',
+    })),
+];
+function getNation(countryCode: string): NationRosterRecord | undefined {
+    return NATIONAL_GAME_CATALOG.find(nation => nation.countryCode === countryCode || nation.name === countryCode);
+}
 const clone = <T,>(value: T): T => value == null ? value : JSON.parse(JSON.stringify(value));
 export function normalizeNationalPlayerName(name: string): string {
-    return name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return normalizeRosterName(name);
 }
 function stableHash(value: string): number {
     let h = 2166136261;
@@ -101,6 +116,8 @@ const RATING_PRIORS: Record<string, number> = {
     'espn:238262': 90, 'espn:142200': 92, 'espn:189026': 88, 'espn:159443': 86,
 };
 function derivePosition(athlete: SourceAthlete, indexWithinFamily: number): PlayerPosition | undefined {
+    const supplied = getAuthoritativeWorldCupPlayer({ name: athlete.name, externalId: athlete.externalId });
+    if (supplied) return authoritativeWorldCupPosition(supplied.position);
     if (ROLE_PRIORS[athlete.externalId]) return ROLE_PRIORS[athlete.externalId];
     const abbreviation = athlete.sourcePosition?.abbreviation || '';
     const exact: Record<string, PlayerPosition> = { GK: 'GK', LB: 'LB', CB: 'CB', RB: 'RB', LWB: 'LWB', RWB: 'RWB', DM: 'DM', CM: 'CM', AM: 'AM', LM: 'LM', RM: 'RM', LW: 'LW', RW: 'RW', ST: 'ST', CF: 'CF' };
@@ -115,15 +132,17 @@ function derivePosition(athlete: SourceAthlete, indexWithinFamily: number): Play
 
 /** All provider athlete records, including any with unusable/unknown source positions. */
 export function getRawNationalSquadPool(countryCode: string): SourceAthlete[] {
-    const nation = NATIONAL_ROSTER_CATALOG.find(n => n.countryCode === countryCode || n.name === countryCode);
+    const nation = getNation(countryCode);
     if (!nation) throw new Error(`Unknown national game catalog entry: ${countryCode}`);
+    if (!nation.players.length) return (getAuthoritativeWorldCupSquad(nation.countryCode) || []).map(authoritativeSourceAthlete);
     return clone(nation.players);
 }
 
 /** Full playable sourced pool, independent of manager selection. Unknown positions stay in raw evidence, not fabricated game roles. */
 export function getNationalSquadPool(countryCode: string): NationalRosterPlayer[] {
-    const nation = NATIONAL_ROSTER_CATALOG.find(n => n.countryCode === countryCode || n.name === countryCode);
+    const nation = getNation(countryCode);
     if (!nation) throw new Error(`Unknown national game catalog entry: ${countryCode}`);
+    if (!nation.players.length) return getWorldCup2026Squad(nation.countryCode);
     const counters: Record<string, number> = {};
     return nation.players.flatMap(athlete => {
         const broad = athlete.sourcePosition?.abbreviation || '';
@@ -150,8 +169,51 @@ export function getNationalSquadPool(countryCode: string): NationalRosterPlayer[
                         ['appearances', 'subIns', 'totalGoals', 'goalAssists', 'yellowCards', 'redCards', 'saves', 'goalsConceded'].includes(name))),
                 })),
             },
-            gameDerived: { rating: true, personality: true, wage: true, position: broad !== 'G' && broad !== position, ageFallback: athlete.age == null },
+            gameDerived: { rating: true, personality: true, wage: true, position: !getAuthoritativeWorldCupPlayer({ name: athlete.name, externalId: athlete.externalId }) && broad !== 'G' && broad !== position, ageFallback: athlete.age == null },
         } as NationalRosterPlayer];
+    });
+}
+
+function authoritativeSourceAthlete(row: AuthoritativeWorldCupPlayer): SourceAthlete {
+    const source = row.resolvedSourceId ? resolveRosterAthlete({ name: row.name, externalId: row.resolvedSourceId }) : undefined;
+    return {
+        ...clone(source), externalId: source?.externalId || row.datasetPlayerId,
+        name: row.name, currentClub: row.club,
+        sourcePosition: { name: row.position_category, abbreviation: row.position },
+        sourceOccurrences: clone(source?.sourceOccurrences || []),
+    };
+}
+function sourceAge(athlete: SourceAthlete): number | undefined {
+    if (athlete.age != null && Number.isFinite(athlete.age)) return athlete.age;
+    if (!athlete.dateOfBirth) return undefined;
+    const birth = new Date(athlete.dateOfBirth), at = new Date(AUTHORITATIVE_WORLD_CUP_DATA.compiled_date);
+    if (Number.isNaN(birth.getTime())) return undefined;
+    return at.getUTCFullYear() - birth.getUTCFullYear() - (at.getUTCMonth() < birth.getUTCMonth() || (at.getUTCMonth() === birth.getUTCMonth() && at.getUTCDate() < birth.getUTCDate()) ? 1 : 0);
+}
+/** Exact supplied membership/order/count. Identity/age enrichment never substitutes football facts. */
+export function getWorldCup2026Squad(countryCode: string): NationalRosterPlayer[] {
+    const nation = getNation(countryCode);
+    const rows = getAuthoritativeWorldCupSquad(countryCode);
+    if (!nation || !rows) throw new Error(`No supplied WC2026 squad: ${countryCode}`);
+    return rows.map(row => {
+        const athlete = authoritativeSourceAthlete(row);
+        const rating = RATING_PRIORS[athlete.externalId] ?? Math.max(45, Math.min(90, nation.prestige - 6 + stableHash(athlete.externalId) % 9 - 4));
+        const age = sourceAge(athlete);
+        return {
+            name: row.name, sourceName: row.name, sourceShortName: athlete.shortName || undefined,
+            externalId: athlete.externalId, datasetPlayerId: row.datasetPlayerId,
+            nationality: nation.flag, nationalCountryCode: nation.countryCode, nationalTeamCode: nation.countryCode,
+            position: authoritativeWorldCupPosition(row.position), rating, age: age ?? 25, personality: 'Professional',
+            wage: Math.round(Math.max(1000, (rating - 40) ** 2 * 40) / 1000) * 1000,
+            status: { type: 'Available' }, effects: [], contractExpires: 3, isStarter: false, condition: 100,
+            currentClub: row.club, authoritativeWorldCupFacts: clone(row),
+            nationalRosterFacts: {
+                externalId: athlete.externalId, sourceAthleteId: athlete.sourceAthleteId,
+                name: row.name, sourcePosition: clone(athlete.sourcePosition), dateOfBirth: athlete.dateOfBirth,
+                jersey: athlete.jersey, athleteUrl: athlete.athleteUrl, sourceOccurrences: clone(athlete.sourceOccurrences),
+            },
+            gameDerived: { rating: true, personality: true, wage: true, position: false, ageFallback: age == null },
+        };
     });
 }
 
@@ -213,16 +275,21 @@ export function selectNationalSquad<T extends Player>(pool: T[], size = 26, form
     return [...selected.values()].map(p => ({ ...clone(p), isStarter: starterIds.has(identity(p)) }));
 }
 
-/** Fresh playable national team, with untouched provenance and a separate full source pool. */
-export function createNationalRosterTeam(countryCode: string, group?: string): NationalRosterTeam {
-    const nation = NATIONAL_ROSTER_CATALOG.find(n => n.countryCode === countryCode || n.name === countryCode);
+export type NationalSelectionMode = 'world-cup-2026' | 'source-pool';
+/** Default uses approved WC membership where supplied. Other tournaments can explicitly select observed pools. */
+export function createNationalRosterTeam(countryCode: string, group?: string, mode: NationalSelectionMode = 'world-cup-2026'): NationalRosterTeam {
+    const nation = getNation(countryCode);
     if (!nation) throw new Error(`Unknown national game catalog entry: ${countryCode}`);
-    const pool = getNationalSquadPool(nation.countryCode);
-    const players = selectNationalSquad(pool, 26, nation.formation);
+    const approved = mode === 'world-cup-2026' && !!getAuthoritativeWorldCupSquad(nation.countryCode);
+    const pool = approved ? getWorldCup2026Squad(nation.countryCode) : getNationalSquadPool(nation.countryCode);
+    const xi = new Set(selectNationalStartingXI(pool, nation.formation).map(identity));
+    const players = approved ? pool.map(player => ({ ...clone(player), isStarter: xi.has(identity(player)) })) : selectNationalSquad(pool, 26, nation.formation);
     const warnings = [...nation.warnings];
-    for (const athlete of nation.players.filter(a => !derivePosition(a, 0))) warnings.push(`${athlete.name} (${athlete.externalId}) has no usable source position; preserved in raw source evidence, excluded from playable pool.`);
+    if (!approved) for (const athlete of nation.players.filter(a => !derivePosition(a, 0))) warnings.push(`${athlete.name} (${athlete.externalId}) has no usable source position; preserved in raw source evidence, excluded from playable pool.`);
     if (pool.filter(p => p.position === 'GK').length < 3) warnings.push('Source pool has fewer than 3 goalkeepers; no fabricated goalkeeper added.');
     if (selectNationalStartingXI(players, nation.formation).length < 11) warnings.push('Fewer than 11 available source players; kickoff needs validation.');
+    if (approved && players.length < 26) warnings.push(`Supplied squad has ${players.length} players; membership is preserved without padding.`);
+    const observedPool = { snapshotDate: NATIONAL_ROSTER_SNAPSHOT_DATE, kind: 'source-squad-pool' as const, sources: clone(nation.sources) };
     return {
         name: nation.name, countryCode: nation.countryCode, flag: nation.flag, confederation: nation.confederation,
         sourceTeamId: nation.sourceTeamId, crestUrl: nation.crestUrl || undefined,
@@ -232,7 +299,12 @@ export function createNationalRosterTeam(countryCode: string, group?: string): N
         objectives: [], activePromises: [], weeklyWageBill: 0, matchDayRevenue: 0, transferBudget: 0, weeklyBroadcastRevenue: 0,
         colors: nation.colors ? { ...nation.colors, text: '#FFFFFF' } : undefined,
         nationalSquadPool: pool, rosterWarnings: warnings,
-        nationalRosterSource: { snapshotDate: NATIONAL_ROSTER_SNAPSHOT_DATE, kind: 'source-squad-pool', officialFinalSelection: false, sources: clone(nation.sources) },
+        nationalRosterSource: approved ? {
+            snapshotDate: AUTHORITATIVE_WORLD_CUP_DATA.compiled_date, kind: 'authoritative-tournament-squad', officialFinalSelection: true,
+            selectionAuthority: 'user-approved-WC2026', dataset: 'src/data/worldCup2026Squads.json', suppliedSquadSize: players.length,
+            sources: [{ provider: 'user-approved-WC2026', url: 'src/data/worldCup2026Squads.json', retrievedAt: AUTHORITATIVE_WORLD_CUP_DATA.compiled_date, competition: AUTHORITATIVE_WORLD_CUP_DATA.tournament }],
+            observedPool,
+        } : { ...observedPool, officialFinalSelection: false },
     };
 }
 
@@ -253,7 +325,15 @@ function nameMatches(player: Player, candidate: SourceAthlete): boolean {
 export function resolveNationalPlayerIdentity(player: Player): SourceAthlete | undefined {
     const externalId = (player as Partial<NationalRosterPlayer>).externalId;
     if (externalId) {
-        return NATIONAL_ROSTER_CATALOG.flatMap(n => n.players).find(p => p.externalId === externalId);
+        return resolveRosterAthlete({ name: player.name, externalId });
+    }
+    const exact = resolveRosterAthlete({ name: player.name, nationality: player.nationality, club: player.currentClub });
+    if (exact) {
+        const supplied = getAuthoritativeWorldCupPlayer({ name: player.name, externalId: exact.externalId, nationality: player.nationality });
+        const position = supplied ? authoritativeWorldCupPosition(supplied.position) : ROLE_PRIORS[exact.externalId];
+        // Legacy abbreviated seeds may be role-ambiguous. The shared source resolver itself has no game-role dependency.
+        if (position && normalizeNationalPlayerName(player.name) !== normalizeNationalPlayerName(exact.name) && position !== player.position) return undefined;
+        return exact;
     }
     let candidates = NATIONAL_ROSTER_CATALOG.filter(n => nationalityMatches(player, n)).flatMap(n => n.players)
         .filter(p => nameMatches(player, p) && (ROLE_PRIORS[p.externalId] ? family(ROLE_PRIORS[p.externalId]) === family(player.position) : p.sourcePosition?.abbreviation === family(player.position) || p.sourcePosition?.abbreviation === player.position));
@@ -264,60 +344,83 @@ export function resolveNationalPlayerIdentity(player: Player): SourceAthlete | u
     return candidates.length === 1 ? candidates[0] : undefined;
 }
 
-/** Annotate verified club seeds without changing abbreviated display names, ages, stats, history or contracts. */
+/** Annotate club seeds and apply supplied factual positions; never change career ages, stats, ownership or contracts. */
 export function linkNationalRosterIdentitiesToClubTeams<T extends Team>(clubTeams: Record<string, T>): Record<string, T> {
     return Object.fromEntries(Object.entries(clubTeams).map(([key, team]) => [key, {
         ...team,
         players: team.players.map(player => {
-            const source = resolveNationalPlayerIdentity(player);
-            if (!source) return clone(player);
-            return { ...clone(player), externalId: source.externalId, sourceName: source.name, sourceShortName: source.shortName || undefined };
+            const source = resolveRosterAthlete({ name: player.name, nationality: player.nationality, club: team.name, externalId: player.externalId });
+            const supplied = getAuthoritativeWorldCupPlayer({ name: player.name, nationality: player.nationality, club: team.name, externalId: player.externalId || source?.externalId });
+            if (!source && !supplied) return clone(player);
+            return {
+                ...clone(player), externalId: source?.externalId || supplied!.resolvedSourceId || supplied!.datasetPlayerId,
+                sourceName: supplied?.name || source!.name, sourceShortName: source?.shortName || undefined,
+                ...(supplied ? { position: authoritativeWorldCupPosition(supplied.position), datasetPlayerId: supplied.datasetPlayerId, authoritativeWorldCupFacts: clone(supplied) } : {}),
+            };
         }),
     }])) as Record<string, T>;
 }
 
+function playerRosterIdentity(player: Player): string | undefined {
+    const source = resolveRosterAthlete({ name: player.name, nationality: player.nationality, externalId: player.externalId });
+    const supplied = getAuthoritativeWorldCupPlayer({ name: player.name, nationality: player.nationality, externalId: player.externalId || source?.externalId });
+    return supplied?.resolvedSourceId || source?.externalId || supplied?.datasetPlayerId;
+}
 /**
- * Callups from the current career, not stale club seeds. Only verified identities link.
+ * Enrich existing callups from the current career, not stale club seeds. Only verified identities link.
  * Career name is retained for match-scorer/stat matching; full source name stays in sourceName.
- * Stats/history/appearance facts are copied verbatim, never reset or fabricated.
+ * Existing selection count/membership, stats/history, contracts and rifts are never reset or reselected.
+ * Older saves without approved-selection metadata remain older selections, not silently migrated.
  * Input order: national teams, then current club teams. Neither input is mutated.
  */
 export function hydrateNationalTeamsFromCareer(nationalTeams: Record<string, Team>, clubTeams: Record<string, Team>): Record<string, NationalRosterTeam> {
     const career = new Map<string, Array<{ player: Player; club: string }>>();
     for (const team of Object.values(clubTeams).filter(t => t.league !== 'International')) {
         for (const player of team.players) {
-            const source = resolveNationalPlayerIdentity(player);
-            if (!source) continue;
-            const matches = career.get(source.externalId) || [];
+            const id = playerRosterIdentity(player);
+            if (!id) continue;
+            const matches = career.get(id) || [];
             matches.push({ player, club: team.name });
-            career.set(source.externalId, matches);
+            career.set(id, matches);
         }
     }
     return Object.fromEntries(Object.entries(nationalTeams).map(([key, team]) => {
         const existing = team as Partial<NationalRosterTeam>;
-        const nation = NATIONAL_ROSTER_CATALOG.find(n => n.countryCode === existing.countryCode || n.name === team.name);
+        const nation = getNation(existing.countryCode || team.name);
         if (!nation) return [key, clone(team) as NationalRosterTeam];
-        const baseline = createNationalRosterTeam(nation.countryCode, team.group);
+        const approved = existing.nationalRosterSource?.kind === 'authoritative-tournament-squad' && existing.nationalRosterSource.officialFinalSelection;
+        const baseline = createNationalRosterTeam(nation.countryCode, team.group, approved ? 'world-cup-2026' : 'source-pool');
+        const baselineById = new Map(baseline.nationalSquadPool.map(player => [playerRosterIdentity(player) || identity(player), player]));
         const fullPool = existing.nationalSquadPool?.length ? existing.nationalSquadPool : baseline.nationalSquadPool;
-        const pool = fullPool.map(sourcePlayer => {
-            const matches = career.get(sourcePlayer.externalId);
-            if (matches?.length !== 1) return clone(sourcePlayer);
-            const current = matches[0];
+        const enrich = (player: Player): NationalRosterPlayer => {
+            const id = playerRosterIdentity(player) || identity(player);
+            const facts = baselineById.get(id);
+            const sourcePlayer = { ...clone(facts), ...clone(player) } as NationalRosterPlayer;
+            const matches = career.get(id);
+            const current = matches?.length === 1 ? matches[0] : undefined;
             return {
-                ...clone(sourcePlayer), ...clone(current.player),
-                externalId: sourcePlayer.externalId, sourceName: sourcePlayer.sourceName, sourceShortName: sourcePlayer.sourceShortName,
+                ...sourcePlayer, ...(current ? clone(current.player) : {}),
+                externalId: facts?.externalId || sourcePlayer.externalId, sourceName: facts?.sourceName || sourcePlayer.sourceName,
+                sourceShortName: facts?.sourceShortName || sourcePlayer.sourceShortName,
                 nationality: nation.flag, nationalCountryCode: nation.countryCode,
-                nationalRosterFacts: clone(sourcePlayer.nationalRosterFacts), gameDerived: clone(sourcePlayer.gameDerived),
-                currentClub: current.club,
-                status: current.player.status.type === 'On International Duty' ? { type: 'Available' } : clone(current.player.status),
+                nationalRosterFacts: clone(facts?.nationalRosterFacts || sourcePlayer.nationalRosterFacts),
+                gameDerived: clone(facts?.gameDerived || sourcePlayer.gameDerived),
+                ...(approved && facts?.authoritativeWorldCupFacts ? {
+                    position: facts.position, datasetPlayerId: facts.datasetPlayerId,
+                    authoritativeWorldCupFacts: clone(facts.authoritativeWorldCupFacts),
+                } : {}),
+                currentClub: current?.club || sourcePlayer.currentClub,
+                // National availability is not club-duty status; other status/effects are retained verbatim.
+                status: current?.player.status.type === 'On International Duty' ? { type: 'Available' } : clone(current?.player.status || sourcePlayer.status),
+                isStarter: player.isStarter,
             } as NationalRosterPlayer;
-        });
-        const formation = team.tactic?.formation || baseline.tactic.formation;
+        };
+        const pool = fullPool.map(enrich);
         return [key, {
             ...baseline, ...clone(team), countryCode: nation.countryCode, nationalSquadPool: pool,
-            players: selectNationalSquad(pool, 26, formation),
-            nationalRosterSource: baseline.nationalRosterSource,
-            rosterWarnings: [...baseline.rosterWarnings, ...pool.filter(p => (career.get(p.externalId)?.length || 0) > 1).map(p => `Ambiguous career club identity: ${p.sourceName}; source pool record retained.`)],
+            players: team.players.map(enrich),
+            nationalRosterSource: clone(existing.nationalRosterSource || baseline.nationalRosterSource),
+            rosterWarnings: [...new Set([...(existing.rosterWarnings || baseline.rosterWarnings), ...pool.filter(p => (career.get(playerRosterIdentity(p) || identity(p))?.length || 0) > 1).map(p => `Ambiguous career club identity: ${p.sourceName}; existing national record retained.`)])],
         }];
     }));
 }

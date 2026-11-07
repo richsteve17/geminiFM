@@ -1,63 +1,59 @@
-# Manus FM
+# xGaffer '28
 
-**Manus FM** is a football-management simulation with a deterministic match-truth engine, AI narrative services, songbook-driven terrace culture, and a browser-based 3D broadcast pitch.
+AI football management with deterministic match results, consequential staff conversations, World Cup-to-career progression, international player relationships and a 3D broadcast pitch.
 
-> **Runtime model:** deterministic football truth first; AI is a presentation, interaction, and media layer—not the source of match results.
+**’28 is the edition label.** Current club squads are observed on 2026-11-07, the roster season is 2026/27 (MLS uses its calendar year), and the tutorial remains the 2026 World Cup. The edition does not advance the simulated calendar or fabricate future football data.
 
-## Current foundations
+## Current implementation
 
-- **Deterministic matches:** Fixture-derived seeds produce repeatable live event ledgers, background results, and penalty shootouts.
-- **Replayable live state:** Career saves retain `MatchState`, event coordinates, pending event playback, simulation target, and current playback minute.
-- **3D pitch theatre:** React Three Fiber renders code-created player tokens, ball targeting from deterministic event coordinates, and momentum-driven formation shifts. No player characters or asset models are required.
-- **Terrace system:** Chants are assembled from the supplied 36-archetype songbook. Crowd audio uses Web Audio rhythm and ambience; it does not call an external TTS service for chants.
-- **AI gateway:** Gemini narrative and optional media calls use the server-only `/api/ai` gateway with request validation, model allow-lists, rate limiting, and server-side replay media fetching.
+- New careers use **82 sourced club squads / 2,538 unique athletes**. Actual membership, names, IDs, source ages/DOB and squad numbers are separate from versioned game-derived ratings, detailed roles where only broad positions are supplied, personalities and contract economics.
+- The World Cup tutorial uses the owner's authoritative **48 squads / 1,244 players**. Its actual results unlock RTG opportunities and produce the international history used by the relationship engine. The separate expanded background format retains 64 nations.
+- Deterministic live and background match ledgers retain goal actors, keeper/penalty duels, substitutions and playback state. AI narrates and evaluates decisions; prose cannot rewrite the result ledger.
+- The pitch uses a sourced anatomical skinned footballer model with articulated football poses. Source shirt photos are projected onto the shirt; secondary garments and player likenesses are not claimed as official assets.
+- The supplied chant songbook and 17 recordings connect to match cues through the audio director. Unmatched club/cue recordings are explicitly unavailable. Paid synthetic media is separately opt-in.
+- Continue preserves the actual career's membership, transfers, ages, contracts, balance, stats, history, fixtures and relationships. New source snapshots are **not** transplanted into existing saves.
+- Saves omit duplicate source payloads and use a bounded gzip/base64 envelope. Legacy plain JSON and the historic save/profile keys remain readable. Compression uses the already-pinned **[fflate](https://github.com/101arrowz/fflate)** implementation bundled with Three.js; no new dependency or server transaction is required.
+- The paper/ink/forest club workspace, local typography, authentic kit archive and dark broadcast interface are preserved.
 
-## Architecture
+The game competition catalog remains curated: observed source league associations are recorded separately from inherited game leagues. Full league-membership expansion and a validated live-scout-to-contract import boundary are distinct unfinished work, not accomplished by changing a roster label.
 
-| Layer | Responsibility |
+## Main modules
+
+| Path | Responsibility |
 |---|---|
-| `src/engine/matchEngine.ts` | Seeded match segments, background fixtures, shootouts, event coordinates |
-| `src/services/geminiService.ts` | Client-side gateway facade plus AI presentation features and local fallback behavior |
-| `server/ai/` | Server-only Gemini client, validation, model policy, rate limits, media proxy |
-| `src/services/chantService.ts` | Songbook selection and template substitution |
-| `src/services/audioDirector.ts` | Crowd bus and terrace rhythm via Web Audio |
-| `src/components/PitchView.tsx` | WebGL broadcast pitch consuming match events and momentum |
+| `src/product.ts` | Approved product name and edition |
+| `src/buildInfo.ts` | Real version/revision/timestamp release record |
+| `src/engine/clubRosters.ts` | Fresh-career current squads and explicit unattached records |
+| `src/engine/rosterIdentity.ts` | Shared supplied/source identity joins |
+| `src/engine/nationalRosters.ts` | Authoritative tutorial squads and separate observed pools |
+| `src/engine/matchEngine.ts` | Seeded football results and actor ledger |
+| `src/engine/internationalRelationships.ts` | Causal rifts, bonds and intervention effects |
+| `src/engine/careerStorage.ts` | Compressed storage, legacy decoding and backup handling |
+| `src/services/` | Server-gateway facade, grounded interactions and stadium playback |
+| `server/ai/` | Server-only AI policy, provider routing and media proxy |
+| `src/interface.css` | Shared responsive interface tokens and workspace geometry |
 
-## Development
+## Run
 
-### Prerequisites
-
-- Node.js 22+
-- A Gemini API key **only when AI narrative or media features are required**
-
-### Environment
-
-Create `.env` at the project root:
-
-```env
-# Server only. Do not use VITE_GEMINI_API_KEY.
-GEMINI_API_KEY=your_key_here
-```
-
-The browser never reads this key. The Express server owns it and exposes only `/api/ai` capability routes.
-
-### Commands
+Use Node.js 22+ from the project directory:
 
 ```bash
 npm ci
 npm run dev
+npm run check
 npm test -- --run
-npx tsc --noEmit
+python3 scripts/import-club-rosters.test.py
 npm run build
 ```
 
-## Verification focus
+The server honors the configured `PORT`. Production serves `dist/public` through `dist/index.js`.
 
-- The exact same teams, fixture key, and simulation seed must yield the exact same result ledger.
-- All match events generated by the deterministic engine retain normalized `pitchX` / `pitchY` coordinates.
-- A mid-match save reloads the ledger and playback cursor without regenerating provider content.
-- Provider keys must not appear in `dist/assets`.
+AI is a core game capability. The server needs either its configured Gemini key or managed runtime inference credentials. Provider credentials stay server-side; `/api/ai` remains the validated client gateway. Never place provider keys in `VITE_*` variables or client bundles.
 
-## Known scope boundary
+## Data maintenance
 
-This iteration establishes the runtime spine. Full server-authoritative careers, durable database transactions, live data import provenance, licensed crowd/stadium audio assets, and production deployment are separate milestones in the implementation plan.
+`src/data/worldCup2026Squads.json` and `src/data/sources/worldCup2026Squads.base.json` are byte-preserved copies of the corrected owner-supplied files. Do not reinterpret dataset metadata as a replacement for the goal/penalty/stakes/participation design.
+
+`scripts/import-club-rosters.py` performs one bounded catalog import. The committed snapshot and provenance document preserve the delivered roster facts; reproducing an older raw import requires its date-isolated source cache. Refresh only the new-career baseline, never a continued football timeline.
+
+See `docs/club-roster-provenance.md`, `docs/club-roster-hydration.md`, and `docs/world-cup-roster-integration.md` for exact source and adapter contracts. Server-authoritative persistence, full world/regen expansion, complete club atmosphere coverage and permanent publication remain separate work.

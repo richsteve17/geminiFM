@@ -49,7 +49,7 @@ All AI requests must transit the validated `/api/ai` gateway.
 ## International tutorial and return relationships
 - World Cup is the RTG tutorial. New club access uses `tutorialProgression.ts` across selectors and job paths; roleplay background is not a reputation bypass. Preserve existing careers and best completed tutorial outcomes.
 - Do not route the eight-week World Cup final through domestic season reset. Keep actual tournament fixtures, scorers, shootout attempts and substitute actors; complete other nations’ results after tutorial elimination without changing the manager’s finish.
-- National snapshots are sourced pools, not official final squads or qualification. Keep stable external IDs, source dates and game-derived values explicit. Never refresh a saved player’s stats/history/age from a new source snapshot.
+- The owner-supplied corrected World Cup JSON is authoritative for tutorial membership. Preserve its football fields and distinguish it from observed source pools used by the separate expanded background format. Keep shared IDs, source dates and game-derived values explicit; never refresh a saved player's stats/history/age from a new source snapshot.
 - Relationship severity must follow actual international events, stakes, club membership and participation. Shared-nationality bonds cannot cancel serious personal feuds. Mediation must validate exact answer evidence; benching is separation, not amnesia.
 - Use compact career serialization to omit duplicate national source pools, not actual saved football or relationship facts. Apply training impairment to positive development, never by damping negative performance toward zero.
 
@@ -58,3 +58,9 @@ All AI requests must transit the validated `/api/ai` gateway.
 - Dark surfaces must declare `fm-inverse` so text, fields, status colours and border tokens change together. Pair foreground/background semantics; do not paste pale utility text onto paper or dark ink onto a dark log.
 - Keep primary actions, exact contract/answer inputs, source labels, retries and existing consequence/save callbacks when changing layout. The kit archive is factual photography; club theme colours are accents, not a reason to recolour the entire workspace.
 - Venue photography requires location/date/attribution; do not present Wembley as a selected club's ground. Font licences remain in `public/fonts/`. Phone form text stays readable and user zoom remains enabled.
+
+## Current rosters, edition and storage
+- `src/product.ts` owns xGaffer '28. The edition label does not change the 2026/27 roster snapshot or 2026 tutorial calendar. Keep historic save/profile keys compatible.
+- `clubRosters.ts` is a fresh-start factory, never a Continue migration. Keep complete sourced membership, stable identities and source metadata; game-derived ratings/economics/age fallbacks must not be presented as observed football facts.
+- Owned squad capacity is a game limit, not a 25-player senior registration limit. Full source squads include reserves/youth and must not be truncated or prevented from recruiting by an unrelated registration cap.
+- Use `careerStorage.ts` for application persistence: bounded gzip with legacy JSON decoding and lightweight preview metadata. Backup quota failure is nonfatal. Canonical career football/history/relationships survive source-payload compaction.

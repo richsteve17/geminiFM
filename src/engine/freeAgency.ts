@@ -93,7 +93,9 @@ export interface FreeAgentSigningSuccess {
 
 export type FreeAgentSigningResult = FreeAgentSigningSuccess | FreeAgentSigningFailure;
 
-export const DEFAULT_MAX_SQUAD_SIZE = 25;
+/** Game ownership bound, not a competition's senior registration limit; source squads include reserves/youth. */
+export const DEFAULT_MAX_OWNED_PLAYERS = 60;
+export const DEFAULT_MAX_SQUAD_SIZE = DEFAULT_MAX_OWNED_PLAYERS;
 
 const freeAgentLabels = new Set(['', 'free agent', 'free-agent', 'unattached']);
 
@@ -220,7 +222,7 @@ export function getFreeAgentEligibility({
         return { ...common, eligible: false, reason: 'player-already-signed', message: `${player.name} is already in this squad.` };
     }
     if (squadPlayers.length >= Math.max(1, Math.floor(maxSquadSize))) {
-        return { ...common, eligible: false, reason: 'squad-full', message: `The squad is full (${maxSquadSize} players).` };
+        return { ...common, eligible: false, reason: 'squad-full', message: `The owned roster has reached its game limit (${maxSquadSize} players).` };
     }
     return { ...common, eligible: true, reason: 'eligible', message: `${player.name} can be signed as a free agent.` };
 }

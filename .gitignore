@@ -72,6 +72,8 @@ jspm_packages/
 .rts2_cache_es/
 .rts2_cache_umd/
 .webdev/
+__pycache__/
+*.pyc
 
 # Local database files
 *.db

@@ -1,3 +1,4 @@
+import { formatRosterAge } from '../engine/playerDataPresentation';
 import React, { useState } from 'react';
 import { Check, Star } from 'lucide-react';
 import type { Player } from '../types';
@@ -66,7 +67,7 @@ const ScoutingScreen: React.FC<ScoutingScreenProps> = ({ onScout, scoutResults, 
                                         <NationalityBadge nationality={player.nationality} className="mt-1 shrink-0" />
                                         <div className="min-w-0">
                                             <h4 className="break-words text-2xl font-bold leading-tight" style={{ fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif" }}>{player.name}</h4>
-                                            <p className="mt-1 text-sm text-[#637169]">{player.position} <span aria-hidden="true">/</span> Age: {player.age}{player.currentClub && <> <span aria-hidden="true">/</span> {player.currentClub}</>}</p>
+                                            <p className="mt-1 text-sm text-[#637169]">{player.position} <span aria-hidden="true">/</span> Age: {formatRosterAge(player)}{player.currentClub && <> <span aria-hidden="true">/</span> {player.currentClub}</>}</p>
                                         </div>
                                     </div>
                                     <button type="button" onClick={() => onSignPlayer(player)} className="fm-button-secondary min-h-11 px-4 text-sm" aria-label={`${isNationalTeam ? 'Call up' : 'Approach'} ${player.name}`}>{isNationalTeam ? 'Call Up' : 'Approach'}</button>
