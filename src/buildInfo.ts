@@ -4,6 +4,10 @@ declare const __MANUS_FM_BUILT_AT__: string;
 
 export const ACTIVE_SEASON = '2026/27';
 export const CURRENT_BUILD_CHANGES = [
+    'World Cup is the RTG tutorial. Skip: unemployed/Championship; elimination unlocks lower clubs; a title unlocks elite clubs including Real Madrid. Best completed tutorial rewards persist; existing club careers retain earned mobility.',
+    '64 distinct source-backed national pools with 2,015 identified athletes, a 48-nation tutorial and positional squad selection. Snapshot observed 2026-11-07, not official final World Cup rosters; four source pools contain 23–25 players rather than invented fill.',
+    'International return relationships use actual scorers, keeper/penalty duels, tournament stakes and participation. Shared national success/failure, persistent chemistry/training effects, grounded AI mediation, separation and repeated-co-selection transfer escalation replace random national-pair feuds.',
+    'International results and recorded highlights remain viewable. Actual penalty sheets and substitute participation persist; compact saves omit duplicate source pools without resetting career football facts. The World Cup final now reaches its RTG award branch.',
     '235 locally packaged current-season kit photos across all 82 playable clubs. European 2026/27 and MLS 2026 labels remain distinct; unknown release/sponsor facts stay blank.',
     'Authentic local club crests replace generic squad-header shirts across all 82 clubs. Emoji navigation and match decoration use a consistent icon system.',
     'Pitch players now use a sourced anatomical 16-bone footballer rig, articulated gait and resolved shooting/save/celebration poses. Club shirt photographs project onto the model; keeper colours, back panels, shorts and socks remain approximations, not official full-kit textures or player likenesses.',

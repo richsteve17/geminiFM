@@ -5,11 +5,18 @@ import { TEAMS as allTeams, TRANSFER_TARGETS, EXPERIENCE_LEVELS } from './consta
 import type { Team, LeagueTableEntry, Fixture, Tactic, MatchState, Interview, Job, PlayerTalk, Player, TouchlineShout, NewsItem, ExperienceLevel, NationalTeam, GameMode, NegotiationResult, MatchEvent, ContractTerms, TransferBid, CareerHistoryEntry, LeagueTier, PlayerEffect } from './types';
 import { AppScreen, GameState } from './types';
 import { hashSeed, simulateDeterministicShootout } from './engine/matchEngine';
+import { kickoffParticipants, mergeMatchParticipants, pairPlayedTogether } from './engine/matchParticipants';
 import { applyLiveFatigue, nextMatchBoundary, revealMatchMinute } from './engine/matchPlayback';
 import { isFreeAgent, mergeFreeAgentsIntoMarket, signFreeAgent, toFreeAgent } from './engine/freeAgency';
 import { applyPressConferenceTransition } from './engine/pressConference';
 import { buildPressContext } from './engine/pressContext';
+import { completeTutorialTournament } from './engine/tutorialTournament';
+import { serializeCareerSave } from './engine/careerSerialization';
 import { CAREER_SAVE_VERSION, migrateCareerSave } from './engine/careerSave';
+import { applyIncidentEffects, advanceRelationship, buildRelationshipIncidents, getIncidentEffects, interveneRelationship, relationshipPlayerKey, type RelationshipIncident, type InternationalRelationshipFixture } from './engine/internationalRelationships';
+import { hydrateNationalTeamsFromCareer, linkNationalRosterIdentitiesToClubTeams, NATIONAL_ROSTER_SNAPSHOT_DATE } from './engine/nationalRosters';
+import { interpretRiftMediation } from './services/riftMediation';
+import { bestTutorialResult, shouldRollClubSeason, canStartAtClub, careerGateLabel, normalizeTutorialResult, restoreTutorialHonors, tutorialResult, TUTORIAL_PROFILE_KEY, type TutorialResult, type TutorialFinish } from './engine/tutorialProgression';
 import Header from './components/Header';
 import LeagueTableView from './components/LeagueTableView';
 import TeamDetails from './components/TeamDetails';
@@ -23,6 +30,7 @@ import JobInterviewScreen from './components/JobInterviewScreen';
 import TransfersScreen from './components/TransfersScreen';
 import PlayerTalkScreen from './components/PlayerTalkScreen';
 import NewsScreen from './components/NewsScreen';
+import InternationalBreakScreen from './components/InternationalBreakScreen';
 import CreateManagerScreen from './components/CreateManagerScreen';
 import TutorialOverlay from './components/TutorialOverlay';
 import ScoutingScreen from './components/ScoutingScreen';
@@ -86,7 +94,7 @@ export default function App() {
     const [currentWeek, setCurrentWeek] = useState(1);
     const [weeksInSeason, setWeeksInSeason] = useState(38); 
     const [teams, setTeams] = useState<Record<string, Team>>(() => {
-        const hydrated = ensureTeamAndPlayerFields(structuredClone(allTeams));
+        const hydrated = linkNationalRosterIdentitiesToClubTeams(ensureTeamAndPlayerFields(structuredClone(allTeams)));
         Object.keys(hydrated).forEach(tName => {
             hydrated[tName].players = hydrated[tName].players.map(p => {
                 const baseStamina = p.stamina ?? (p.age < 22 ? 80 : p.age > 30 ? 65 : 75) + (p.personality === 'Professional' ? 5 : 0);
@@ -138,10 +146,24 @@ export default function App() {
     const [pressProgress, setPressProgress] = useState<PressProgress | null>(null);
     const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     const [managerReputation, setManagerReputation] = useState<number>(0);
+    const [tutorialCompletion, setTutorialCompletion] = useState<TutorialResult | null>(() => {
+        try { return normalizeTutorialResult(JSON.parse(localStorage.getItem(TUTORIAL_PROFILE_KEY) || 'null')); } catch { return null; }
+    });
+    const [hasClubCareer, setHasClubCareer] = useState(false);
+    const [relationshipIncidents, setRelationshipIncidents] = useState<RelationshipIncident[]>([]);
+    const relationshipsRef = useRef<RelationshipIncident[]>([]);
+    relationshipsRef.current = relationshipIncidents;
+    const careerGenerationRef = useRef(0);
+    const teamsRef = useRef(teams);
+    teamsRef.current = teams;
+    const [prologueArchive, setPrologueArchive] = useState<{ teams: Record<string, Team>; fixtures: Fixture[]; champion?: string } | null>(null);
+    useEffect(() => {
+        if (tutorialCompletion) localStorage.setItem(TUTORIAL_PROFILE_KEY, JSON.stringify(tutorialCompletion));
+    }, [tutorialCompletion]);
     const [careerHistory, setCareerHistory] = useState<CareerHistoryEntry[]>([]);
     
     const [matchSpeed, setMatchSpeed] = useState<'slow' | 'normal' | 'fast' | 'instant'>('normal');
-    const [gameplayTab, setGameplayTab] = useState<'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors'>('match');
+    const [gameplayTab, setGameplayTab] = useState<'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors' | 'international'>('match');
 
     // --- THEMING STATE ---
     const [activeTheme, setActiveTheme] = useState<{ primary: string, secondary: string, text: string } | null>(null);
@@ -204,7 +226,7 @@ export default function App() {
                         let completed = matchState;
                         if (boundary.shootout) {
                             const pens = simulateDeterministicShootout(teams[currentFixture.homeTeam], teams[currentFixture.awayTeam], `${currentFixture.id}|${matchState.simulationSeed ?? 0}`);
-                            completed = { ...matchState, penaltyWinner: pens.penaltyWinner, events: [...matchState.events, {
+                            completed = { ...matchState, penaltyWinner: pens.penaltyWinner, penalties: pens.penalties, events: [...matchState.events, {
                                 id: hashSeed(`${matchState.simulationSeed ?? 0}|120|shootout`), minute: 120, type: 'commentary',
                                 description: `Penalty shootout: ${currentFixture.homeTeam} ${pens.homePenalties}-${pens.awayPenalties} ${currentFixture.awayTeam}.`,
                             }] };
@@ -281,6 +303,8 @@ export default function App() {
                                 pitchX: Number.isFinite(Number(event?.pitchX)) ? Math.max(0, Math.min(100, Number(event.pitchX))) : undefined,
                                 pitchY: Number.isFinite(Number(event?.pitchY)) ? Math.max(0, Math.min(100, Number(event.pitchY))) : undefined,
                                 play: event.play,
+                                isPenalty: event.isPenalty,
+                                goalkeeper: event.goalkeeper,
                                 xG: event.xG,
                                 onTarget: event.onTarget,
                                 momentumAfter: event.momentumAfter,
@@ -348,39 +372,43 @@ export default function App() {
 
     // --- SAVE / LOAD SYSTEM ---
     const saveGame = () => {
-        if (userTeamName) {
+        if (userTeamName || appScreen === AppScreen.JOB_CENTRE) {
             const stateToSave = {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
-                managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory,
+                managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory, tutorialCompletion, hasClubCareer, prologueArchive, availableJobs, relationshipIncidents,
                 matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute,
                 version: CAREER_SAVE_VERSION, pressInput, pressQuestionResult, pressProgress, appliedPressEvaluationIds: [...appliedPressEvaluationIdsRef.current]
             };
-            localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
+            try { localStorage.setItem('gfm_save_v1', serializeCareerSave(stateToSave)); } catch { setError('Browser storage could not save this career. The previous save is preserved; free browser storage before continuing.'); return; }
             logger.success("Game Saved Successfully!");
             alert("Game Saved Successfully!");
         }
     };
 
     useEffect(() => {
-        if (userTeamName && appScreen !== AppScreen.START_SCREEN) {
+        if ((userTeamName || appScreen === AppScreen.JOB_CENTRE) && appScreen !== AppScreen.START_SCREEN) {
             const stateToSave = {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
                 teams, leagueTable, fixtures, news, weeklyResults, appScreen, gameState,
-                managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory,
+                managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory, tutorialCompletion, hasClubCareer, prologueArchive, availableJobs, relationshipIncidents,
                 matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute,
                 version: CAREER_SAVE_VERSION, pressInput, pressQuestionResult, pressProgress, appliedPressEvaluationIds: [...appliedPressEvaluationIdsRef.current]
             };
-            localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
+            try { localStorage.setItem('gfm_save_v1', serializeCareerSave(stateToSave)); } catch { setError('Browser storage could not save this career. The previous save is preserved; free browser storage before continuing.'); return; }
         }
-    }, [currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory, matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute, transferMarket, pressInput, pressQuestionResult, pressProgress, appScreen]);
+    }, [currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory, matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute, transferMarket, pressInput, pressQuestionResult, pressProgress, appScreen, tutorialCompletion, hasClubCareer, prologueArchive, availableJobs, relationshipIncidents]);
 
     const handleQuit = () => {
+        careerGenerationRef.current++;
         setAppScreen(AppScreen.START_SCREEN);
         setGameState(GameState.PRE_MATCH);
         setMatchState(null);
         setUserTeamName(null);
         setCareerHistory([]);
+        setHasClubCareer(false);
+        setPrologueArchive(null);
+        setRelationshipIncidents([]); relationshipsRef.current = [];
         setTeams(ensureTeamAndPlayerFields(structuredClone(allTeams)));
         setTransferMarket(TRANSFER_TARGETS);
         setIncomingBids([]);
@@ -412,6 +440,7 @@ export default function App() {
     };
 
     const handleContinue = () => {
+        careerGenerationRef.current++;
         const savedData = localStorage.getItem('gfm_save_v1');
         if (savedData) {
             try {
@@ -446,6 +475,11 @@ export default function App() {
                     ? parsed.simulationTargetMinute
                     : restoredMatchState?.currentMinute || 0);
                 setManagerReputation(parsed.managerReputation);
+                setTutorialCompletion(prev => bestTutorialResult(prev, bestTutorialResult(normalizeTutorialResult(parsed.tutorialCompletion), restoreTutorialHonors(parsed.careerHistory || []))));
+                setHasClubCareer(parsed.hasClubCareer ?? (parsed.gameMode === 'Club' && !!parsed.userTeamName));
+                setPrologueArchive(parsed.prologueArchive || null);
+                setAvailableJobs(parsed.availableJobs || []);
+                setRelationshipIncidents(parsed.relationshipIncidents || []); relationshipsRef.current = parsed.relationshipIncidents || [];
                 if (parsed.transferMarket) setTransferMarket(parsed.transferMarket);
                 if (parsed.incomingBids) setIncomingBids(parsed.incomingBids);
                 if (parsed.careerHistory) setCareerHistory(parsed.careerHistory);
@@ -471,11 +505,18 @@ export default function App() {
     const startTutorial = () => { setTutorialStep(0); setShowTutorial(true); };
 
     const initializeWorldCup = (selectedNationalTeamName: string) => {
+        careerGenerationRef.current++;
         setGameMode('WorldCup');
         setIsPrologue(true);
-        setManagerReputation(90); 
+        setManagerReputation(90);
+        setHasClubCareer(false);
+        setPrologueArchive(null);
+        setCareerHistory([]);
+        setCurrentYear(1);
+        setRelationshipIncidents([]); relationshipsRef.current = [];
+        setPressInput(null); setPressQuestionResult(null); setPressProgress(null);
         
-        const wcTeamsRecord = generateWorldCupStructure();
+        const wcTeamsRecord = hydrateNationalTeamsFromCareer(generateWorldCupStructure(), linkNationalRosterIdentitiesToClubTeams(ensureTeamAndPlayerFields(structuredClone(allTeams))));
         setTeams(wcTeamsRecord);
 
         let actualTeamName = selectedNationalTeamName;
@@ -508,7 +549,7 @@ export default function App() {
         const initialTable = allWcTeams.map((t: Team) => ({ teamName: t.name, league: 'International' as const, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, group: t.group }));
         setLeagueTable(initialTable);
         setCurrentWeek(1); setGameState(GameState.PRE_MATCH);
-        setNews([{ id: Date.now(), week: 1, title: 'World Cup 2026 Begins', body: '48 teams. 12 Groups. 104 Matches. The road to glory starts now.', type: 'tournament-result' }]);
+        setNews([{ id: Date.now(), week: 1, title: 'World Cup Tutorial Begins', body: '48 unique nations in a simulated 12-group draw. Your finish unlocks RTG clubs. These squads are source-supported national pools, not a claim of official final tournament selection.', type: 'tournament-result' }]);
         setAppScreen(AppScreen.GAMEPLAY);
         const week1Fixtures = groupFixtures.filter(f => f.week === 1);
         const userMatch = week1Fixtures.find(f => f.homeTeam === actualTeamName || f.awayTeam === actualTeamName);
@@ -516,12 +557,23 @@ export default function App() {
     };
 
     const initializeGame = useCallback((selectedTeamName: string) => {
-        setGameMode('Club');
-        if (!isPrologue) {
-            setManagerReputation(70);
+        careerGenerationRef.current++;
+        const selected = allTeams[selectedTeamName];
+        if (!selected) { setError('Club not found.'); return; }
+        if (!hasClubCareer && !canStartAtClub(selected, tutorialCompletion)) {
+            setError(careerGateLabel(tutorialCompletion));
+            return;
         }
+        if (hasClubCareer && gameMode === 'Club') {
+            setUserTeamName(selectedTeamName); setAppScreen(AppScreen.GAMEPLAY);
+            setCurrentFixture(fixtures.find(f => f.week === currentWeek && !f.played && (f.homeTeam === selectedTeamName || f.awayTeam === selectedTeamName)));
+            setGameState(GameState.PRE_MATCH); setMatchState(null); setPendingEvents([]); return;
+        }
+        setGameMode('Club');
+        if (!hasClubCareer) setManagerReputation(tutorialCompletion?.reputation ?? 15);
         setIsPrologue(false);
-        let finalTeamsState = { ...allTeams };
+        setHasClubCareer(true);
+        let finalTeamsState = linkNationalRosterIdentitiesToClubTeams(ensureTeamAndPlayerFields(structuredClone(allTeams)));
         const domesticFixtures = generateFixtures(Object.values(allTeams));
         const { participants, newTeams } = getChampionsLeagueParticipants(allTeams);
         finalTeamsState = { ...finalTeamsState, ...newTeams };
@@ -539,28 +591,40 @@ export default function App() {
         const initialTable: LeagueTableEntry[] = Object.values(finalTeamsState).map(t => ({ teamName: t.name, league: t.league, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, }));
         setWeeksInSeason(Math.max(...finalFixtures.map(f => f.week)) + 10);
         setLeagueTable(initialTable); setFixtures(finalFixtures); setCurrentWeek(1);
+        if (prologueArchive && !hasClubCareer) {
+            const played = prologueArchive.fixtures.filter(f => f.played).map(f => ({ ...f, week: 1, tournamentId: 'tutorial-worldcup', year: 1 }));
+            const carried = buildRelationshipIncidents({ clubTeams: finalTeamsState, nationalTeams: prologueArchive.teams, fixtures: played, tournamentType: 'WorldCup', year: 1, week: 1, weeksPerYear: Math.max(...finalFixtures.map(f => f.week)) + 10 });
+            relationshipsRef.current = carried; setRelationshipIncidents(carried);
+            finalTeamsState = applyIncidentEffects(finalTeamsState, carried.flatMap(i => getIncidentEffects(i, { year: 1, week: 1 })));
+            setNews(prev => [...carried.filter(i => i.clubName === selectedTeamName).map(relationshipNews), ...prev].slice(0, 1000));
+        }
         setTeams(finalTeamsState); setUserTeamName(selectedTeamName); setAppScreen(AppScreen.GAMEPLAY);
         setCurrentFixture(finalFixtures.find(f => (f.homeTeam === selectedTeamName || f.awayTeam === selectedTeamName) && f.week === 1));
         startTutorial();
-    }, [isPrologue]);
+    }, [hasClubCareer, tutorialCompletion, prologueArchive, gameMode, fixtures, currentWeek]);
 
-    const handleCreateManager = (name: string, exp: ExperienceLevel) => {
-        let initialRep = 15;
-        if (exp.id === 'semi-pro') initialRep = 40; if (exp.id === 'pro') initialRep = 60;
-        if (exp.id === 'international') initialRep = 80; if (exp.id === 'legend') initialRep = 95;
-        setManagerReputation(initialRep); generateJobs(initialRep);
+    const handleCreateManager = (name: string, _exp: ExperienceLevel) => {
+        localStorage.setItem('gfm_manager_name', name.trim().slice(0, 80) || 'Manager');
+        // Playing background is roleplay, never a free elite-career unlock.
+        setHasClubCareer(false);
+        setUserTeamName(null);
+        setIsPrologue(false);
+        setGameMode('Club');
+        const initialRep = tutorialCompletion?.reputation ?? 15;
+        setManagerReputation(initialRep);
+        generateJobs(initialRep, tutorialCompletion);
     };
 
-    const generateJobs = (currentRep: number | ExperienceLevel) => {
+    const generateJobs = (currentRep: number | ExperienceLevel, completion: TutorialResult | null = tutorialCompletion) => {
         const rep = typeof currentRep === 'number' ? currentRep : managerReputation;
-        const allTeamList: Team[] = Object.values(allTeams);
+        const allTeamList: Team[] = Object.values(allTeams).filter(t => hasClubCareer || canStartAtClub(t, completion));
         const shuffle = (array: Team[]) => array.sort(() => 0.5 - Math.random());
         let vacancies: Team[] = [];
         const feasible = allTeamList.filter(t => t.prestige <= rep && t.prestige >= rep - 20);
         const reach = allTeamList.filter(t => t.prestige > rep && t.prestige <= rep + 10);
         const safety = allTeamList.filter(t => t.prestige < rep - 20);
         vacancies = [...shuffle(feasible).slice(0, 4), ...shuffle(reach).slice(0, 2), ...shuffle(safety).slice(0, 1)];
-        if (vacancies.length === 0) vacancies = shuffle(allTeamList.filter(t => t.prestige < 60)).slice(0, 3);
+        if (vacancies.length === 0) vacancies = shuffle(allTeamList).slice(0, 3);
         const jobs: Job[] = vacancies.map(t => ({ teamName: t.name, prestige: t.prestige, chairmanPersonality: t.chairmanPersonality }));
         setAvailableJobs(jobs); setAppScreen(AppScreen.JOB_CENTRE);
     }
@@ -568,6 +632,7 @@ export default function App() {
     const handleApplyForJob = async (teamName: string) => {
         setAppScreen(AppScreen.JOB_INTERVIEW); setIsLoading(true); setInterview(null); setJobOffer(null); setError(null);
         const team = allTeams[teamName];
+        if (team && !hasClubCareer && !canStartAtClub(team, tutorialCompletion)) { setError(careerGateLabel(tutorialCompletion)); setIsLoading(false); setAppScreen(AppScreen.JOB_CENTRE); return; }
         if (!team) { setError("Team not found."); setIsLoading(false); return; }
         try {
             const questions = await getInterviewQuestions(teamName, team.chairmanPersonality, team.league);
@@ -648,13 +713,23 @@ export default function App() {
         proceedToNextWeek();
     };
 
-    const transitionToClubCareer = (finalReputation: number) => {
+    const transitionToClubCareer = (finalReputation: number, tournamentFixtures: Fixture[] = fixtures) => {
+        const finish: TutorialFinish = finalReputation >= 100 ? 'Winner' : finalReputation >= 90 ? 'Finalist' : finalReputation >= 85 ? 'Semi Final' : finalReputation >= 80 ? 'Quarter Final' : finalReputation >= 75 ? 'Round of 16' : finalReputation >= 70 ? 'Round of 32' : 'Group Stage';
+        const completion = bestTutorialResult(tutorialCompletion, tutorialResult(userTeamName || 'National team', finish));
+        setTutorialCompletion(completion);
+        const completedTournament = completeTutorialTournament(teams, tournamentFixtures);
+        setPrologueArchive({ teams: structuredClone(teams), fixtures: completedTournament.fixtures, champion: completedTournament.champion });
+        setCareerHistory(prev => prev.some(h => h.league === 'World Cup') ? prev : [...prev, { year: currentYear, teamName: userTeamName || 'National team', league: 'World Cup', finalPosition: finish, trophies: [] }]);
         setGameMode('Club');
         setIsPrologue(false);
-        setManagerReputation(finalReputation);
+        setHasClubCareer(false);
+        setUserTeamName(null);
+        setManagerReputation(completion?.reputation ?? finalReputation);
         setCurrentYear(1);
         setCurrentWeek(1);
-        generateJobs(finalReputation);
+        setTeams(ensureTeamAndPlayerFields(structuredClone(allTeams)));
+        setFixtures([]); setLeagueTable([]); setCurrentFixture(undefined); setMatchState(null); setPendingEvents([]); setGameState(GameState.PRE_MATCH);
+        generateJobs(completion?.reputation ?? finalReputation, completion);
     };
 
     const getWeeklyBroadcastRevenue = (league: LeagueTier, prestige: number): number => {
@@ -670,184 +745,52 @@ export default function App() {
         return 100000;
     };
 
-    const processTeammateRivalries = async (simulatedFixtures: Fixture[], week: number) => {
-        if (!userTeamName || !teams[userTeamName]) return;
-        const userPlayers = teams[userTeamName].players;
-        const flagToCountryName: Record<string, string> = {
-            '🏴󠁧󠁢󠁥󠁮󠁧󠁿': 'England',
-            '🇫🇷': 'France',
-            '🇪🇸': 'Spain',
-            '🇩🇪': 'Germany',
-            '🇵🇹': 'Portugal',
-            '🇳🇱': 'Netherlands',
-            '🇮🇹': 'Italy',
-            '🇺🇸': 'USA',
-            '🇯🇵': 'Japan',
-            '🇲🇦': 'Morocco',
-            '🇧🇪': 'Belgium',
-            '🇭🇷': 'Croatia',
-            '🇺🇾': 'Uruguay',
-            '🇨🇴': 'Colombia',
-            '🇩🇰': 'Denmark',
-            '🇨🇭': 'Switzerland',
-            '🇦🇹': 'Austria',
-            '🇹🇷': 'Turkey',
-            '🇵🇱': 'Poland',
-            '🇭🇺': 'Hungary',
-            '🏴󠁧󠁢󠁳󠁣󠁴󠁿': 'Scotland',
-            '🇨🇿': 'Czechia',
-            '🇷🇸': 'Serbia',
-            '🇷🇴': 'Romania',
-            '🇸🇰': 'Slovakia',
-            '🇸🇮': 'Slovenia',
-            '🇬🇪': 'Georgia',
-            '🇧🇷': 'Brazil',
-        };
+    const relationshipNews = (incident: RelationshipIncident): NewsItem => ({
+        id: hashSeed(incident.id), week: incident.createdWeek,
+        title: incident.kind === 'bond' ? `International bond: ${incident.playerA.name} / ${incident.playerB.name}` : `Return tension: ${incident.playerA.name} / ${incident.playerB.name}`,
+        body: `${incident.trigger.homeNation} ${incident.trigger.score} ${incident.trigger.awayNation} · ${incident.trigger.tournamentType} ${incident.trigger.stage}. ${incident.playerA.name}: ${incident.trigger.playerAGoals} goals; ${incident.playerB.name}: ${incident.trigger.playerBGoals} goals. ${incident.trigger.labels.join(', ')}. Impact ${incident.strength}/100 (${incident.severity}).`,
+        type: incident.kind === 'bond' ? 'teammate-bond' : incident.severity === 'serious' ? 'serious-rift' : 'chemistry-rift',
+        relationshipId: incident.id,
+        ...(incident.kind !== 'bond' ? { riftDecision: { riftPlayerA: incident.playerA.name, riftPlayerB: incident.playerB.name, relationshipId: incident.id } } : {}),
+    });
 
-        for (let i = 0; i < userPlayers.length; i++) {
-            const playerA = userPlayers[i];
-            const countryA = flagToCountryName[playerA.nationality];
-            if (!countryA) continue;
+    const processTeammateRivalries = (simulatedFixtures: InternationalRelationshipFixture[], week: number, nationalTeams: Record<string, Team>, tournamentType: 'WorldCup' | 'Euros' | 'Friendly') => {
+        const current = relationshipsRef.current;
+        const stamped = simulatedFixtures.map(f => ({ ...f, tournamentId: f.tournamentId || `${tournamentType}-${currentYear}`, year: currentYear }));
+        const next = buildRelationshipIncidents({ clubTeams: teamsRef.current, nationalTeams, fixtures: stamped, tournamentType, year: currentYear, week, weeksPerYear: weeksInSeason, existingIncidents: current });
+        const known = new Set(current.map(i => i.id));
+        relationshipsRef.current = next; setRelationshipIncidents(next);
+        const updates = next.flatMap(i => getIncidentEffects(i, { year: currentYear, week }));
+        setTeams(prev => applyIncidentEffects(prev, updates));
+        setNews(prev => [...next.filter(i => !known.has(i.id) && i.clubName === userTeamName).map(relationshipNews), ...prev].slice(0, 1000));
+    };
 
-            for (let j = i + 1; j < userPlayers.length; j++) {
-                const playerB = userPlayers[j];
-                const countryB = flagToCountryName[playerB.nationality];
-                if (!countryB || countryA === countryB) continue;
+    const advanceClubRelationships = (year: number, week: number, appearances?: { fixture: Fixture; events: MatchEvent[] }[]) => {
+        const previous = relationshipsRef.current;
+        const results = previous.map(i => advanceRelationship(i, { year, week, ...(appearances?.some(a => pairPlayedTogether(a.fixture, a.events, i.clubName, i.playerA.name, i.playerB.name)) ? { selectedPlayerKeys: [i.playerA.key, i.playerB.key] } : {}) }));
+        const next = results.map(r => r.incident);
+        relationshipsRef.current = next; setRelationshipIncidents(next);
+        setTeams(prev => applyIncidentEffects(prev, results.flatMap(r => r.effects)));
+        const transferred = next.filter(i => i.transferRequestedPlayerKeys.length > (previous.find(p => p.id === i.id)?.transferRequestedPlayerKeys.length || 0) && i.clubName === userTeamName);
+        setNews(prev => [...transferred.map(i => ({ id: hashSeed(`${i.id}|transfer-request`), week, title: 'Unresolved rift: transfer requested', body: `${i.playerA.name} / ${i.playerB.name}: repeated co-selection under serious unresolved tension has produced a transfer request. Separation or roster changes may be required.`, type: 'player-departure', relationshipId: i.id })), ...prev].slice(0, 1000));
+    };
 
-                const match = simulatedFixtures.find(f => 
-                    (f.homeTeam === countryA && f.awayTeam === countryB) ||
-                    (f.homeTeam === countryB && f.awayTeam === countryA)
-                );
+    useEffect(() => {
+        if (gameMode === 'Club' && relationshipsRef.current.length) advanceClubRelationships(currentYear, currentWeek);
+    }, [currentYear, currentWeek, gameMode]);
 
-                if (match && match.played && match.score) {
-                    const homeGoals = parseInt(match.score.split('-')[0]) || 0;
-                    const awayGoals = parseInt(match.score.split('-')[1]) || 0;
-                    
-                    let winnerCountry = '';
-                    let loserCountry = '';
-                    let matchResult: 'won' | 'lost' | 'draw' = 'draw';
-                    if (homeGoals > awayGoals) {
-                        winnerCountry = match.homeTeam;
-                        loserCountry = match.awayTeam;
-                        matchResult = 'won';
-                    } else if (awayGoals > homeGoals) {
-                        winnerCountry = match.awayTeam;
-                        loserCountry = match.homeTeam;
-                        matchResult = 'won';
-                    }
-
-                    let winnerPlayer = countryA === winnerCountry ? playerA : playerB;
-                    let loserPlayer = countryA === loserCountry ? playerA : playerB;
-                    
-                    if (matchResult === 'draw') {
-                        winnerPlayer = playerA;
-                        loserPlayer = playerB;
-                    }
-
-                    const competitionName = (internationalTournament?.type === 'WorldCup' || match.id.includes('ucl') || (week === 10 && currentYear % 4 === 1 && currentYear > 1)) ? 'World Cup' : 'Euros';
-                    const roundName = match.stage || 'Group Stage';
-                    
-                    try {
-                        const rivalry = await getTeammateTournamentRivalry(
-                            { name: loserPlayer.name, personality: loserPlayer.personality, nationality: loserPlayer.nationality },
-                            { name: winnerPlayer.name, personality: winnerPlayer.personality, nationality: winnerPlayer.nationality },
-                            competitionName as any,
-                            roundName as any,
-                            matchResult,
-                            'full-match'
-                        );
-
-                        if (rivalry.riftSeverity !== 'none') {
-                            setTeams(prevTeams => {
-                                const nextTeams = { ...prevTeams };
-                                const updatedPlayers = nextTeams[userTeamName].players.map(p => {
-                                    if (p.name === playerA.name) {
-                                        const effect: PlayerEffect = {
-                                            type: 'InternationalRift',
-                                            severity: rivalry.riftSeverity as 'minor' | 'moderate' | 'serious',
-                                            with: playerB.name,
-                                            message: rivalry.reason,
-                                            until: week + (rivalry.duration || 6)
-                                        };
-                                        return { ...p, effects: [...(p.effects || []), effect] };
-                                    }
-                                    if (p.name === playerB.name) {
-                                        const effect: PlayerEffect = {
-                                            type: 'InternationalRift',
-                                            severity: rivalry.riftSeverity as 'minor' | 'moderate' | 'serious',
-                                            with: playerA.name,
-                                            message: rivalry.reason,
-                                            until: week + (rivalry.duration || 6)
-                                        };
-                                        return { ...p, effects: [...(p.effects || []), effect] };
-                                    }
-                                    return p;
-                                });
-                                nextTeams[userTeamName].players = updatedPlayers;
-                                return nextTeams;
-                            });
-
-                            const newsId = Date.now() + Math.floor(Math.random() * 1000);
-                            setNews(prevNews => [
-                                {
-                                    id: newsId,
-                                    week: week,
-                                    title: `Feud Alert: ${playerA.name} vs ${playerB.name}`,
-                                    body: `Tension has erupted between ${userTeamName} teammates ${playerA.name} and ${playerB.name} following the match between ${countryA} and ${countryB}. Reason: ${rivalry.reason}`,
-                                    type: 'serious-rift',
-                                    riftDecision: {
-                                        riftPlayerA: playerA.name,
-                                        riftPlayerB: playerB.name
-                                    }
-                                },
-                                ...prevNews
-                            ].slice(0, 1000));
-                        } else {
-                            setTeams(prevTeams => {
-                                const nextTeams = { ...prevTeams };
-                                const updatedPlayers = nextTeams[userTeamName].players.map(p => {
-                                    if (p.name === playerA.name) {
-                                        const effect: PlayerEffect = {
-                                            type: 'TeammateBond',
-                                            with: playerB.name,
-                                            message: `Strong bond developed on international duty: ${rivalry.reason}`,
-                                            until: week + 8
-                                        };
-                                        return { ...p, effects: [...(p.effects || []), effect] };
-                                    }
-                                    if (p.name === playerB.name) {
-                                        const effect: PlayerEffect = {
-                                            type: 'TeammateBond',
-                                            with: playerA.name,
-                                            message: `Strong bond developed on international duty: ${rivalry.reason}`,
-                                            until: week + 8
-                                        };
-                                        return { ...p, effects: [...(p.effects || []), effect] };
-                                    }
-                                    return p;
-                                });
-                                nextTeams[userTeamName].players = updatedPlayers;
-                                return nextTeams;
-                            });
-
-                            const newsId = Date.now() + Math.floor(Math.random() * 1000);
-                            setNews(prevNews => [
-                                {
-                                    id: newsId,
-                                    week: week,
-                                    title: `Teammate Bond: ${playerA.name} & ${playerB.name}`,
-                                    body: `A strong mutual respect has blossomed between ${playerA.name} and ${playerB.name} after sharing the pitch internationally.`,
-                                    type: 'teammate-bond'
-                                },
-                                ...prevNews
-                            ].slice(0, 1000));
-                        }
-                    } catch (e) {
-                        console.error("Failed to generate teammate rivalry", e);
-                    }
-                }
-            }
+    const runFriendlyInternationalBreak = (week: number) => {
+        const nationalTeams = hydrateNationalTeamsFromCareer(generateWorldCupStructure(), teamsRef.current);
+        const names = Object.keys(nationalTeams).sort((a, b) => hashSeed(`${currentYear}|${week}|${a}`) - hashSeed(`${currentYear}|${week}|${b}`));
+        const played = [];
+        for (let i = 0; i + 1 < names.length; i += 2) {
+            const id = `friendly-${currentYear}-${week}-${i}`;
+            const result = simulateQuickMatch(nationalTeams[names[i]], nationalTeams[names[i + 1]], id);
+            played.push({ id, week, league: 'International' as const, homeTeam: names[i], awayTeam: names[i + 1], played: true, score: `${result.homeGoals}-${result.awayGoals}`, events: result.events, participantNames: result.participantNames, goalkeeperNames: result.goalkeeperNames });
         }
+        processTeammateRivalries(played, week, nationalTeams, 'Friendly');
+        setInternationalTournament({ type: 'Friendly', teams: nationalTeams, fixtures: played, leagueTable: [] });
+        setNews(prev => [{ id: hashSeed(`international-return-${currentYear}-${week}`), week, title: 'International break: return report', body: `${played.length} simulated international friendlies completed. Actual selected players and scorer events are retained; squad incidents appear below. Roster source pool: ${NATIONAL_ROSTER_SNAPSHOT_DATE}; this is a game simulation, not live football results.`, type: 'tournament-result' }, ...prev].slice(0, 1000));
     };
 
     const simulateKnockoutRoundBackground = (
@@ -862,7 +805,7 @@ export default function App() {
                 ...f,
                 played: true,
                 score: `${res.homeGoals}-${res.awayGoals}`,
-                penaltyWinner: res.penaltyWinner
+                penaltyWinner: res.penaltyWinner, penalties: res.penalties, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames
             });
             const isHomeWinner = res.penaltyWinner ? res.penaltyWinner === 'home' : res.homeGoals > res.awayGoals;
             winners.push(isHomeWinner ? f.homeTeam : f.awayTeam);
@@ -871,7 +814,7 @@ export default function App() {
     };
 
     const runBackgroundTournamentWeek10 = async (tournamentType: 'Euros' | 'WorldCup') => {
-        const intTeams = tournamentType === 'Euros' ? generateEurosStructure() : generateExpandedWorldCupStructure();
+        const intTeams = hydrateNationalTeamsFromCareer(tournamentType === 'Euros' ? generateEurosStructure() : generateExpandedWorldCupStructure(), teamsRef.current);
         const groups = tournamentType === 'Euros' 
             ? ['A', 'B', 'C', 'D', 'E', 'F'] 
             : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
@@ -924,7 +867,7 @@ export default function App() {
             const res = simulateQuickMatch(intTeams[f.homeTeam], intTeams[f.awayTeam], f.id);
             updateIntTeam(intTable, f.homeTeam, res.homeGoals, res.awayGoals);
             updateIntTeam(intTable, f.awayTeam, res.awayGoals, res.homeGoals);
-            return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` };
+            return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames };
         });
 
         let qualifiedTeams: string[] = [];
@@ -947,7 +890,7 @@ export default function App() {
             leagueTable: intTable
         });
 
-        await processTeammateRivalries(simulatedFixtures, 10);
+        await processTeammateRivalries(simulatedFixtures, 10, intTeams, tournamentType);
 
         const newsBody = `The ${tournamentType} Group Stage has finished! A total of ${simulatedFixtures.length} matches were simulated in the background. ${qualifiedTeams.length} teams qualify for the knockout stage.`;
         setNews(prev => [{
@@ -980,8 +923,8 @@ export default function App() {
             currentTourney.fixtures = allNewFixtures;
             setInternationalTournament(currentTourney);
 
-            await processTeammateRivalries(simR16, 20);
-            await processTeammateRivalries(simQF, 20);
+            await processTeammateRivalries(simR16, 20, currentTourney.teams, currentTourney.type);
+            await processTeammateRivalries(simQF, 20, currentTourney.teams, currentTourney.type);
 
             const body = `Euros Quarter-Finals completed! Advancing to the Semi-Finals: ${qfWinners.join(', ')}`;
             setNews(prev => [{
@@ -1010,9 +953,9 @@ export default function App() {
             currentTourney.fixtures = allNewFixtures;
             setInternationalTournament(currentTourney);
 
-            await processTeammateRivalries(simR32, 20);
-            await processTeammateRivalries(simR16, 20);
-            await processTeammateRivalries(simQF, 20);
+            await processTeammateRivalries(simR32, 20, currentTourney.teams, currentTourney.type);
+            await processTeammateRivalries(simR16, 20, currentTourney.teams, currentTourney.type);
+            await processTeammateRivalries(simQF, 20, currentTourney.teams, currentTourney.type);
 
             const body = `World Cup Quarter-Finals completed! Advancing to the Semi-Finals: ${qfWinners.join(', ')}`;
             setNews(prev => [{
@@ -1041,10 +984,10 @@ export default function App() {
         allNewFixtures.push(...filteredFixtures, ...simSF, ...simFinal);
         
         currentTourney.fixtures = allNewFixtures;
-        setInternationalTournament(null);
+        setInternationalTournament(currentTourney);
 
-        await processTeammateRivalries(simSF, 30);
-        await processTeammateRivalries(simFinal, 30);
+        await processTeammateRivalries(simSF, 30, currentTourney.teams, currentTourney.type);
+        await processTeammateRivalries(simFinal, 30, currentTourney.teams, currentTourney.type);
 
         const champion = finalWinner[0];
         const newsBody = `The tournament is over! ${champion} are the champions of the ${currentTourney.type}! They defeated ${sfWinners.find(w => w !== champion)} in the Final.`;
@@ -1056,27 +999,6 @@ export default function App() {
             type: 'tournament-result'
         }, ...prev]);
         
-        setTeams(prev => {
-            const updated = { ...prev };
-            Object.keys(updated).forEach(tName => {
-                updated[tName].players = updated[tName].players.map(p => {
-                    if (p.nationality === champion) {
-                        const effect: PlayerEffect = {
-                            type: 'PostTournamentMorale',
-                            morale: 'Winner',
-                            message: `Winner of ${currentTourney.type} with ${champion}!`,
-                            until: currentWeek + 10
-                        };
-                        return {
-                            ...p,
-                            effects: [...p.effects, effect]
-                        };
-                    }
-                    return p;
-                });
-            });
-            return updated;
-        });
     };
 
     const requestPressQuestions = async () => {
@@ -1100,7 +1022,7 @@ export default function App() {
     const proceedToNextWeek = async (snapshot?: { teams: Record<string, Team>; managerReputation: number }) => {
         const activeTeams = snapshot?.teams || teams;
         const activeManagerReputation = snapshot?.managerReputation ?? managerReputation;
-        if (currentWeek >= weeksInSeason) {
+        if (shouldRollClubSeason(gameMode, currentWeek, weeksInSeason)) {
             if (gameMode === 'Club') {
                 const nextYear = currentYear + 1;
                 setCurrentYear(nextYear);
@@ -1339,14 +1261,14 @@ export default function App() {
             if (f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName) {
                 if (f.isKnockout) {
                     const res = simulateKnockoutQuickMatch(activeTeams[f.homeTeam], activeTeams[f.awayTeam], f.id);
-                    results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner });
-                    return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner };
+                    results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner, penalties: res.penalties, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames });
+                    return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner, penalties: res.penalties, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames };
                 } else {
                     const res = simulateQuickMatch(activeTeams[f.homeTeam], activeTeams[f.awayTeam], f.id);
-                    results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` });
+                    results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames });
                     updateTeam(updatedTable, f.homeTeam, res.homeGoals, res.awayGoals);
                     updateTeam(updatedTable, f.awayTeam, res.awayGoals, res.homeGoals);
-                    return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}` };
+                    return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames };
                 }
             }
             if (f.week === currentWeek && (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && matchState) {
@@ -1354,7 +1276,10 @@ export default function App() {
                     ...f, 
                     played: true, 
                     score: `${matchState.homeScore}-${matchState.awayScore}`,
-                    penaltyWinner: matchState.penaltyWinner as 'home' | 'away' | undefined
+                    penaltyWinner: matchState.penaltyWinner as 'home' | 'away' | undefined, penalties: matchState.penalties,
+                    events: matchState.events,
+                    participantNames: mergeMatchParticipants(f, matchState.events, teams[f.homeTeam], teams[f.awayTeam]),
+                    goalkeeperNames: f.goalkeeperNames || { home: teams[f.homeTeam].players.find(p => p.isStarter && p.position === 'GK')?.name, away: teams[f.awayTeam].players.find(p => p.isStarter && p.position === 'GK')?.name },
                 };
             }
             return f;
@@ -1374,7 +1299,7 @@ export default function App() {
                         body: `Your World Cup campaign with ${userTeamName} ends in the Group Stage. You have been sacked and will need to find a club job.`,
                         type: 'tournament-result'
                     }, ...prev]);
-                    transitionToClubCareer(finalRep);
+                    transitionToClubCareer(finalRep, nextFixtures);
                     setIsLoading(false);
                     return;
                 }
@@ -1411,7 +1336,7 @@ export default function App() {
                         body: `Your World Cup campaign with ${userTeamName} ends in the Round of 32. You transition to your club management career.`,
                         type: 'tournament-result'
                     }, ...prev]);
-                    transitionToClubCareer(finalRep);
+                    transitionToClubCareer(finalRep, nextFixtures);
                     setIsLoading(false);
                     return;
                 }
@@ -1470,7 +1395,7 @@ export default function App() {
                         body: `Your World Cup campaign with ${userTeamName} ends in the Round of 16. You transition to your club management career.`,
                         type: 'tournament-result'
                     }, ...prev]);
-                    transitionToClubCareer(finalRep);
+                    transitionToClubCareer(finalRep, nextFixtures);
                     setIsLoading(false);
                     return;
                 }
@@ -1529,7 +1454,7 @@ export default function App() {
                         body: `Your World Cup campaign with ${userTeamName} ends in the Quarter-Finals. You transition to your club management career.`,
                         type: 'tournament-result'
                     }, ...prev]);
-                    transitionToClubCareer(finalRep);
+                    transitionToClubCareer(finalRep, nextFixtures);
                     setIsLoading(false);
                     return;
                 }
@@ -1588,7 +1513,7 @@ export default function App() {
                         body: `Your World Cup campaign with ${userTeamName} ends in the Semi-Finals. You transition to your club management career.`,
                         type: 'tournament-result'
                     }, ...prev]);
-                    transitionToClubCareer(finalRep);
+                    transitionToClubCareer(finalRep, nextFixtures);
                     setIsLoading(false);
                     return;
                 }
@@ -1653,7 +1578,7 @@ export default function App() {
                             : `So close! ${userTeamName} finished as World Cup runners-up. Your managerial career is off to a strong start.`,
                         type: 'tournament-result'
                     }, ...prev]);
-                    transitionToClubCareer(finalRep);
+                    transitionToClubCareer(finalRep, nextFixtures);
                     setIsLoading(false);
                     return;
                 }
@@ -1663,49 +1588,7 @@ export default function App() {
         setFixtures(nextFixtures);
         setLeagueTable(updatedTable);
 
-        // --- Rift/Unhappy check and Transfer Request generation ---
         let updatedBids = [...incomingBids];
-        let riftTransferRequestedPlayers: string[] = [];
-
-        if (gameMode === 'Club' && userTeamName && activeTeams[userTeamName]) {
-            setTeams(prevTeams => {
-                const nextTeams = { ...prevTeams };
-                const userClub = nextTeams[userTeamName];
-                userClub.players = userClub.players.map(p => {
-                    const hasSeriousRift = (p.effects || []).some(e => 
-                        (e.type === 'InternationalRift' && e.severity === 'serious') || 
-                        e.type === 'BadChemistry'
-                    );
-
-                    const unresolvedRiftFor4Weeks = (p.effects || []).some(e => 
-                        (e.type === 'BadChemistry' && (e.until - currentWeek) <= 4) ||
-                        (e.type === 'InternationalRift' && e.severity === 'serious' && (e.until - currentWeek) <= 2)
-                    );
-
-                    if (hasSeriousRift && unresolvedRiftFor4Weeks && !p.transferRequested) {
-                        riftTransferRequestedPlayers.push(p.name);
-                        return { ...p, transferRequested: true };
-                    }
-                    return p;
-                });
-                return nextTeams;
-            });
-        }
-
-        // Post transfer request news cards
-        riftTransferRequestedPlayers.forEach(pName => {
-            setNews(prevNews => [
-                {
-                    id: Date.now() + Math.floor(Math.random() * 1000),
-                    week: currentWeek,
-                    title: `Transfer Request: ${pName}`,
-                    body: `${pName} has formally requested a transfer from ${userTeamName} due to ongoing dressing room tension and unresolved feuds.`,
-                    type: 'player-departure'
-                },
-                ...prevNews
-            ].slice(0, 1000));
-            logger.warn(`Transfer request submitted by ${pName} at ${userTeamName}.`);
-        });
 
         // --- Increment pending weeks on current bids and filter expired ones ---
         updatedBids = updatedBids.map(b => ({ ...b, weeksPending: b.weeksPending + 1 }));
@@ -1798,10 +1681,7 @@ export default function App() {
             }
         }
 
-        if (gameMode === 'Club' && INTERNATIONAL_BREAK_WEEKS.includes(nextW)) {
-            const summary = await getInternationalBreakSummary(nextW);
-            setNews(prev => [{ id: Date.now(), week: nextW, title: summary.newsTitle, body: summary.newsBody, type: 'call-up' }, ...prev]);
-        }
+        if (gameMode === 'Club' && INTERNATIONAL_BREAK_WEEKS.includes(nextW) && !(currentYear % 4 === 2 || (currentYear % 4 === 1 && currentYear > 1))) runFriendlyInternationalBreak(nextW);
         
         setTeams(prev => {
             const newTeams = { ...prev };
@@ -2073,6 +1953,9 @@ export default function App() {
             return;
         }
 
+        const evidence = kickoffParticipants(teams[currentFixture.homeTeam], teams[currentFixture.awayTeam]);
+        setFixtures(prev => prev.map(f => f.id === currentFixture.id ? { ...f, ...evidence } : f));
+        setCurrentFixture(f => f ? { ...f, ...evidence } : f);
         setError(null);
         setMatchState({ currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: "Kick off.", simulationSeed: hashSeed(`${currentFixture.id}|${currentWeek}|${currentFixture.homeTeam}|${currentFixture.awayTeam}`), sessionId: `${currentFixture.id}-${Date.now()}` });
         setGameState(GameState.PLAYING); 
@@ -2110,6 +1993,10 @@ export default function App() {
         const matchState = completedMatch;
         setMatchState({ ...completedMatch, isFinished: true });
         setGameState(GameState.POST_MATCH);
+        if (gameMode === 'Club') advanceClubRelationships(currentYear, currentWeek, [{ fixture: fixtures.find(f => f.id === currentFixture.id) || currentFixture, events: completedMatch.events }]);
+        setFixtures(prev => prev.map(f => f.id === currentFixture.id ? { ...f, played: true, score: `${completedMatch.homeScore}-${completedMatch.awayScore}`, penaltyWinner: completedMatch.penaltyWinner as 'home' | 'away' | undefined, penalties: completedMatch.penalties, events: completedMatch.events,
+            participantNames: mergeMatchParticipants(f, completedMatch.events, teams[f.homeTeam], teams[f.awayTeam]),
+            goalkeeperNames: { home: teams[f.homeTeam].players.find(p => p.isStarter && p.position === 'GK')?.name, away: teams[f.awayTeam].players.find(p => p.isStarter && p.position === 'GK')?.name } } : f));
 
         const isHome = currentFixture.homeTeam === userTeamName;
         const userGoals = isHome ? matchState.homeScore : matchState.awayScore;
@@ -2204,7 +2091,7 @@ export default function App() {
             const updatedPlayers = t.players.map(p => { if (p.name === playerIn.name) return { ...p, isStarter: true }; if (p.name === playerOut.name) return { ...p, isStarter: false }; return p; });
             return { ...prev, [userTeamName]: { ...t, players: updatedPlayers } };
         });
-        setMatchState(prev => prev ? ({ ...prev, subsUsed: { home: isHome ? prev.subsUsed.home + 1 : prev.subsUsed.home, away: !isHome ? prev.subsUsed.away + 1 : prev.subsUsed.away }, events: [...prev.events, { id: Date.now(), minute: prev.currentMinute, type: 'sub', description: `SUB: ${playerIn.name} ON, ${playerOut.name} OFF`, teamName: userTeamName }] }) : null);
+        setMatchState(prev => prev ? ({ ...prev, subsUsed: { home: isHome ? prev.subsUsed.home + 1 : prev.subsUsed.home, away: !isHome ? prev.subsUsed.away + 1 : prev.subsUsed.away }, events: [...prev.events, { id: Date.now(), minute: prev.currentMinute, type: 'sub', player: playerIn.name, playerIn: playerIn.name, playerOut: playerOut.name, description: `SUB: ${playerIn.name} ON, ${playerOut.name} OFF`, teamName: userTeamName }] }) : null);
     };
 
     const handleStartPlayerTalk = async (player: Player, context: 'transfer' | 'renewal') => {
@@ -2278,99 +2165,32 @@ export default function App() {
         setPlayerTalk(null); setTalkResult(null); setPendingContractTerms(null); setError(null); setAppScreen(AppScreen.GAMEPLAY);
     };
 
-    const handleRiftDecision = (newsId: number, playerAName: string, playerBName: string, choice: 'bench-a' | 'bench-b' | 'risk-it') => {
-        let finalTeams: any = null;
-        let finalNews: any = null;
-
-        setTeams(prevTeams => {
-            if (!userTeamName || !prevTeams[userTeamName]) return prevTeams;
-            const nextTeams = { ...prevTeams };
-            const updatedPlayers = nextTeams[userTeamName].players.map(p => {
-                if (p.name === playerAName) {
-                    let nextEffects = (p.effects || []).filter(e => !(e.type === 'InternationalRift' && e.with === playerBName));
-                    let nextForm = p.form;
-                    if (choice === 'bench-a') {
-                        nextEffects.push({
-                            type: 'PostTournamentMorale',
-                            morale: 'Disappointed',
-                            message: `Benched due to rift with ${playerBName}`,
-                            until: currentWeek + 4
-                        });
-                    } else if (choice === 'risk-it') {
-                        nextEffects.push({
-                            type: 'BadChemistry',
-                            with: playerBName,
-                            message: `Feud on the pitch with ${playerBName}`,
-                            until: currentWeek + 8
-                        });
-                        nextForm = Math.max(0, nextForm - 20);
-                    }
-                    return { ...p, effects: nextEffects, form: nextForm };
-                }
-                if (p.name === playerBName) {
-                    let nextEffects = (p.effects || []).filter(e => !(e.type === 'InternationalRift' && e.with === playerAName));
-                    let nextForm = p.form;
-                    if (choice === 'bench-b') {
-                        nextEffects.push({
-                            type: 'PostTournamentMorale',
-                            morale: 'Disappointed',
-                            message: `Benched due to rift with ${playerAName}`,
-                            until: currentWeek + 4
-                        });
-                    } else if (choice === 'risk-it') {
-                        nextEffects.push({
-                            type: 'BadChemistry',
-                            with: playerAName,
-                            message: `Feud on the pitch with ${playerAName}`,
-                            until: currentWeek + 8
-                        });
-                        nextForm = Math.max(0, nextForm - 20);
-                    }
-                    return { ...p, effects: nextEffects, form: nextForm };
-                }
-                return p;
-            });
-            nextTeams[userTeamName].players = updatedPlayers;
-            finalTeams = nextTeams;
-            return nextTeams;
-        });
-
-        setNews(prevNews => {
-            const updatedNews = prevNews.map(item => {
-                if (item.id === newsId && item.riftDecision) {
-                    let effect = '';
-                    if (choice === 'bench-a') {
-                        effect = `${playerAName} was benched and is disappointed. ${playerBName} feels vindicated. The rift has cooled down.`;
-                    } else if (choice === 'bench-b') {
-                        effect = `${playerBName} was benched and is disappointed. ${playerAName} feels vindicated. The rift has cooled down.`;
-                    } else {
-                        effect = `Both players played. Tactical chemistry is severely penalized (-30) and their form has dropped due to high tension!`;
-                    }
-                    return {
-                        ...item,
-                        riftDecision: {
-                            ...item.riftDecision,
-                            choice,
-                            resultEffect: effect
-                        }
-                    };
-                }
-                return item;
-            });
-            finalNews = updatedNews;
-            return updatedNews;
-        });
-
-        setTimeout(() => {
-            if (userTeamName && finalTeams && finalNews) {
-                const stateToSave = {
-                    userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
-                    teams: finalTeams, leagueTable, fixtures, news: finalNews, weeklyResults, appScreen, gameState,
-                    managerReputation, transferMarket, internationalTournament, incomingBids, careerHistory
-                };
-                localStorage.setItem('gfm_save_v1', JSON.stringify(stateToSave));
-            }
-        }, 100);
+    const handleRiftDecision = async (newsId: number, _playerAName: string, _playerBName: string, choice: 'bench-a' | 'bench-b' | 'risk-it' | 'mediate', managerAnswer?: string) => {
+        const item = news.find(n => n.id === newsId);
+        const id = item?.riftDecision?.relationshipId;
+        const incident = relationshipsRef.current.find(i => i.id === id && i.clubName === userTeamName);
+        if (!incident) throw new Error('This legacy rift has no grounded incident ledger. Its existing effects are preserved; no fabricated mediation was applied.');
+        const clubName = userTeamName;
+        const generation = careerGenerationRef.current;
+        const alreadyMediated = incident.attempts.some(a => a.action === 'mediation' && a.year === currentYear && a.week === currentWeek);
+        if (choice === 'mediate' && alreadyMediated) throw new Error('One mediation session per pair each week. Advance the career before another attempt.');
+        let interpretation;
+        let evidence = '';
+        if (choice === 'mediate') {
+            const result = await interpretRiftMediation(incident, managerAnswer || '');
+            const supportive = result.tone === 'accountable' || result.tone === 'conciliatory';
+            interpretation = { tone: result.tone === 'hostile' ? 'hostile' as const : supportive ? 'supportive' as const : 'balanced' as const, support: supportive ? 0.9 : 0.2, accountability: result.acknowledgesCause ? 1 : 0.1, specificity: result.acknowledgesCause ? 1 : 0, respect: result.tone === 'hostile' ? 0 : result.takesSides ? 0.3 : 0.9 };
+            evidence = `AI ${result.provider}: ${result.tone}. Evidence: “${result.quote}”. `;
+        }
+        const latest = relationshipsRef.current.find(i => i.id === id);
+        if (!latest || latest.clubName !== clubName || generation !== careerGenerationRef.current) throw new Error('Career changed while mediation was pending; no stale outcome applied.');
+        const transition = interveneRelationship(latest, choice === 'mediate' ? 'mediation' : choice, { year: currentYear, week: currentWeek, attemptId: `${id}|${choice}|${currentYear}|${currentWeek}`, interpretation });
+        const next = relationshipsRef.current.map(i => i.id === id ? transition.incident : i);
+        relationshipsRef.current = next; setRelationshipIncidents(next);
+        setTeams(prev => applyIncidentEffects(prev, transition.effects));
+        const attempt = transition.incident.attempts.at(-1);
+        const effect = `${evidence}${attempt?.outcome || 'No change'}. Impact ${latest.strength} → ${transition.incident.strength}/100. ${choice.startsWith('bench') ? 'Player separated; the grievance remains.' : choice === 'risk-it' ? 'Both may be selected; chemistry risk remains.' : 'Mediation is not guaranteed to resolve a severe rift.'}`;
+        setNews(prev => prev.map(n => n.id === newsId && n.riftDecision ? { ...n, riftDecision: { ...n.riftDecision, choice, resultEffect: effect } } : n));
     };
 
     const handleJobOfferDecision = (newsId: number, teamName: string, choice: 'accept' | 'decline') => {
@@ -2488,14 +2308,15 @@ export default function App() {
         setIncomingBids(prev => prev.map(b => b.id === updatedBid.id ? updatedBid : b));
     };
 
-    const worldCupTeams = NATIONAL_TEAMS.map(convertNationalTeam);
-    const clubTeams = Object.values(allTeams);
+    const worldCupTeams = Object.values(generateWorldCupStructure());
+    const clubTeams = Object.values(allTeams).filter(t => canStartAtClub(t, tutorialCompletion));
 
     const renderScreen = () => {
         switch (appScreen) {
             case AppScreen.START_SCREEN: return (
                 <StartScreen
-                    onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)}
+                    tutorialSummary={careerGateLabel(tutorialCompletion)}
+                    onSelectTeam={() => { setHasClubCareer(false); setAppScreen(AppScreen.TEAM_SELECTION); }}
                     onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)}
                     onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)}
                     onThemeSelect={(colors) => setActiveTheme(colors)}
@@ -2506,15 +2327,15 @@ export default function App() {
                         if (!raw) return null;
                         try {
                             const p = JSON.parse(raw);
-                            return { teamName: p.userTeamName, week: p.currentWeek, year: p.currentYear || 1 };
+                            return { teamName: p.userTeamName || 'Unemployed', week: p.currentWeek, year: p.currentYear || 1 };
                         } catch { return null; }
                     })()}
                 />
             );
             case AppScreen.TEAM_SELECTION: return <TeamSelectionScreen teams={clubTeams} onTeamSelect={initializeGame} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.NATIONAL_TEAM_SELECTION: return <TeamSelectionScreen teams={worldCupTeams} onTeamSelect={initializeWorldCup} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
-            case AppScreen.CREATE_MANAGER: return <CreateManagerScreen onCreate={handleCreateManager} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
-            case AppScreen.JOB_CENTRE: return <JobCentreScreen jobs={availableJobs} onApply={handleApplyForJob} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
+            case AppScreen.CREATE_MANAGER: return <CreateManagerScreen tutorialSummary={careerGateLabel(tutorialCompletion)} onCreate={handleCreateManager} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
+            case AppScreen.JOB_CENTRE: return <JobCentreScreen careerSummary={hasClubCareer ? `Earned career reputation: ${managerReputation}` : careerGateLabel(tutorialCompletion)} jobs={availableJobs} onApply={handleApplyForJob} onBack={() => setAppScreen(AppScreen.START_SCREEN)} />;
             case AppScreen.JOB_INTERVIEW: return <JobInterviewScreen interview={interview} isLoading={isLoading} error={error} jobOffer={jobOffer} onAnswerSubmit={handleJobInterviewAnswer} onFinish={(acc) => { if(acc && interview) initializeGame(interview.teamName); else setAppScreen(AppScreen.JOB_CENTRE); }} />;
             case AppScreen.TRANSFERS: return <TransfersScreen targets={transferMarket} squadPlayers={userTeam?.players ?? []} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setAppScreen(AppScreen.GAMEPLAY)} />;
             case AppScreen.PLAYER_TALK: return <PlayerTalkScreen talk={playerTalk} isLoading={isLoading} error={error} talkResult={talkResult} onAnswerSubmit={handlePlayerTalkAnswer} onFinish={handlePlayerTalkFinish} clubBudget={userTeam ? { balance: userTeam.balance, transferBudget: userTeam.transferBudget || Math.floor(userTeam.balance * 0.7), weeklyWageBill: userTeam.weeklyWageBill || userTeam.players.reduce((sum, p) => sum + p.wage, 0) } : undefined} />;
@@ -2561,6 +2382,8 @@ export default function App() {
                                 </button>
                             </div>
 
+                            {gameMode === 'Club' && <button onClick={() => setGameplayTab('international')} className="mb-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-emerald-200 flex items-center gap-2"><Globe2 size={17} aria-hidden="true" /> International duty & returns</button>}
+                            {gameplayTab === 'international' && <InternationalBreakScreen tournament={gameMode === 'WorldCup' ? { type: 'World Cup Tutorial', teams, fixtures } : internationalTournament} incidents={relationshipIncidents} clubName={userTeamName!} onOpenInbox={() => setAppScreen(AppScreen.NEWS_FEED)} />}
                             {/* Active Tab Panel */}
                             {gameplayTab === 'tactics' && (
                                 <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
@@ -2609,11 +2432,7 @@ export default function App() {
                                 </div>
                             )}
 
-                            {gameplayTab === 'news' && (
-                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-                                    <NewsScreen news={news} onRiftDecision={handleRiftDecision} onJobOfferDecision={handleJobOfferDecision} onBack={() => setGameplayTab('match')} />
-                                </div>
-                            )}
+                            {gameplayTab === 'news' && <NewsScreen news={news} onRiftDecision={handleRiftDecision} onJobOfferDecision={handleJobOfferDecision} onBack={() => setGameplayTab('match')} />}
 
                             {gameplayTab === 'scouting' && (
                                 <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
@@ -2812,7 +2631,7 @@ export default function App() {
                         </div>
                     </div>
                 );
-            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen key={pressInput?.sessionId} questionResult={pressQuestionResult ?? undefined} initialProgress={pressProgress} onProgress={setPressProgress} onRetryQuestions={() => void requestPressQuestions()} onSkip={() => { setPressInput(null); setPressQuestionResult(null); setPressProgress(null); void proceedToNextWeek(); }} onFinish={handleFinishPressConference} />;
+            case AppScreen.PRESS_CONFERENCE: return <PressConferenceScreen key={pressInput?.sessionId} questionResult={pressQuestionResult ?? undefined} initialProgress={pressProgress} onProgress={setPressProgress} onRetryQuestions={() => void requestPressQuestions()} onSkip={() => { setPressInput(null); setPressQuestionResult(null); setPressProgress(null);void proceedToNextWeek(); }} onFinish={handleFinishPressConference} />;
             default: return <StartScreen onSelectTeam={() => setAppScreen(AppScreen.TEAM_SELECTION)} onStartUnemployed={() => setAppScreen(AppScreen.CREATE_MANAGER)} onStartWorldCup={() => setAppScreen(AppScreen.NATIONAL_TEAM_SELECTION)} />;
         }
     };

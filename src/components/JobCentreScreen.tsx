@@ -7,9 +7,10 @@ interface JobCentreScreenProps {
     jobs: Job[];
     onApply: (teamName: string) => void;
     onBack: () => void;
+    careerSummary?: string;
 }
 
-const JobCentreScreen: React.FC<JobCentreScreenProps> = ({ jobs, onApply, onBack }) => {
+const JobCentreScreen: React.FC<JobCentreScreenProps> = ({ jobs, onApply, onBack, careerSummary }) => {
     const sortedJobs = [...jobs].sort((a, b) => b.prestige - a.prestige);
 
     return (
@@ -17,6 +18,7 @@ const JobCentreScreen: React.FC<JobCentreScreenProps> = ({ jobs, onApply, onBack
             <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-white mb-2">Job Centre</h2>
                 <p className="text-lg text-gray-400">The following clubs are looking for a new manager. Do you have what it takes?</p>
+                {careerSummary && <p className="mt-3 text-sm text-emerald-300" role="status">{careerSummary}</p>}
             </div>
             <div className="space-y-3">
                 {sortedJobs.map(job => (

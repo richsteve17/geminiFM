@@ -7,9 +7,10 @@ import { UserIcon } from './icons/UserIcon';
 interface CreateManagerScreenProps {
     onCreate: (name: string, experience: ExperienceLevel) => void;
     onBack: () => void;
+    tutorialSummary?: string;
 }
 
-const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onBack }) => {
+const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onBack, tutorialSummary }) => {
     const [name, setName] = useState('');
     const [selectedExpId, setSelectedExpId] = useState(EXPERIENCE_LEVELS[0].id);
 
@@ -25,7 +26,8 @@ const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onB
         <div className="mt-12 max-w-2xl mx-auto px-4">
             <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-white mb-2">Create Your Profile</h2>
-                <p className="text-lg text-gray-400">Define your managerial background to see who will hire you.</p>
+                <p className="text-lg text-gray-400">Your World Cup tutorial record determines starting job access.</p>
+                {tutorialSummary && <p className="text-sm text-emerald-300 mt-3">{tutorialSummary}</p>}
             </div>
 
             <form onSubmit={handleSubmit} className="bg-gray-800/50 rounded-xl shadow-lg border border-gray-700 p-6 md:p-8">
@@ -51,7 +53,7 @@ const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onB
 
                 <div className="mb-8">
                     <label className="block text-sm font-bold text-gray-300 mb-4">
-                        Past Playing Experience
+                        Past Playing Experience — profile only, not an unlock
                     </label>
                     <div className="space-y-3">
                         {EXPERIENCE_LEVELS.map(level => (
@@ -72,7 +74,7 @@ const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onB
                                         {level.label}
                                     </span>
                                     <span className="block text-sm text-gray-400 mt-1">
-                                        {level.description}
+                                        Profile background only. Starting clubs are determined by your World Cup tutorial record.
                                     </span>
                                 </div>
                             </label>

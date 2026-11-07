@@ -96,39 +96,36 @@ export const analyzeTactics = (starters: Player[], formation: Formation): Tactic
 
     // Check for serious chemistry rifts or bad chemistry between any two starters
     const feudWarnings = new Set<string>();
+    let bondBonus = 0;
     for (let i = 0; i < starters.length; i++) {
         const pA = starters[i];
         for (let j = i + 1; j < starters.length; j++) {
             const pB = starters[j];
-            const pAHasRiftWithB = (pA.effects || []).some(e =>
-                (e.type === 'InternationalRift' && e.severity === 'serious' && e.with === pB.name) ||
-                (e.type === 'BadChemistry' && e.with === pB.name)
-            );
-            const pBHasRiftWithA = (pB.effects || []).some(e =>
-                (e.type === 'InternationalRift' && e.severity === 'serious' && e.with === pA.name) ||
-                (e.type === 'BadChemistry' && e.with === pA.name)
-            );
+            const pairEffects = [...(pA.effects || []).filter(e => 'with' in e && e.with === pB.name), ...(pB.effects || []).filter(e => 'with' in e && e.with === pA.name)];
+            const penalties = pairEffects.map(e => e.type === 'BadChemistry' ? ('relationshipId' in e && 'strength' in e ? Math.max(1, Math.round(Math.min(100, Number(e.strength) || 0) * 0.2)) : 30) : e.type === 'InternationalRift' ? ({ mild: 2, minor: 4, moderate: 12, serious: 30 }[e.severity]) : 0);
+            const penalty = Math.max(0, ...penalties);
 
-            if (pAHasRiftWithB || pBHasRiftWithA) {
+            if (penalty > 0) {
                 const warningKey = [pA.name, pB.name].sort().join(" vs ");
                 if (!feudWarnings.has(warningKey)) {
                     feudWarnings.add(warningKey);
-                    efficiencyScore -= 30;
-                    feedback.push(`⚠️ Feud Alert: ${pA.name} and ${pB.name} have a serious rift and refuse to cooperate on the pitch!`);
+                    efficiencyScore -= penalty;
+                    feedback.push(`${penalty >= 30 ? 'Feud Alert' : 'Relationship tension'}: ${pA.name} and ${pB.name} — cooperation penalty ${penalty}.`);
                 }
             }
 
             const pAHasBondWithB = (pA.effects || []).some(e => e.type === 'TeammateBond' && e.with === pB.name);
             const pBHasBondWithA = (pB.effects || []).some(e => e.type === 'TeammateBond' && e.with === pA.name);
-            if (pAHasBondWithB || pBHasBondWithA) {
+            if (penalty === 0 && (pAHasBondWithB || pBHasBondWithA)) {
                 const bondKey = [pA.name, pB.name].sort().join(" bond ");
                 if (!feudWarnings.has(bondKey)) {
                     feudWarnings.add(bondKey);
-                    efficiencyScore += 5;
+                    bondBonus += 5;
                 }
             }
         }
     }
+    efficiencyScore += Math.min(12, bondBonus);
 
     // Check for unavailable players (Injured, Suspended, SentOff) in the starting lineup
     starters.forEach(p => {
@@ -150,7 +147,7 @@ export const analyzeTactics = (starters: Player[], formation: Formation): Tactic
     else feedback.push("The tactical balance looks solid.");
 
     return {
-        score: Math.max(0, efficiencyScore),
+        score: Math.min(100, Math.max(0, efficiencyScore)),
         assignments: assignments, // Order is preserved
         feedback
     };

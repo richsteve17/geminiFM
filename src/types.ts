@@ -74,6 +74,9 @@ export interface HistoricalSeasonStats {
 
 export interface Player {
   name: string;
+  /** Provider-scoped ID; shared by national and club copies when verified. */
+  externalId?: string;
+  nationalTeamCode?: string;
   position: PlayerPosition;
   rating: number;
   age: number;
@@ -125,6 +128,7 @@ export interface PromiseData {
 
 export interface Team {
   name: string;
+  countryCode?: string;
   shortName?: string;
   league: LeagueTier;
   players: Player[];
@@ -165,6 +169,16 @@ export interface Tournament {
 
 export type TournamentStage = 'Group Stage' | 'League Phase' | 'Play-offs' | 'Round of 32' | 'Round of 16' | 'Quarter Final' | 'Semi Final' | 'Final';
 
+export interface MatchPenalty {
+    id: string | number;
+    teamName: string;
+    taker: string;
+    goalkeeper?: string;
+    outcome: 'scored' | 'saved' | 'missed';
+    shootout?: boolean;
+    decisive?: boolean;
+}
+
 export interface Fixture {
   id: string;
   week: number;
@@ -178,6 +192,11 @@ export interface Fixture {
   aggregateScore?: string;
   firstLegScore?: string;
   penaltyWinner?: 'home' | 'away';
+  events?: MatchEvent[];
+  participantNames?: { home: string[]; away: string[] };
+  goalkeeperNames?: { home?: string; away?: string };
+  tournamentId?: string;
+  penalties?: MatchPenalty[];
 }
 
 export interface LeagueTableEntry {
@@ -200,6 +219,10 @@ export interface MatchEvent {
     type: 'goal' | 'sub' | 'injury' | 'card' | 'whistle' | 'commentary';
     teamName?: string;
     player?: string;
+    isPenalty?: boolean;
+    goalkeeper?: string;
+    playerIn?: string;
+    playerOut?: string;
     description: string;
     scoreAfter?: string;
     cardType?: 'yellow' | 'red';
@@ -233,6 +256,7 @@ export interface MatchState {
     /** Monotonic session key used to reject stale asynchronous presentation work. */
     sessionId?: string;
     presentation?: { mode: 'ai' | 'local'; reason?: string; provider?: string };
+    penalties?: MatchPenalty[];
 }
 
 export enum GameState {
@@ -290,10 +314,12 @@ export interface NewsItem {
     title: string;
     body: string;
     type: string;
+    relationshipId?: string;
     riftDecision?: {
         riftPlayerA: string;
         riftPlayerB: string;
-        choice?: 'bench-a' | 'bench-b' | 'risk-it';
+        relationshipId?: string;
+        choice?: 'bench-a' | 'bench-b' | 'risk-it' | 'mediate';
         resultEffect?: string;
     };
     jobOfferDecision?: {

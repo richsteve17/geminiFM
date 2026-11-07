@@ -9,8 +9,8 @@ interface TeamDetailsProps {
     gameState: GameState;
     managerReputation: number;
     nextFixture: Fixture | null;
-    activeTab: 'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors';
-    onNavigateToTab: (tab: 'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors') => void;
+    activeTab: 'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors' | 'international';
+    onNavigateToTab: (tab: 'match' | 'tactics' | 'news' | 'scouting' | 'scouting_market' | 'transfers' | 'honors' | 'international') => void;
     onResign?: () => void;
 }
 
@@ -27,6 +27,7 @@ const navigationItems: Array<{
     { tab: 'scouting', label: 'Scout Network', Icon: Search },
     { tab: 'transfers', label: 'Negotiations', Icon: Handshake },
     { tab: 'honors', label: 'Trophy Room', Icon: Trophy },
+    { tab: 'international', label: 'International Returns', Icon: Plane },
 ];
 
 const TeamDetails: React.FC<TeamDetailsProps> = ({

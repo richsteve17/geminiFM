@@ -142,7 +142,7 @@ export const generateSwissFixtures = (teams: Team[]): Fixture[] => {
 };
 
 // "The Smoking Gun": Deterministic Math Engine
-export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team, fixtureKey = ''): { homeGoals: number, awayGoals: number } => {
+export const simulateQuickMatch = (homeTeam: Team, awayTeam: Team, fixtureKey = '') => {
     return simulateDeterministicQuickMatch(homeTeam, awayTeam, fixtureKey);
 };
 
@@ -173,12 +173,14 @@ export const calculatePlayerDevelopment = (player: Player, matchPerformance: num
 
     // Calculate potential rating change
     const potentialRatingChange = (potential - rating) * (growthRate / 10);
+    const relationshipPenalty = Math.min(8, Math.max(0, ...(player.effects || []).map(e => Number((e as any).trainingPenalty) || 0)));
 
     // Apply development/decline
-    rating += potentialRatingChange;
+    // A rift limits positive training gains, including for benched players. It does not cushion decline or bad results.
+    rating += potentialRatingChange > 0 ? potentialRatingChange * (1 - relationshipPenalty * 0.07) : potentialRatingChange;
 
     // Apply form influence (temporary boost/reduction)
-    rating += (form - 50) / 100; 
+    rating += (form - 50) / 100;
 
     // Ensure rating stays within bounds (e.g., 1-100)
     rating = Math.max(1, Math.min(100, rating));

@@ -45,3 +45,10 @@ All AI requests must transit the validated `/api/ai` gateway.
 - **Lineup & Availability Validations**: Match kickoff must be blocked if any starting player is marked as `Injured`, `Suspended`, or `SentOff`. Tactical report and efficiency scores must penalize starting unavailable players (e.g., `-20` points per player).
 - **Enforce In-Match Substitutions**: Mid-game swaps between starting XI and bench players must trigger an active substitution event logged on the match history, increment the `subsUsed` count, and enforce the FIFA-standard 5-substitution limit.
 - **Seasonal Statistics Archiving**: At the end of each season, current campaign player stats (Appearances, Goals, Clean Sheets, Ratings) must be archived into the player's permanent `history` list before current stats are reset for the next season, preserving year-over-year records for informed scouting.
+
+## International tutorial and return relationships
+- World Cup is the RTG tutorial. New club access uses `tutorialProgression.ts` across selectors and job paths; roleplay background is not a reputation bypass. Preserve existing careers and best completed tutorial outcomes.
+- Do not route the eight-week World Cup final through domestic season reset. Keep actual tournament fixtures, scorers, shootout attempts and substitute actors; complete other nations’ results after tutorial elimination without changing the manager’s finish.
+- National snapshots are sourced pools, not official final squads or qualification. Keep stable external IDs, source dates and game-derived values explicit. Never refresh a saved player’s stats/history/age from a new source snapshot.
+- Relationship severity must follow actual international events, stakes, club membership and participation. Shared-nationality bonds cannot cancel serious personal feuds. Mediation must validate exact answer evidence; benching is separation, not amnesia.
+- Use compact career serialization to omit duplicate national source pools, not actual saved football or relationship facts. Apply training impairment to positive development, never by damping negative performance toward zero.

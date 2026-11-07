@@ -16,9 +16,10 @@ interface StartScreenProps {
     hasSave?: boolean;
     saveMetadata?: { teamName: string; week: number; year: number; } | null;
     initialTeam?: string;
+    tutorialSummary?: string;
 }
 
-const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect, onContinue, hasSave, saveMetadata, initialTeam = 'Manchester City' }) => {
+const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemployed, onStartWorldCup, onThemeSelect, onContinue, hasSave, saveMetadata, initialTeam = 'Manchester City', tutorialSummary }) => {
     const [paidAudio, setPaidAudio] = useState(isPaidAudioEnabled());
     const [paidVideo, setPaidVideo] = useState(isPaidVideoEnabled());
     const [paidVoice, setPaidVoice] = useState(getPaidVoiceName());
@@ -128,9 +129,9 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                         <GlobeAltIcon className="w-20 h-20 text-emerald-500" />
                     </div>
                     <div className="relative z-10">
-                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5 block">Tournament Mode</span>
+                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5 block">Tutorial · Earn your RTG start</span>
                         <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-emerald-300 transition-colors">WORLD CUP</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">Fast-paced international campaign. Take charge of a nation in the ultimate tournament.</p>
+                        <p className="text-xs text-slate-400 leading-relaxed">Learn management with a nation. Your finish unlocks club opportunities; a World Cup title opens the elite tier.</p>
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
                 </button>
@@ -146,7 +147,7 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     <div className="relative z-10">
                         <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1.5 block">Career Mode</span>
                         <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-amber-300 transition-colors">CLUB CAREER</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">Select a club. Manage finances, scout wonderkids, and win league & European silverware.</p>
+                        <p className="text-xs text-slate-400 leading-relaxed">Choose from your earned starting clubs. Without the World Cup tutorial, only Championship clubs are available.</p>
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-yellow-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
                 </button>
@@ -162,11 +163,13 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
                     <div className="relative z-10">
                         <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1.5 block">Hardcore Mode</span>
                         <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-purple-300 transition-colors">ROAD TO GLORY</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">Start unemployed with zero reputation. Apply for job vacancies and sit in tough interviews.</p>
+                        <p className="text-xs text-slate-400 leading-relaxed">Start unemployed and apply for jobs. Your World Cup record determines initial opportunities—not a self-selected reputation.</p>
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
                 </button>
             </div>
+
+            {tutorialSummary && <p className="relative z-10 mb-6 max-w-3xl border border-emerald-900 rounded-lg px-4 py-3 text-sm text-slate-300" role="status">{tutorialSummary}</p>}
 
             {/* --- GRANULAR MEDIA API CONFIG SWITCHES --- */}
             <div className="z-10 bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl shadow-lg mb-8 backdrop-blur-md max-w-xl w-full mx-4 flex flex-col gap-3">

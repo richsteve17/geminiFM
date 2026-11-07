@@ -1,7 +1,8 @@
-import { GameState } from '../types';
+import { AppScreen, GameState } from '../types';
 import { ensureTeamAndPlayerFields } from '../utils';
 import { normalizePressConferenceContext, normalizePressConferenceSession, normalizePressReport } from './pressConference';
-export const CAREER_SAVE_VERSION = 2;
+import { normalizeTutorialResult } from './tutorialProgression';
+export const CAREER_SAVE_VERSION = 3;
 const object = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
 const requireText = (value: unknown, field: string) => { if (typeof value !== 'string' || !value.trim()) throw new Error(`Career save has an invalid ${field}.`); };
 const requireNumber = (value: unknown, field: string, min = -Infinity, max = Infinity) => { if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) throw new Error(`Career save has an invalid ${field}.`); };
@@ -38,7 +39,8 @@ export function migrateCareerSave(input: unknown): Record<string, any> {
     const version = input.version ?? 1;
     if (!Number.isInteger(version) || version < 1) throw new Error('Career save has an invalid version.');
     if (version > CAREER_SAVE_VERSION) throw new Error('This career was saved by a newer game version.');
-    if (!object(input.teams) || !input.userTeamName || !input.teams[input.userTeamName] || !Array.isArray(input.fixtures) || !Array.isArray(input.leagueTable)) throw new Error('Career save is missing its club, fixtures or table.');
+    const unemployed = input.gameMode === 'Club' && !input.userTeamName && input.appScreen === AppScreen.JOB_CENTRE;
+    if (!object(input.teams) || (!unemployed && (!input.userTeamName || !input.teams[input.userTeamName])) || !Array.isArray(input.fixtures) || !Array.isArray(input.leagueTable)) throw new Error('Career save is missing its club, fixtures or table.');
     requireNumber(input.currentWeek, 'career week', 1, 1000);
     for (const [name, team] of Object.entries(input.teams)) {
         if (!object(team) || !Array.isArray(team.players)) throw new Error(`Career save has an invalid squad for ${name}.`);
@@ -51,6 +53,8 @@ export function migrateCareerSave(input: unknown): Record<string, any> {
     for (const fixture of input.fixtures) {
         if (!object(fixture)) throw new Error('Career save has an invalid fixture.');
         requireText(fixture.id, 'fixture id'); requireText(fixture.homeTeam, 'home club'); requireText(fixture.awayTeam, 'away club'); requireNumber(fixture.week, 'fixture week', 0, 1000);
+        if (fixture.events !== undefined) validateEvents(fixture.events);
+        if (fixture.participantNames !== undefined && (!object(fixture.participantNames) || !['home', 'away'].every(side => Array.isArray(fixture.participantNames[side]) && fixture.participantNames[side].every((name: unknown) => typeof name === 'string' && name.length > 0)))) throw new Error('Career save has invalid national match participants.');
     }
     for (const row of input.leagueTable) { if (!object(row)) throw new Error('Career save has an invalid table row.'); requireText(row.teamName, 'table club'); requireNumber(row.points, 'table points', -100, 1000); }
     if (input.transferMarket !== undefined) { if (!Array.isArray(input.transferMarket)) throw new Error('Career save has an invalid transfer market.'); input.transferMarket.forEach(validatePlayer); }
@@ -79,6 +83,11 @@ export function migrateCareerSave(input: unknown): Record<string, any> {
     data.pendingEvents = Array.isArray(data.pendingEvents) ? data.pendingEvents.filter((event: any) => event.minute > (live?.currentMinute || 0)) : [];
     data.appliedPressEvaluationIds = Array.isArray(data.appliedPressEvaluationIds) ? data.appliedPressEvaluationIds.filter((id: any) => typeof id === 'string').slice(-1000) : [];
     data.managerReputation = Number.isFinite(data.managerReputation) ? Math.max(0, Math.min(100, data.managerReputation)) : 50;
+    if (data.tutorialCompletion !== undefined && data.tutorialCompletion !== null && !normalizeTutorialResult(data.tutorialCompletion)) throw new Error('Career save has an invalid World Cup tutorial result.');
+    data.tutorialCompletion = normalizeTutorialResult(data.tutorialCompletion);
+    data.gameMode = data.gameMode || (data.teams[data.userTeamName]?.league === 'International' ? 'WorldCup' : 'Club');
+    data.hasClubCareer = typeof data.hasClubCareer === 'boolean' ? data.hasClubCareer : data.gameMode === 'Club' && !!data.userTeamName;
+    if (data.availableJobs !== undefined && (!Array.isArray(data.availableJobs) || data.availableJobs.some((job: unknown) => !object(job) || typeof job.teamName !== 'string' || !Number.isFinite(job.prestige)))) throw new Error('Career save has invalid job opportunities.');
     if (data.pressInput) data.pressInput = normalizePressConferenceContext(data.pressInput);
     if (data.pressQuestionResult) {
         if (data.pressQuestionResult.mode === 'ai-questions') data.pressQuestionResult.session = normalizePressConferenceSession(data.pressQuestionResult.session);

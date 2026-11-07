@@ -1,4 +1,4 @@
-import type { MatchEvent, MatchState, Player, Team } from '../types';
+import type { MatchEvent, MatchPenalty, MatchState, Player, Team } from '../types';
 import { analyzeTactics } from './tactics';
 import { getRivalry } from './footballCulture';
 
@@ -42,7 +42,8 @@ function teamStrength(team: Team) {
         const condition = clamp(player.condition ?? 100, 25, 100) / 100;
         // Existing saves and UI use 0..100 form, with neutral form 50.
         const form = (clamp(player.form ?? 50, 0, 100) - 50) * 0.09;
-        return sum + player.rating * (0.65 + condition * 0.35) + form;
+        const relationshipForm = Math.max(0, ...(player.effects || []).map(e => Number((e as Player['effects'][number] & { formPenalty?: number }).formPenalty) || 0));
+        return sum + player.rating * (0.65 + condition * 0.35) + form - Math.min(6, relationshipForm);
     }, 0) / selected.length;
     return average * (0.72 + efficiency * 0.0028) - Math.max(0, 11 - selected.length) * 2;
 }
@@ -95,16 +96,17 @@ export function simulateDeterministicSegment(homeTeam: Team, awayTeam: Team, sta
             const name = attacker?.name || 'The forward';
             const shot = sample(seed, minute, 10) < 0.72;
             const crossing = sample(seed, minute, 11) < 0.3;
+            const isPenalty = shot && sample(seed, minute, 16) < 0.012;
             const counter = mentality(active) < 0 && mentality(defending) > 0;
-            const x = homeAttacking ? 76 + sample(seed, minute, 7) * 17 : 24 - sample(seed, minute, 7) * 17;
-            const y = 27 + sample(seed, minute, 8) * 46;
+            const x = isPenalty ? (homeAttacking ? 89.5 : 10.5) : homeAttacking ? 76 + sample(seed, minute, 7) * 17 : 24 - sample(seed, minute, 7) * 17;
+            const y = isPenalty ? 50 : 27 + sample(seed, minute, 8) * 46;
             const direction = homeAttacking ? 1 : -1;
             const base = { x: homeAttacking ? 42 : 58, y: 30 + sample(seed, minute, 12) * 40 };
             const approach = { x: x - direction * 18, y: crossing ? (y < 50 ? 12 : 88) : clamp(y + 12, 15, 85) };
             const origin = { x, y };
-            const kind: NonNullable<MatchEvent['play']>['kind'] = counter ? 'counter' : crossing ? 'cross' : shot ? 'shot' : 'build-up';
+            const kind: NonNullable<MatchEvent['play']>['kind'] = isPenalty ? 'set-piece' : counter ? 'counter' : crossing ? 'cross' : shot ? 'shot' : 'build-up';
             const pressure = clamp((defender?.rating ?? 55) / 100 + Math.max(0, -mentality(defending)) * 0.25 - (counter ? 0.35 : 0), 0, 1.5);
-            const xG = shot ? shotExpectedGoals(x, y, homeAttacking, attacker?.rating ?? 55, goalkeeperRating, pressure) : 0;
+            const xG = isPenalty ? clamp(0.76 + ((attacker?.rating ?? 55) - goalkeeperRating) * 0.002, 0.65, 0.85) : shot ? shotExpectedGoals(x, y, homeAttacking, attacker?.rating ?? 55, goalkeeperRating, pressure) : 0;
             const goal = shot && sample(seed, minute, 4) < xG;
             const card = !goal && !shot && sample(seed, minute, 5) < 0.45 * (rivalry?.cardMultiplier ?? 1);
             const onTarget = goal || (shot && sample(seed, minute, 13) < 0.36);
@@ -115,7 +117,7 @@ export function simulateDeterministicSegment(homeTeam: Team, awayTeam: Team, sta
                 if (homeAttacking) homeScoreAdded++; else awayScoreAdded++;
                 momentum = clamp(momentum * 0.9 + sign * 3.4, -10, 10);
             } else momentum = clamp(momentum * 0.9 + sign * (shot ? 0.65 : 0.3), -10, 10);
-            const description = goal ? `${name} scores for ${active.name} after ${counter ? 'a direct counterattack' : crossing ? 'a cross into the area' : 'a passing move through the middle'}.`
+            const description = goal ? isPenalty ? `${name} scores a penalty for ${active.name} against ${keeper?.name || 'the opposing keeper'}.` : `${name} scores for ${active.name} after ${counter ? 'a direct counterattack' : crossing ? 'a cross into the area' : 'a passing move through the middle'}.`
                 : card ? `${defender?.name || 'The defender'} is booked for halting ${active.name}'s break.`
                 : shot ? `${name} shoots from ${Math.round(Math.hypot((homeAttacking ? 100 - x : x) * 1.05, (y - 50) * 0.68))} metres: ${outcome === 'saved' ? `${keeper?.name || 'the keeper'} makes the save` : outcome === 'blocked' ? 'blocked by the defence' : 'wide of the post'}.`
                 : `${name} ${counter ? 'carries the counterattack forward' : crossing ? 'works a crossing position on the flank' : 'links the midfield and attack'} for ${active.name}.`;
@@ -124,6 +126,7 @@ export function simulateDeterministicSegment(homeTeam: Team, awayTeam: Team, sta
                 type: goal ? 'goal' : card ? 'card' : 'commentary',
                 teamName: card ? defending.name : active.name, player: card ? defender?.name : attacker?.name,
                 description, cardType: card ? 'yellow' : undefined,
+                isPenalty: isPenalty || undefined, goalkeeper: shot && keeper?.position === 'GK' ? keeper.name : undefined,
                 scoreAfter: goal ? `${state.homeScore + homeScoreAdded}-${state.awayScore + awayScoreAdded}` : undefined,
                 pitchX: x, pitchY: y, xG: shot ? xG : undefined, onTarget: shot ? onTarget : undefined,
                 momentumAfter: momentum,
@@ -146,11 +149,38 @@ export function simulateDeterministicSegment(homeTeam: Team, awayTeam: Team, sta
 export function simulateDeterministicQuickMatch(homeTeam: Team, awayTeam: Team, fixtureKey = '') {
     const state: MatchState = { currentMinute: 0, homeScore: 0, awayScore: 0, events: [], isFinished: false, subsUsed: { home: 0, away: 0 }, momentum: 0, tacticalAnalysis: '', simulationSeed: hashSeed(`${fixtureKey}|${homeTeam.name}|${awayTeam.name}`) };
     const result = simulateDeterministicSegment(homeTeam, awayTeam, state, 90, { userTeamName: null });
-    return { homeGoals: result.homeScoreAdded, awayGoals: result.awayScoreAdded };
+    return {
+        homeGoals: result.homeScoreAdded, awayGoals: result.awayScoreAdded, events: result.events,
+        participantNames: { home: starters(homeTeam).map(p => p.name), away: starters(awayTeam).map(p => p.name) },
+        goalkeeperNames: { home: starters(homeTeam).find(p => p.position === 'GK')?.name, away: starters(awayTeam).find(p => p.position === 'GK')?.name },
+    };
 }
 export function simulateDeterministicShootout(homeTeam: Team, awayTeam: Team, fixtureKey = '') {
     const seed = hashSeed(`${fixtureKey}|${homeTeam.name}|${awayTeam.name}|shootout`);
-    const homeWins = ((seed >>> 8) & 1) === 0;
-    const winnerScore = 3 + (seed % 3), loserScore = Math.max(0, winnerScore - 1);
-    return { homePenalties: homeWins ? winnerScore : loserScore, awayPenalties: homeWins ? loserScore : winnerScore, penaltyWinner: homeWins ? 'home' as const : 'away' as const };
+    const takers = (team: Team) => [...starters(team)].sort((a, b) => (a.position === 'GK' ? 1 : 0) - (b.position === 'GK' ? 1 : 0) || b.rating - a.rating || a.name.localeCompare(b.name));
+    const home = takers(homeTeam), away = takers(awayTeam);
+    const homeKeeper = starters(homeTeam).find(p => p.position === 'GK'), awayKeeper = starters(awayTeam).find(p => p.position === 'GK');
+    const penalties: MatchPenalty[] = [];
+    let homePenalties = 0, awayPenalties = 0;
+    const kick = (side: 'home' | 'away', round: number, force?: boolean) => {
+        const pool = side === 'home' ? home : away;
+        const player = pool[round % Math.max(1, pool.length)];
+        const keeper = side === 'home' ? awayKeeper : homeKeeper;
+        const conversion = clamp(0.75 + ((player?.rating ?? 45) - (keeper?.rating ?? 55)) * 0.002, 0.55, 0.9);
+        const scored = force ?? (sample(seed, round, side === 'home' ? 24 : 25) < conversion);
+        if (scored) { if (side === 'home') homePenalties++; else awayPenalties++; }
+        if (player) penalties.push({ id: `${fixtureKey}|shootout|${side}|${round}`, teamName: side === 'home' ? homeTeam.name : awayTeam.name, taker: player.name, goalkeeper: keeper?.name, outcome: scored ? 'scored' : sample(seed, round, 26) < 0.65 ? 'saved' : 'missed', shootout: true });
+    };
+    for (let round = 0; round < 5; round++) {
+        kick('home', round);
+        if (homePenalties > awayPenalties + (5 - round) || awayPenalties > homePenalties + (4 - round)) break;
+        kick('away', round);
+        if (Math.abs(homePenalties - awayPenalties) > (4 - round)) break;
+    }
+    for (let round = 5; homePenalties === awayPenalties && round < 16; round++) {
+        const forcedHome = round === 15 ? ((seed >>> 8) & 1) === 0 : undefined;
+        kick('home', round, forcedHome); kick('away', round, round === 15 ? !forcedHome : undefined);
+    }
+    if (penalties.length) penalties[penalties.length - 1].decisive = true;
+    return { homePenalties, awayPenalties, penaltyWinner: homePenalties > awayPenalties ? 'home' as const : 'away' as const, penalties };
 }
