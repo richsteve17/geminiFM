@@ -103,6 +103,15 @@ export interface ClubRosterTeam extends Team {
         playablePlayerCount: number;
         completePlayableMembership: boolean;
         gameDerivationVersion: string;
+        gameDerivedClub: {
+            version: string;
+            preset: 'existing-game-seed' | 'neutral-game-preset';
+            economics: true;
+            prestige: true;
+            colors: 'existing-game-theme' | 'neutral-ui-palette';
+            chairmanPersonality: true;
+            tactics: true;
+        };
     };
     rosterWarnings: string[];
     unresolvedRosterPlayers: ClubRosterIssue[];
@@ -122,6 +131,13 @@ export const CLUB_ROSTER_SNAPSHOT = snapshotJson as unknown as ClubRosterSnapsho
 export const CLUB_ROSTER_CATALOG = CLUB_ROSTER_SNAPSHOT.teams;
 export const CLUB_ROSTER_SNAPSHOT_DATE = CLUB_ROSTER_SNAPSHOT.snapshotDate;
 export const CLUB_ROSTER_GAME_DERIVATION_VERSION = 'club-roster-v1';
+/** Uniform balancing values, not club wealth, reputation, owner or authentic kit facts. */
+export const CLUB_ROSTER_NEUTRAL_PRESET = {
+    version: 'club-attributes-v1', prestige: 70, balance: 50000000, transferBudget: 10000000,
+    chairmanPersonality: 'Moneyball Advocate' as const,
+    tactic: { formation: '4-3-3' as const, mentality: 'Balanced' as const },
+    colors: { primary: '#475569', secondary: '#f8fafc', text: '#ffffff' },
+};
 const clone = <T,>(value: T): T => value == null ? value : JSON.parse(JSON.stringify(value));
 const norm = normalizeNationalPlayerName;
 function hash(value: string): number {
@@ -321,11 +337,24 @@ export function getCurrentClubTeams(seedTeams: Record<string, Team>, snapshot: C
     const owners = resolveOwnership(snapshot);
     const priors = indexPriors(seedTeams, snapshot);
     const roles = nationalRoles();
-    return Object.fromEntries(Object.entries(seedTeams).map(([key, seed]) => {
-        if (seed.league === 'International') return [key, clone(seed) as ClubRosterTeam];
-        const records = snapshot.teams.filter(t => t.gameName === seed.name && t.gameLeague === seed.league);
-        const source = records.length === 1 ? records[0] : undefined;
-        const warnings = [...(source?.warnings || [])];
+    const seedEntries = Object.entries(seedTeams).filter(([, seed]) => seed.league !== 'International');
+    const domestic = snapshot.teams.map(source => {
+        // Observed IDs survive source display-name changes; canonical names survive promotion/relegation.
+        const byId = seedEntries.filter(([, seed]) => getClubRosterSource(seed)?.sourceTeamId === source.sourceTeamId);
+        const byName = seedEntries.filter(([, seed]) => [source.gameName, source.sourceName].some(name => norm(name) === norm(seed.name)));
+        const candidates = byId.length ? byId : byName;
+        const existing = candidates.length === 1 ? candidates[0] : undefined;
+        const key = existing?.[0] || source.gameName;
+        const seed: Team = existing?.[1] || {
+            name: source.gameName, league: source.gameLeague as Team['league'], players: [],
+            prestige: CLUB_ROSTER_NEUTRAL_PRESET.prestige, balance: CLUB_ROSTER_NEUTRAL_PRESET.balance,
+            transferBudget: CLUB_ROSTER_NEUTRAL_PRESET.transferBudget,
+            chairmanPersonality: CLUB_ROSTER_NEUTRAL_PRESET.chairmanPersonality,
+            tactic: clone(CLUB_ROSTER_NEUTRAL_PRESET.tactic), colors: clone(CLUB_ROSTER_NEUTRAL_PRESET.colors),
+            objectives: [], activePromises: [],
+        };
+        const warnings = [...source.warnings];
+        if (!existing) warnings.push('New catalog club uses uniform modeled game economics/prestige/owner/tactics and a neutral UI palette, not observed club facts or an authentic kit.');
         const issues: ClubRosterIssue[] = [];
         const seen = new Set<string>();
         const pool: ClubRosterPlayer[] = [];
@@ -349,7 +378,7 @@ export function getCurrentClubTeams(seedTeams: Record<string, Team>, snapshot: C
             if (!player) issues.push({ kind: 'unknown-position', externalId: athlete.externalId, name: athlete.name, reason: 'Unknown source position and no authoritative or verified prior role; retained in raw source evidence, not invented.' });
             else pool.push(player);
         }
-        if (!source || !source.players.length) warnings.push(records.length > 1 ? 'Multiple source records match this club; no owner guessed and stale seed not used.' : 'No current sourced squad available; stale seed players were not represented as refreshed.');
+        if (!source.players.length) warnings.push('No current sourced squad available; stale seed players were not represented as refreshed.');
         for (const issue of issues) warnings.push(`${issue.name} (${issue.externalId}): ${issue.reason}`);
         if (pool.some(p => p.gameDerived.ageFallback)) warnings.push('Some source records lack usable DOB/age; explicitly game-derived age 25 is used.');
         if (pool.some(p => p.nationality === 'Unknown')) warnings.push('Some source records lack citizenship/national membership; nationality remains Unknown, not the club country.');
@@ -362,7 +391,7 @@ export function getCurrentClubTeams(seedTeams: Record<string, Team>, snapshot: C
         if (xi.length < 11) warnings.push('Fewer than 11 available sourced players or no sourced goalkeeper; kickoff needs validation, no filler added.');
         const completePlayableMembership = !!source?.players.length && !issues.length;
         return [key, {
-            ...clone(seed), players, tactic: { ...clone(seed.tactic), formation },
+            ...clone(seed), name: source.gameName, league: source.gameLeague as Team['league'], players, tactic: { ...clone(seed.tactic), formation },
             weeklyWageBill: players.reduce((sum, p) => sum + p.wage, 0),
             clubRosterSource: {
                 snapshotDate: snapshot.snapshotDate, kind: 'current-source-club-squad',
@@ -371,9 +400,18 @@ export function getCurrentClubTeams(seedTeams: Record<string, Team>, snapshot: C
                 sources: clone(source?.sources || []), sourceCoverage: clone(source?.coverage),
                 sourcePlayerCount: source?.players.length || 0, playablePlayerCount: players.length, completePlayableMembership,
                 gameDerivationVersion: CLUB_ROSTER_GAME_DERIVATION_VERSION,
+                gameDerivedClub: {
+                    version: CLUB_ROSTER_NEUTRAL_PRESET.version, preset: existing ? 'existing-game-seed' : 'neutral-game-preset',
+                    economics: true, prestige: true, colors: existing ? 'existing-game-theme' : 'neutral-ui-palette',
+                    chairmanPersonality: true, tactics: true,
+                },
             }, rosterWarnings: warnings, unresolvedRosterPlayers: issues,
         } satisfies ClubRosterTeam];
-    }));
+    });
+    // Unmatched domestic seeds are outside the new catalog, not deleted from any saved career.
+    const international = Object.entries(seedTeams).filter(([, seed]) => seed.league === 'International')
+        .map(([key, seed]) => [key, clone(seed) as ClubRosterTeam]);
+    return Object.fromEntries([...domestic, ...international]);
 }
 
 /** Returns source evidence, including unknown roles and excluded/conflicting ownership records. */

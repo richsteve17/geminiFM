@@ -1,101 +1,72 @@
 # Current club roster hydration
 
-## New-career lifecycle only
+## Fresh-start contract
 
-`getCurrentClubTeams(seedTeams)` in `src/engine/clubRosters.ts` builds isolated club templates from `src/data/clubRosterSnapshot.json`. Invoke it only when constructing a **new career**, before selecting the manager's club and assembling competitions. Do not invoke it when loading or migrating saved careers. Saved acquisitions, releases, club ownership, ages, ratings, contracts, effects, statistics and history remain authoritative career state.
+`getCurrentClubTeams(seedTeams)` constructs **all 150 clubs in the current supported source catalog**, even with an empty seed map. It is a new-career factory, not a Continue migration. Seed clubs absent from that catalog are omitted from fresh-start results only. Saved acquisitions, ownership, ages, ratings, contracts, effects, statistics, history and World Cup data remain untouched.
 
-The factory never mutates seed teams, their nested arrays/theme/tactics, source snapshots or previous factory results. It copies club balance, prestige, objectives, chairman, transfer budget and theme, but replaces squad membership with the current sourced squad. It recalculates `weeklyWageBill` as the sum of the resulting game wages. The curated `Team.league` remains unchanged; actual source competition is recorded separately as `clubRosterSource.sourceLeagueCode`. Unsupported legacy formations are normalized to supported `4-3-3` with an explicit warning.
+Existing clubs match by stored observed source team ID, otherwise unambiguous normalized canonical/source name. Their existing map keys, modeled balance/prestige/objectives/chairman/theme/tactics and unambiguous player game priors survive; their league and squad membership come from the current catalog. This keeps Sunderland's canonical key after promotion. New clubs use their source-derived canonical name as key. International seed teams are cloned unchanged. No inputs, nested arrays or global presets are mutated.
 
-No saved-career acquisition or replacement migration is provided. Metadata-only UI accessors do not hydrate or modify a save.
+All **73 newly introduced clubs** receive the same explicit neutral game preset: prestige 70, balance 50,000,000, transfer budget 10,000,000, Moneyball Advocate modeled chairman, Balanced 4-3-3, empty objectives/promises, and neutral slate/paper UI colours (`#475569`, `#f8fafc`, `#ffffff`). These are balancing values, not observed wealth, owner identity, reputation, authentic shirts or crests. The other **77 clubs** retain their existing game seed attributes. `weeklyWageBill` is recalculated from playable modeled wages.
 
-## Public API
+`clubRosterSource.gameDerivedClub` records `version`, `preset: 'existing-game-seed' | 'neutral-game-preset'`, `economics: true`, `prestige: true`, `colors: 'existing-game-theme' | 'neutral-ui-palette'`, `chairmanPersonality: true`, and `tactics: true`. Source evidence remains separate. No new crest or kit provenance is claimed.
+
+## Exact exported API
 
 ```ts
 getCurrentClubTeams(
     seedTeams: Record<string, Team>,
     snapshot?: ClubRosterSnapshot,
 ): Record<string, ClubRosterTeam>
-
-getRawClubRoster(gameName, snapshot?): ClubRosterRecord | undefined
-getClubRosterSource(team): ClubRosterTeam['clubRosterSource'] | undefined
-getClubRosterCoverage(teams?): ClubRosterCoverage
-getClubRosterAge(athlete, snapshotDate?): { age, source }
+getRawClubRoster(gameName: string, snapshot?: ClubRosterSnapshot): ClubRosterRecord | undefined
+getClubRosterSource(team: Team): ClubRosterTeam['clubRosterSource'] | undefined
+getClubRosterCoverage(teams?: Record<string, Team>): ClubRosterCoverage
+getClubRosterAge(
+    athlete: Pick<ClubSourceAthlete, 'age' | 'dateOfBirth' | 'DOB'>,
+    snapshotDate?: string,
+): { age: number; source: ClubRosterPlayer['clubRosterProvenance']['age'] }
 createCurrentFreeAgentMarket(): CurrentFreeAgentPlayer[]
 ```
 
-`CLUB_ROSTER_SNAPSHOT`, `CLUB_ROSTER_CATALOG`, `CLUB_ROSTER_SNAPSHOT_DATE`, and `CLUB_ROSTER_GAME_DERIVATION_VERSION` are also exported. The optional snapshot argument permits isolated fixture tests without touching shipped source data.
+Runtime constants: `CLUB_ROSTER_SNAPSHOT`, `CLUB_ROSTER_CATALOG`, `CLUB_ROSTER_SNAPSHOT_DATE`, `CLUB_ROSTER_GAME_DERIVATION_VERSION` (`club-roster-v1`) and `CLUB_ROSTER_NEUTRAL_PRESET` (`club-attributes-v1`).
 
-Use `getClubRosterSource(team)` for a career header. It returns that team's stored snapshot metadata, or `undefined` for unsourced legacy careers. Do not use the current global snapshot date to label a legacy career as refreshed. The exported current snapshot date is independent of the game's edition branding. `getClubRosterCoverage(teams)` reports both the bundled source coverage and the supplied teams' stored coverage; those are deliberately distinct concepts.
+Exported types/interfaces: `ClubRosterSource`, `ClubSourceAthlete`, `ClubRosterRecord`, `ClubRosterSnapshot`, `ClubOwnershipMethod`, `ClubRosterIssue`, `ClubRosterPlayer`, `ClubRosterTeam`, `ClubRosterCoverage`, `CurrentFreeAgentPlayer`.
 
-`ClubRosterPlayer` extends `Player` with `squadNumber`, `dateOfBirth`, `externalId`, `datasetPlayerId`, source names, `clubRosterFacts`, `clubRosterProvenance`, and `gameDerived`. `squadNumber` is a numeric conversion of a real source jersey value only, never a lineup-index number. Non-numeric or absent shirts remain undefined. `clubRosterSource`, `rosterWarnings` and `unresolvedRosterPlayers` extend the team.
+`getClubRosterSource` reads only stored metadata and returns undefined for unsourced legacy teams. It never labels an old save with a new global date. `getClubRosterCoverage(teams)` distinguishes bundled source coverage from supplied teams' stored playable coverage; without teams, requested-team counts are zero. The optional snapshot arguments support isolated test fixtures.
 
-## Facts versus game derivation
+## Unchanged identity and player derivation
 
-Provider-scoped athlete IDs are retained exactly as `espn:<sourceAthleteId>`. Full supplied/source names, raw DOB, citizenship, shirts, source positions, source URLs and occurrences remain separate from simulation values. Full original provider records are available through `getRawClubRoster`, including records that are not playable.
+Provider IDs remain `espn:<sourceAthleteId>`. Authoritative World Cup membership/roles take precedence; nationality otherwise uses source citizenship, not club country. Age uses valid DOB at the actual snapshot date, then source age, then labeled game fallback 25. Stable-ID DOB enrichment retains its existing explicit provenance. Source raw fields remain unchanged.
 
-Age prefers a valid DOB and is calculated using UTC calendar dates **at the actual snapshot date**, not the game's edition or current wall clock. A missing club DOB can be enriched only from the same verified provider ID through the shared identity resolver. This is labelled `verified-identity-source`; an older national age display is never copied for that enrichment. If no usable DOB exists, a usable club-source age is retained. Otherwise game age 25 is used with `gameDerived.ageFallback: true`. Invalid calendar dates and future/unusable ages do not silently become factual ages. Raw club facts remain raw even when runtime DOB is enriched.
+Position precedence remains supplied exact role, source exact role, shared national gameplay role, verified compatible prior role, then deterministic broad source-role derivation. Unknown roles without usable evidence are quarantined, not filled. Ratings/personality/potential/wages/contracts remain deterministic game derivation or unambiguous prior game values; no clock, network, random generation or LLM calls are used by this factory. New players have no fabricated career statistics/history.
 
-Nationality prefers supplied authoritative national membership when resolved, otherwise source citizenship. Missing citizenship and membership remain `Unknown`; the club's country is never used as a fabricated athlete nationality. The raw citizenship evidence is retained independently of the game's nationality display.
+Existing duplicate-owner logic remains supplied association then explicit source-owner reference, never array order or a copied currentClub label. Missing/empty rosters stay empty and labeled missing. Every playable source athlete is retained, including benches over 25; unsupported seed formations receive a supported 4-3-3 fallback warning. Source limitations and losing/unknown entries remain in raw evidence and runtime issues.
 
-Position precedence is:
+`createCurrentFreeAgentMarket()` is unchanged: only the supplied explicitly unattached Jordan players Ehsan Haddad and Saed Al-Rosan. Missing clubs do not imply free agency.
 
-1. The supplied authoritative World Cup role, with `CDM → DM` and `CAM → AM` normalization.
-2. An exact granular source role.
-3. An existing shared national gameplay role, so club and national copies remain consistent; this does **not** make a derived role a provider fact.
-4. A compatible, unambiguously identified prior club game role.
-5. A deterministic, versioned gameplay role derived from a broad source `D/M/F` family.
+## Simulated European qualification
 
-Provider `G` identifies `GK` without a granular role guess. Broad role assignments are explicitly marked `gameDerived.position: true`. Unknown source roles with no authoritative, shared or verified prior role remain in raw evidence and are recorded in `unresolvedRosterPlayers`, rather than receiving an invented position/player.
+`src/europe.ts` exports:
 
-The source does not provide exact ratings, wages, contract lengths, personality, potential or stamina. The factory uses transparent deterministic game derivation under `club-roster-v1`, with hash inputs tied to athlete identity and attribute type. It makes no LLM/network calls, reads no wall clock, and performs no random trait generation. Unambiguous prior game ratings, potential, growth rate, personality, wages, contract durations, stamina and market values can be retained as **game priors**, not current real-world contract or scouting facts. A prior is indexed globally so a sourced transfer may retain its game rating while its stale club, age, display name and membership are not retained. Ambiguous abbreviated identities or multiple seed copies do not supply priors.
+```ts
+getChampionsLeagueParticipants(
+    existingTeams: Record<string, Team>,
+): { participants: string[]; newTeams: Record<string, Team> }
+```
 
-New players start available, at full condition, with no fabricated match statistics, effects or historical career record. The existing `selectNationalStartingXI` selects a balanced deterministic XI in formation order. Every other playable sourced athlete stays on the bench, even when the squad exceeds 25 players. No squad-size truncation or filler generation occurs.
+When input contains club source metadata, it selects up to 36 existing playable source-backed clubs from supported European top divisions only (`eng.1`, `esp.1`, `ita.1`, `ger.1`, `fra.1`), ordered by modeled game prestige and canonical-name tie break. The full catalog supplies 36; MLS, Championship, International, unsourced, missing-squad and division-mismatched teams are excluded. `newTeams` is empty and short coverage is never filled with generated athletes or FC Europe teams. This is **simulated qualification**, not the official UEFA 2026 field. The legacy unsourced-career path is retained for compatibility.
 
-## Ownership and gaps
+## Verified results — 2026-11-07
 
-A source athlete listed by only one catalog club has that source owner. For a provider ID appearing across multiple clubs, the factory first tries the supplied authoritative user club association, then an explicit source owner reference (team ID/name or provider team URL). It never chooses by array order or blindly trusts a copied `currentClub` display label. Conflicting or unresolved owners are quarantined from playable copies and recorded against affected teams. Resolved losing records are also explicitly recorded rather than silently dropped.
+Source coverage: 150/150 squads, 4,602 entries / 4,601 unique IDs. Runtime: 149 sourced clubs, one partial club (Málaga's losing duplicate Moussa Diarra entry), no missing clubs, 4,601 playable athletes, 24–39 squad sizes, 202 labeled age fallbacks and 224 Unknown nationalities. Cross-club playable IDs are unique and shared national roles remain consistent. No source gaps are disguised.
 
-A missing or empty current source roster yields an empty squad and `clubRosterSource.status: 'missing'`, not stale seed players labelled current. Unknown positions, invalid IDs and repeated entries produce explicit issues and partial coverage. Raw evidence is retained. A short pool or a missing goalkeeper receives a kickoff warning; no fictional filler is added.
+Verification commands:
 
-`completePlayableMembership` means all entries in that sourced squad were hydrated into playable membership. It does not assert official registration, transfer certification, final selection, or that provider metadata covers all real-world facts.
+```bash
+npm test -- --run src/__tests__/club_rosters.test.ts src/__tests__/europe_rosters.test.ts src/__tests__/authoritative_squads.test.ts
+python3 scripts/import-club-rosters.test.py
+npx tsc --noEmit
+npm test -- --run
+npm run build
+```
 
-## Explicit current free-agent market
-
-`createCurrentFreeAgentMarket()` contains only the supplied rows explicitly marked `club: 'unattached'` and `league: 'Free Agent'`: Jordan's **Ehsan Haddad** and **Saed Al-Rosan**. It does not infer free agency from unknown/missing clubs, carry stale transfer targets, or invent a larger market. Unresolved provider IDs use the shared stable authoritative dataset IDs. Source kind is `authoritative-explicit-unattached`; simulation attributes remain game-derived. Career releases are the responsibility of the existing career market lifecycle, not this constructor.
-
-## Shared identity integration and performance
-
-The shared module exports `resolveRosterAthlete({name, nationality?, club?, externalId?})` and `getAuthoritativeWorldCupPlayer(query)`, returning the supplied row plus `countryCode`, `datasetPlayerId` and optional `resolvedSourceId`. The supplied World Cup JSON is consumed as authoritative without a re-audit.
-
-`clubRosters` imports the shared identity module and national XI/pool helpers. The identity module must not import the club runtime, avoiding a circular runtime dependency. Prior aliases and their countries are indexed once per factory call rather than scanning every athlete for every stale seed player. The shared national role cache stores only IDs and positions and is private to this module; full national pools are not attached to club entities. An actual full-catalog integration test ran in approximately 191 ms after indexing, versus approximately 12.8 seconds before the optimization.
-
-## Verified snapshot and integrity
-
-Verified against the bundled **2026-11-07** snapshot:
-
-| Check | Result |
-| --- | ---: |
-| Catalog clubs with source squads | 82 / 82 |
-| Playable source athletes | 2,538 |
-| Unique playable provider IDs | 2,538 |
-| Missing club squads | 0 |
-| Partial club membership / unresolved records | 0 |
-| Smallest–largest retained squad | 24–39 |
-| Supplied authoritative exact-role matches | 434 |
-| Shared national/club provider IDs | 667 |
-| Shared national/club role mismatches | 0 |
-| Explicit age fallbacks (missing usable source age/DOB) | 110 |
-| Unknown nationality (missing usable citizenship/membership) | 117 |
-
-The last two rows are source-fact limitations, not hidden fictional data. No current missing DOB could be enriched from another verified identity source in this snapshot; the stable-ID enrichment path is covered by an isolated regression fixture.
-
-## Verification
-
-`src/__tests__/club_rosters.test.ts` has 21 regression tests covering source replacement versus stale seeds, full benches, immutability, identity priors and ambiguity, supplied national roles, stable-ID DOB enrichment, explicit broad/unknown role and age behavior, missing sources, deterministic economics/selection, ownership references/conflicts, raw/accessor isolation, actual 82-club integration, shared national roles and the exact explicit unattached market.
-
-Final verification on 2026-11-07:
-
-- `npm test`: **226 tests passed across 35 files** (including concurrent integration tests).
-- `npm run check`: **passed**, exit 0.
-
-Files owned by this implementation: `src/engine/clubRosters.ts`, `src/__tests__/club_rosters.test.ts`, and this document. No App/constants/national-roster/data/identity/type/Git files were edited by this implementation.
+Targeted tests passed; importer checks passed and offline regeneration matched byte-for-byte. Full suite and production build passed; the build retains the pre-existing large-bundle warning. Implementation is limited to roster sources/snapshot/helper, club factory, European participant selection and focused tests/docs. No title/edition, utils, authoritative World Cup files, identity/role logic, save migration or Git commit changes were made.

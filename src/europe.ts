@@ -2,6 +2,7 @@
 import type { Team, Player, Formation, PlayerPersonality, PlayerPosition } from './types';
 import { TEAMS } from './constants';
 import { generateName } from './utils';
+import { getClubRosterSource } from './engine/clubRosters';
 
 const FORMATIONS: Formation[] = ['4-3-3', '4-4-2', '5-3-2', '3-5-2'];
 
@@ -57,6 +58,21 @@ const createEuroTeam = (name: string, flag: string, prestige: number): Team => {
 };
 
 export const getChampionsLeagueParticipants = (existingTeams: Record<string, Team>): { participants: string[], newTeams: Record<string, Team> } => {
+    if (Object.values(existingTeams).some(team => getClubRosterSource(team))) {
+        // Simulated qualification by modeled game prestige, NOT an official UEFA field.
+        // No new teams/players are generated, including when source coverage is short.
+        const supported: Partial<Record<Team['league'], string>> = {
+            'Premier League': 'eng.1', 'La Liga': 'esp.1', 'Serie A': 'ita.1',
+            'Bundesliga': 'ger.1', 'Ligue 1': 'fra.1',
+        };
+        const eligible = Object.values(existingTeams).filter(team => {
+            const source = getClubRosterSource(team);
+            return supported[team.league] && source?.sourceLeagueCode === supported[team.league]
+                && source.status !== 'missing' && !!source.sourceTeamId && team.players.length >= 11;
+        }).sort((a, b) => b.prestige - a.prestige || a.name.localeCompare(b.name));
+        return { participants: [...new Set(eligible.map(team => team.name))].slice(0, 36), newTeams: {} };
+    }
+    // Compatibility path for careers created before source-backed club factories.
     const participants: string[] = [];
     const newTeams: Record<string, Team> = {};
 

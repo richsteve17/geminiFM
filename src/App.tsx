@@ -53,6 +53,7 @@ import {
     EXTRA_GLOBAL_TEAMS
 } from './international';
 import { getChampionsLeagueParticipants } from './europe';
+import { CL_RESERVED_WEEKS, createSeasonTable, domesticSlotToWeek, generateMLSPlayoffFixtures, getDomesticSeasonLength, getMLSSeasonHonors, getMLSStandings, getMLSPlayoffMatchRules, isMLSPlayoffFixture, resolveMLSPlayoffMatch } from './engine/domesticSeason';
 
 import Terminal from './components/Terminal';
 import { logger, LogEntry } from './utils/logger';
@@ -64,6 +65,21 @@ const CLEAN_SHEET_POSITIONS = new Set(['GK', 'LB', 'CB', 'RB', 'LWB', 'RWB']);
 // Immutable NEW-career source baseline. Continue restores parsed.teams instead.
 const allTeams = linkNationalRosterIdentitiesToClubTeams(getCurrentClubTeams(ensureTeamAndPlayerFields(structuredClone(clubSeedTeams))));
 const freshFreeAgents = createCurrentFreeAgentMarket();
+
+// Construct only new/rolled seasons. Continue never refreshes a saved career's clubs or results.
+const createClubSeason = (sourceTeams: Record<string, Team>, legacyFixtures: Fixture[] = []) => {
+    const { participants, newTeams } = getChampionsLeagueParticipants(sourceTeams);
+    const seasonTeams = { ...sourceTeams, ...newTeams };
+    const members = Object.values(sourceTeams);
+    const legacyMLS = members.filter(t => t.league === 'MLS').length !== 30;
+    const domestic = generateFixtures(legacyMLS ? members.filter(t => t.league !== 'MLS') : members)
+        .map(f => ({ ...f, week: domesticSlotToWeek(f.week) }));
+    // An incomplete restored MLS universe keeps its old game-week template, not a fake 2026 schedule.
+    if (legacyMLS) domestic.push(...legacyFixtures.filter(f => f.league === 'MLS' && !f.isKnockout).map(f => ({ id: f.id, league: f.league, week: f.week, homeTeam: f.homeTeam, awayTeam: f.awayTeam, played: false })));
+    const european = generateSwissFixtures(participants.map(n => seasonTeams[n])).map(f => ({ ...f, week: CL_RESERVED_WEEKS[f.week - 1] }));
+    const seasonFixtures = [...domestic, ...european].sort((a, b) => a.week - b.week);
+    return { teams: seasonTeams, fixtures: seasonFixtures, table: createSeasonTable(seasonTeams, participants), weeks: Math.max(getDomesticSeasonLength(seasonFixtures), ...european.map(f => f.week), 0) + 10 };
+};
 
 const deterministicUnit = (...parts: Array<string | number>) => hashSeed(parts.join('|')) / 0xFFFFFFFF;
 
@@ -159,6 +175,10 @@ export default function App() {
     const relationshipsRef = useRef<RelationshipIncident[]>([]);
     relationshipsRef.current = relationshipIncidents;
     const careerGenerationRef = useRef(0);
+    const advancingRef = useRef(false);
+    const advanceRequestRef = useRef(false);
+    const committedWeekRef = useRef<string | null>(null);
+    const [advanceRevision, setAdvanceRevision] = useState(0);
     const teamsRef = useRef(teams);
     teamsRef.current = teams;
     const [prologueArchive, setPrologueArchive] = useState<{ teams: Record<string, Team>; fixtures: Fixture[]; champion?: string } | null>(null);
@@ -226,13 +246,16 @@ export default function App() {
             if (gameState === GameState.PLAYING && currentFixture && userTeam && matchState && !isLoading) {
                 
                 if (currentPlaybackMinute >= simulationTargetMinute) {
-                    const boundary = nextMatchBoundary(matchState, currentFixture, !!activeShout, SIMULATION_CHUNK_MINUTES);
+                    const directPenalties = getMLSPlayoffMatchRules(currentFixture)?.extraTime === false;
+                    const boundary = directPenalties && matchState.currentMinute >= 90
+                        ? { kind: 'finish' as const, shootout: matchState.homeScore === matchState.awayScore }
+                        : nextMatchBoundary(matchState, currentFixture, !!activeShout, SIMULATION_CHUNK_MINUTES);
                     if (boundary.kind === 'finish') {
                         let completed = matchState;
                         if (boundary.shootout) {
                             const pens = simulateDeterministicShootout(teams[currentFixture.homeTeam], teams[currentFixture.awayTeam], `${currentFixture.id}|${matchState.simulationSeed ?? 0}`);
                             completed = { ...matchState, penaltyWinner: pens.penaltyWinner, penalties: pens.penalties, events: [...matchState.events, {
-                                id: hashSeed(`${matchState.simulationSeed ?? 0}|120|shootout`), minute: 120, type: 'commentary',
+                                id: hashSeed(`${matchState.simulationSeed ?? 0}|${matchState.currentMinute}|shootout`), minute: matchState.currentMinute, type: 'commentary',
                                 description: `Penalty shootout: ${currentFixture.homeTeam} ${pens.homePenalties}-${pens.awayPenalties} ${currentFixture.awayTeam}.`,
                             }] };
                         }
@@ -377,6 +400,7 @@ export default function App() {
 
     // --- SAVE / LOAD SYSTEM ---
     const saveGame = () => {
+        if (advancingRef.current) { setError('Wait for the current week to finish before saving.'); return; }
         if (userTeamName || appScreen === AppScreen.JOB_CENTRE) {
             const stateToSave = {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
@@ -392,6 +416,7 @@ export default function App() {
     };
 
     useEffect(() => {
+        if (advancingRef.current) return;
         if ((userTeamName || appScreen === AppScreen.JOB_CENTRE) && appScreen !== AppScreen.START_SCREEN) {
             const stateToSave = {
                 userTeamName, gameMode, isPrologue, currentWeek, weeksInSeason, currentYear,
@@ -402,9 +427,10 @@ export default function App() {
             };
             try { localStorage.setItem('gfm_save_v1', encodeCareerSave(stateToSave)); } catch { setError('Browser storage could not save this career. The previous save is preserved; free browser storage before continuing.'); return; }
         }
-    }, [currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory, matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute, transferMarket, pressInput, pressQuestionResult, pressProgress, appScreen, tutorialCompletion, hasClubCareer, prologueArchive, availableJobs, relationshipIncidents]);
+    }, [advanceRevision, currentWeek, gameState, managerReputation, currentYear, internationalTournament, incomingBids, teams, news, careerHistory, matchState, pendingEvents, currentPlaybackMinute, simulationTargetMinute, transferMarket, pressInput, pressQuestionResult, pressProgress, appScreen, tutorialCompletion, hasClubCareer, prologueArchive, availableJobs, relationshipIncidents]);
 
     const handleQuit = () => {
+        if (advancingRef.current) { setError('Wait for the current week to finish before leaving the career.'); return; }
         careerGenerationRef.current++;
         setAppScreen(AppScreen.START_SCREEN);
         setGameState(GameState.PRE_MATCH);
@@ -580,27 +606,14 @@ export default function App() {
         setIncomingBids([]);
         setIsPrologue(false);
         setHasClubCareer(true);
-        let finalTeamsState = linkNationalRosterIdentitiesToClubTeams(ensureTeamAndPlayerFields(structuredClone(allTeams)));
-        const domesticFixtures = generateFixtures(Object.values(allTeams));
-        const { participants, newTeams } = getChampionsLeagueParticipants(allTeams);
-        finalTeamsState = { ...finalTeamsState, ...newTeams };
-        const clWeeks = [5, 9, 13, 17, 21, 25, 29, 33];
-        const clFixtures = generateSwissFixtures(participants.map(n => finalTeamsState[n]));
-        const finalFixtures: Fixture[] = [];
-        domesticFixtures.forEach(f => {
-            let gameWeek = f.week;
-            if (f.week >= 5) gameWeek++; if (f.week >= 9) gameWeek++; if (f.week >= 13) gameWeek++;
-            if (f.week >= 17) gameWeek++; if (f.week >= 21) gameWeek++; if (f.week >= 25) gameWeek++;
-            if (f.week >= 29) gameWeek++; if (f.week >= 33) gameWeek++;
-            finalFixtures.push({ ...f, week: gameWeek });
-        });
-        clFixtures.forEach(f => { if (clWeeks[f.week - 1]) finalFixtures.push({ ...f, week: clWeeks[f.week - 1] }); });
-        const initialTable: LeagueTableEntry[] = Object.values(finalTeamsState).map(t => ({ teamName: t.name, league: t.league, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, }));
-        setWeeksInSeason(Math.max(...finalFixtures.map(f => f.week)) + 10);
-        setLeagueTable(initialTable); setFixtures(finalFixtures); setCurrentWeek(1);
+        const season = createClubSeason(linkNationalRosterIdentitiesToClubTeams(ensureTeamAndPlayerFields(structuredClone(allTeams))));
+        let finalTeamsState = season.teams;
+        const finalFixtures = season.fixtures;
+        setWeeksInSeason(season.weeks);
+        setLeagueTable(season.table); setFixtures(finalFixtures); setCurrentWeek(1);
         if (prologueArchive && !hasClubCareer) {
             const played = prologueArchive.fixtures.filter(f => f.played).map(f => ({ ...f, week: 1, tournamentId: 'tutorial-worldcup', year: 1 }));
-            const carried = buildRelationshipIncidents({ clubTeams: finalTeamsState, nationalTeams: prologueArchive.teams, fixtures: played, tournamentType: 'WorldCup', year: 1, week: 1, weeksPerYear: Math.max(...finalFixtures.map(f => f.week)) + 10 });
+            const carried = buildRelationshipIncidents({ clubTeams: finalTeamsState, nationalTeams: prologueArchive.teams, fixtures: played, tournamentType: 'WorldCup', year: 1, week: 1, weeksPerYear: season.weeks });
             relationshipsRef.current = carried; setRelationshipIncidents(carried);
             finalTeamsState = applyIncidentEffects(finalTeamsState, carried.flatMap(i => getIncidentEffects(i, { year: 1, week: 1 })));
             setNews(prev => [...carried.filter(i => i.clubName === selectedTeamName).map(relationshipNews), ...prev].slice(0, 1000));
@@ -701,6 +714,9 @@ export default function App() {
     };
 
     const handleAdvanceWeek = async () => {
+        if (advanceRequestRef.current || advancingRef.current) return;
+        advanceRequestRef.current = true;
+        try {
         setIsLoading(true);
         if (gameState === GameState.POST_MATCH && matchState && userTeamName && currentFixture) {
             try { 
@@ -717,7 +733,8 @@ export default function App() {
                 console.error(e);
             }
         }
-        proceedToNextWeek();
+        await proceedToNextWeek();
+        } finally { advanceRequestRef.current = false; }
     };
 
     const transitionToClubCareer = (finalReputation: number, tournamentFixtures: Fixture[] = fixtures) => {
@@ -1027,31 +1044,32 @@ export default function App() {
     };
 
     const proceedToNextWeek = async (snapshot?: { teams: Record<string, Team>; managerReputation: number }) => {
+        const advanceKey = `${careerGenerationRef.current}:${currentYear}:${currentWeek}`;
+        if (advancingRef.current || committedWeekRef.current === advanceKey) return;
+        advancingRef.current = true;
+        const before = structuredClone({ teams: snapshot?.teams || teams, leagueTable, fixtures, news, weeklyResults, currentYear, currentWeek, incomingBids, transferMarket, careerHistory, internationalTournament, relationshipIncidents, reputation: snapshot?.managerReputation ?? managerReputation });
+        setIsLoading(true);
+        try {
         const activeTeams = snapshot?.teams || teams;
         const activeManagerReputation = snapshot?.managerReputation ?? managerReputation;
         if (shouldRollClubSeason(gameMode, currentWeek, weeksInSeason)) {
+            if (fixtures.some(f => !f.played && f.week <= weeksInSeason)) throw new Error('Season has unresolved fixtures. Rollover blocked to preserve results.');
             if (gameMode === 'Club') {
+                const season = createClubSeason(activeTeams, fixtures);
                 const nextYear = currentYear + 1;
                 setCurrentYear(nextYear);
+                committedWeekRef.current = advanceKey;
                 setCurrentWeek(1);
-
-                const updatedTable: LeagueTableEntry[] = Object.values(activeTeams).map(t => ({
-                    teamName: t.name,
-                    league: t.league,
-                    played: 0, won: 0, drawn: 0, lost: 0,
-                    goalsFor: 0, goalsAgainst: 0, goalDifference: 0,
-                    points: 0
-                }));
-                setLeagueTable(updatedTable);
-
-                const domesticFixtures = generateFixtures(Object.values(activeTeams));
-                const { participants, newTeams } = getChampionsLeagueParticipants(activeTeams);
-                const finalTeamsState = { ...activeTeams, ...newTeams };
+                setLeagueTable(season.table);
+                setFixtures(season.fixtures);
+                setWeeksInSeason(season.weeks);
+                const finalTeamsState = season.teams;
 
                 // --- End-of-season Board Evaluation & Sacking Checks ---
-                const clubLeague = activeTeams[userTeamName]?.league;
-                const finalPosition = leagueTable.filter(t => t.league === clubLeague).sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor).findIndex(t => t.teamName === userTeamName) + 1;
-                const userClub = finalTeamsState[userTeamName];
+                const clubLeague = userTeamName ? activeTeams[userTeamName]?.league : undefined;
+                const finalStandings = clubLeague === 'MLS' ? getMLSStandings(Object.values(activeTeams), fixtures) : leagueTable.filter(t => t.league === clubLeague).sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor);
+                const finalPosition = finalStandings.findIndex(t => t.teamName === userTeamName) + 1;
+                const userClub = userTeamName ? finalTeamsState[userTeamName] : undefined;
                 let isSacked = false;
                 let sackMessage = '';
 
@@ -1069,14 +1087,8 @@ export default function App() {
                 const departures: string[] = [];
 
                 if (userClub && userClub.league !== 'International') {
-                    const isTopTier = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1'].includes(userClub.league);
-                    const totalTeams = leagueTable.length;
-                    const isRelegated = isTopTier && finalPosition > (totalTeams - 3);
-
-                    if (isRelegated) {
-                        isSacked = true;
-                        sackMessage = `Relegation Disaster: ${userTeamName} has been relegated! The board has terminated your contract immediately.`;
-                    } else {
+                    // Board evaluation is not a promotion/relegation engine; do not claim movement into absent divisions.
+                    {
                         const objective = userClub.objectives?.[0] || 'Mid-table Finish';
                         const targetPos = getTargetPosition(objective);
                         const gap = finalPosition - targetPos;
@@ -1148,7 +1160,7 @@ export default function App() {
                 if (isSacked) {
                     const nextRep = Math.max(10, Math.round(activeManagerReputation * 0.8));
                     setManagerReputation(nextRep);
-                    setUserTeamName(undefined);
+                    setUserTeamName(null);
                     
                     const departureNews = departures.map((text, idx) => ({
                         id: Date.now() + idx + 1,
@@ -1175,11 +1187,12 @@ export default function App() {
                         teamName: userTeamName,
                         league: userClub ? userClub.league : 'Club League',
                         finalPosition: `${finalPosition} (Sacked)`,
-                        trophies: []
+                        trophies: userClub?.league === 'MLS' ? getMLSSeasonHonors(Object.values(activeTeams), fixtures, userClub.name) : []
                     };
                     setCareerHistory(prev => [...prev, honorsEntry]);
                     
                     generateJobs(nextRep);
+                    setCurrentFixture(undefined); setMatchState(null); setGameState(GameState.PRE_MATCH);
                     setIsLoading(false);
                     return;
                 }
@@ -1187,9 +1200,8 @@ export default function App() {
                 if (userClub && userClub.league !== 'International') {
                     const finalPositionOrdinal = finalPosition === 1 ? '1st' : finalPosition === 2 ? '2nd' : finalPosition === 3 ? '3rd' : `${finalPosition}th`;
                     const trophiesWon: string[] = [];
-                    if (finalPosition === 1) {
-                        trophiesWon.push(`${userClub.league} Champion`);
-                    }
+                    if (userClub.league === 'MLS') trophiesWon.push(...getMLSSeasonHonors(Object.values(activeTeams), fixtures, userClub.name));
+                    else if (finalPosition === 1) trophiesWon.push(`${userClub.league} Champion`);
                     const honorsEntry = {
                         year: currentYear,
                         teamName: userTeamName,
@@ -1200,20 +1212,7 @@ export default function App() {
                     setCareerHistory(prev => [...prev, honorsEntry]);
                 }
 
-                const clWeeks = [5, 9, 13, 17, 21, 25, 29, 33];
-                const clFixtures = generateSwissFixtures(participants.map(n => nextYearTeams[n]));
-                const finalFixtures: Fixture[] = [];
-                domesticFixtures.forEach(f => {
-                    let gameWeek = f.week;
-                    if (f.week >= 5) gameWeek++; if (f.week >= 9) gameWeek++; if (f.week >= 13) gameWeek++;
-                    if (f.week >= 17) gameWeek++; if (f.week >= 21) gameWeek++; if (f.week >= 25) gameWeek++;
-                    if (f.week >= 29) gameWeek++; if (f.week >= 33) gameWeek++;
-                    finalFixtures.push({ ...f, week: gameWeek });
-                });
-                clFixtures.forEach(f => { if (clWeeks[f.week - 1]) finalFixtures.push({ ...f, week: clWeeks[f.week - 1] }); });
-
-                setFixtures(finalFixtures);
-                setWeeksInSeason(Math.max(...finalFixtures.map(f => f.week)) + 10);
+                const finalFixtures = season.fixtures;
                 setCurrentFixture(finalFixtures.find(f => (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && f.week === 1));
                 setMatchState(null);
                 setGameState(GameState.PRE_MATCH);
@@ -1249,8 +1248,8 @@ export default function App() {
         const nextW = currentWeek + 1;
         const results: Fixture[] = [];
         let updatedTable = [...leagueTable];
-        const updateTeam = (table: any[], name: string, goalsFor: number, goalsAgainst: number) => {
-            const idx = table.findIndex(t => t.teamName === name);
+        const updateTeam = (table: any[], name: string, goalsFor: number, goalsAgainst: number, league: string) => {
+            const idx = table.findIndex(t => t.teamName === name && t.league === league);
             if (idx !== -1) { 
                 const t = { ...table[idx] }; 
                 t.played++; 
@@ -1265,20 +1264,23 @@ export default function App() {
         };
 
         const nextFixtures = fixtures.map(f => {
-            if (f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName) {
-                if (f.isKnockout) {
+            if (!f.played && f.week === currentWeek && f.homeTeam !== userTeamName && f.awayTeam !== userTeamName) {
+                if (isMLSPlayoffFixture(f)) {
+                    const resolved = resolveMLSPlayoffMatch(f, activeTeams[f.homeTeam], activeTeams[f.awayTeam]);
+                    results.push(resolved); return resolved;
+                } else if (f.isKnockout) {
                     const res = simulateKnockoutQuickMatch(activeTeams[f.homeTeam], activeTeams[f.awayTeam], f.id);
                     results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner, penalties: res.penalties, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames });
                     return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, penaltyWinner: res.penaltyWinner, penalties: res.penalties, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames };
                 } else {
                     const res = simulateQuickMatch(activeTeams[f.homeTeam], activeTeams[f.awayTeam], f.id);
                     results.push({ ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames });
-                    updateTeam(updatedTable, f.homeTeam, res.homeGoals, res.awayGoals);
-                    updateTeam(updatedTable, f.awayTeam, res.awayGoals, res.homeGoals);
+                    updateTeam(updatedTable, f.homeTeam, res.homeGoals, res.awayGoals, f.league);
+                    updateTeam(updatedTable, f.awayTeam, res.awayGoals, res.homeGoals, f.league);
                     return { ...f, played: true, score: `${res.homeGoals}-${res.awayGoals}`, events: res.events, participantNames: res.participantNames, goalkeeperNames: res.goalkeeperNames };
                 }
             }
-            if (f.week === currentWeek && (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && matchState) {
+            if (!f.played && f.week === currentWeek && (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && matchState?.isFinished) {
                 return { 
                     ...f, 
                     played: true, 
@@ -1291,6 +1293,14 @@ export default function App() {
             }
             return f;
         });
+
+        if (gameMode === 'Club') {
+            let playoffWeek = nextW;
+            while ((CL_RESERVED_WEEKS as readonly number[]).includes(playoffWeek)) playoffWeek++;
+            const additions = generateMLSPlayoffFixtures(Object.values(activeTeams), nextFixtures, playoffWeek);
+            nextFixtures.push(...additions);
+            if (additions.length) setWeeksInSeason(previous => Math.max(previous, getDomesticSeasonLength(nextFixtures) + 1));
+        }
 
         // --- World Cup Prologue Knockout Generation ---
         if (gameMode === 'WorldCup' && isPrologue) {
@@ -1938,16 +1948,29 @@ export default function App() {
         }
 
         setWeeklyResults(results); 
+        committedWeekRef.current = advanceKey;
         setCurrentWeek(nextW);
-        setCurrentFixture(nextFixtures.find(f => (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && f.week === nextW));
+        setCurrentFixture(nextFixtures.find(f => !f.played && (f.homeTeam === userTeamName || f.awayTeam === userTeamName) && f.week === nextW));
         setMatchState(null); 
         setGameState(GameState.PRE_MATCH); 
         setIsLoading(false);
         setAppScreen(AppScreen.GAMEPLAY);
+        } catch (error) {
+            setTeams(before.teams); setLeagueTable(before.leagueTable); setFixtures(before.fixtures); setNews(before.news); setWeeklyResults(before.weeklyResults);
+            setCurrentYear(before.currentYear); setCurrentWeek(before.currentWeek); setIncomingBids(before.incomingBids); setTransferMarket(before.transferMarket);
+            setCareerHistory(before.careerHistory); setInternationalTournament(before.internationalTournament); setRelationshipIncidents(before.relationshipIncidents);
+            relationshipsRef.current = before.relationshipIncidents; setManagerReputation(before.reputation);
+            if (committedWeekRef.current === advanceKey) committedWeekRef.current = null;
+            setError(error instanceof Error ? error.message : 'Week advance failed.');
+        } finally {
+            advancingRef.current = false;
+            setIsLoading(false);
+            setAdvanceRevision(r => r + 1);
+        }
     };
 
     const handleStartMatch = () => {
-        if (!currentFixture || !userTeam) return;
+        if (!currentFixture || currentFixture.played || !userTeam) return;
         
         // Validation: prevent starting injured, suspended, or sent-off players
         const unavailableStarters = userTeam.players.filter(p => 
@@ -1993,7 +2016,7 @@ export default function App() {
     };
 
     const finishMatch = (completedMatch: MatchState | null = matchState) => {
-        if (!completedMatch || !userTeamName || !currentFixture) return;
+        if (!completedMatch || !userTeamName || !currentFixture || fixtures.find(f => f.id === currentFixture.id)?.played) return;
         const key = completedMatch.sessionId || currentFixture.id;
         if (finishedMatchRef.current === key) return;
         finishedMatchRef.current = key;
@@ -2018,7 +2041,7 @@ export default function App() {
             setLeagueTable(prev => {
                 const newTable = [...prev];
                 const updateTeam = (name: string, goalsFor: number, goalsAgainst: number) => {
-                    const idx = newTable.findIndex(t => t.teamName === name);
+                    const idx = newTable.findIndex(t => t.teamName === name && t.league === currentFixture.league);
                     if (idx !== -1) { 
                         const t = { ...newTable[idx] }; 
                         t.played++; 

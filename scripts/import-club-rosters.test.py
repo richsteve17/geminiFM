@@ -208,11 +208,42 @@ class BundledSnapshotTests(unittest.TestCase):
     def test_catalog_scope(self):
         config = json.loads(IMPORTER.CONFIG.read_text())
         games = IMPORTER.catalog(config)
-        self.assertEqual(len(games), 82)
+        self.assertEqual(len(games), 150)
         self.assertEqual(Counter(game['gameLeague'] for game in games), {
-            'Premier League': 20, 'Championship': 10, 'La Liga': 10, 'Serie A': 10,
-            'Bundesliga': 10, 'Ligue 1': 10, 'MLS': 12})
-        self.assertNotIn('sourceTeamId', json.dumps(config))
+            'Premier League': 20, 'Championship': 24, 'La Liga': 20, 'Serie A': 20,
+            'Bundesliga': 18, 'Ligue 1': 18, 'MLS': 30})
+        self.assertEqual(config['leagueInventories'], {
+            'Premier League': ['eng.1'], 'Championship': ['eng.2'], 'La Liga': ['esp.1'],
+            'Serie A': ['ita.1'], 'Bundesliga': ['ger.1'], 'Ligue 1': ['fra.1'], 'MLS': ['usa.1']})
+        self.assertEqual(config['canonicalSourceTeamIds']['366'], 'Sunderland')
+        self.assertEqual(config['canonicalSourceTeamIds']['83'], 'FC Barcelona')
+        self.assertFalse({'Leicester City', 'Girona', 'Wolfsburg', 'Nantes', 'Reims'} & {g['gameName'] for g in games})
+
+    def test_catalog_exactly_matches_cached_current_supported_inventories(self):
+        config = json.loads(IMPORTER.CONFIG.read_text())
+        if not (IMPORTER.DEFAULT_CACHE / 'snapshot-cache.json').exists():
+            self.skipTest('Historical raw cache unavailable; bundled contract checks still run')
+        fetcher = IMPORTER.Fetcher(IMPORTER.DEFAULT_CACHE, DATE, offline=True)
+        snapshot = json.loads((IMPORTER.ROOT / 'src/data/clubRosterSnapshot.json').read_text())
+        with patch('urllib.request.urlopen', side_effect=AssertionError('Network forbidden')):
+            inventories = dict(IMPORTER.load_inventory(fetcher, codes[0], DATE)
+                               for codes in config['leagueInventories'].values())
+            for league, codes in config['leagueInventories'].items():
+                code = codes[0]
+                expected_ids = {str(t['id']) for t in inventories[code]['teams']}
+                bundled = [t for t in snapshot['teams'] if t['gameLeague'] == league]
+                self.assertEqual(len(bundled), config['expectedLeagueCounts'][league])
+                self.assertEqual({t['sourceTeamId'] for t in bundled}, expected_ids)
+                self.assertTrue(all(t['sourceLeagueCode'] == code for t in bundled))
+                for team in bundled:
+                    url = f"{IMPORTER.SITE}/{code}/teams/{team['sourceTeamId']}/roster?limit=500"
+                    raw = fetcher.get(url)
+                    expected = [IMPORTER.source_player(p, team['sourceName'], raw, code)
+                                for p in raw['payload']['athletes']]
+                    self.assertEqual(team['players'], expected)
+                    canonical = config['canonicalSourceTeamIds'].get(team['sourceTeamId'])
+                    if canonical:
+                        self.assertEqual(team['gameName'], canonical)
 
     def test_bundled_contract_and_coverage(self):
         path = IMPORTER.ROOT / 'src/data/clubRosterSnapshot.json'
@@ -226,7 +257,7 @@ class BundledSnapshotTests(unittest.TestCase):
             [(g['gameName'], g['gameLeague']) for g in IMPORTER.catalog(config)])
         teams = snapshot['teams']
         players = [p for t in teams for p in t['players']]
-        self.assertEqual(snapshot['coverage']['catalogClubs'], 82)
+        self.assertEqual(snapshot['coverage']['catalogClubs'], 150)
         self.assertEqual(snapshot['coverage']['clubsWithRoster'], sum(bool(t['players']) for t in teams))
         self.assertEqual(snapshot['coverage']['athleteEntries'], len(players))
         self.assertEqual(snapshot['coverage']['uniqueAthleteIds'], len({p['externalId'] for p in players}))

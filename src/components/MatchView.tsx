@@ -272,12 +272,12 @@ export default function MatchView({
     if (isSeasonOver) return (
         <div className="fm-panel p-6 sm:p-8">
             <h2 className="fm-screen-title text-3xl mb-4">Season Over!</h2>
-            <button onClick={onNextMatch} className="fm-button px-6">End Season</button>
+            <button onClick={onNextMatch} disabled={isLoading} className="fm-button px-6">End Season</button>
         </div>
     );
 
     if (gameState === GameState.PRE_MATCH && !fixture) {
-         return <div className="fm-panel p-6 sm:p-8"><h2 className="fm-screen-title text-2xl mb-2">Week {currentWeek}</h2><p>No match scheduled.</p></div>;
+         return <div className="fm-panel p-6 sm:p-8"><h2 className="fm-screen-title text-2xl mb-2">Week {currentWeek}</h2><p>No match scheduled.</p><button onClick={onNextMatch} disabled={isLoading} className="fm-button mt-4 px-6">CONTINUE</button></div>;
     }
 
     const currentMinute = matchState?.currentMinute || 0;
@@ -386,7 +386,7 @@ export default function MatchView({
                                 {matchState?.currentMinute !== 45 && (matchState?.currentMinute || 0) < 90 && <div className="flex flex-wrap gap-2 sm:ml-auto"><button onClick={() => onPlaySecondHalf('resume')} className="fm-button px-5">RESUME MATCH</button><button onClick={() => onSimulateSegment(90)} className="fm-button-secondary px-5">Sim to End</button></div>}
                             </>
                         )}
-                        {(gameState === GameState.POST_MATCH || (gameState === GameState.PRE_MATCH && !fixture)) && <button onClick={onNextMatch} className="fm-button px-6">CONTINUE</button>}
+                        {(gameState === GameState.POST_MATCH || (gameState === GameState.PRE_MATCH && !fixture)) && <button onClick={onNextMatch} disabled={isLoading} className="fm-button px-6">CONTINUE</button>}
                     </div>
                 )}
             </div>

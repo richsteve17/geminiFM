@@ -1,55 +1,696 @@
 {
   "schemaVersion": 1,
-  "catalogBaseline": "v3.4.0 / 66b6a64",
+  "catalogBaseline": "ESPN current supported domestic inventories / 2026-11-07",
   "provider": "ESPN",
   "documentation": [
     "https://py.sportsdataverse.org/docs/soccer/reference/site",
     "https://github.com/pseudo-r/Public-ESPN-API/blob/main/docs/sports/soccer.md"
   ],
   "leagueInventories": {
-    "Premier League": ["eng.1", "eng.2", "eng.3", "eng.4"],
-    "Championship": ["eng.2", "eng.1", "eng.3", "eng.4"],
-    "La Liga": ["esp.1", "esp.2"],
-    "Serie A": ["ita.1", "ita.2"],
-    "Bundesliga": ["ger.1", "ger.2"],
-    "Ligue 1": ["fra.1", "fra.2"],
-    "MLS": ["usa.1"]
+    "Premier League": [
+      "eng.1"
+    ],
+    "Championship": [
+      "eng.2"
+    ],
+    "La Liga": [
+      "esp.1"
+    ],
+    "Serie A": [
+      "ita.1"
+    ],
+    "Bundesliga": [
+      "ger.1"
+    ],
+    "Ligue 1": [
+      "fra.1"
+    ],
+    "MLS": [
+      "usa.1"
+    ]
   },
   "catalog": {
-    "Premier League": ["Manchester City", "Liverpool", "Arsenal", "Chelsea", "Tottenham", "Newcastle United", "Aston Villa", "West Ham", "Brighton", "Manchester United", "Everton", "Wolves", "Fulham", "Nottingham Forest", "Leicester City", "Bournemouth", "Crystal Palace", "Ipswich Town", "Southampton", "Brentford"],
-    "Championship": ["Sunderland", "Burnley", "Leeds United", "Norwich City", "Watford", "Sheffield United", "Middlesbrough", "West Brom", "Stoke City", "Coventry City"],
-    "La Liga": ["Real Madrid", "FC Barcelona", "Atletico Madrid", "Sevilla", "Real Sociedad", "Athletic Bilbao", "Valencia", "Villarreal", "Real Betis", "Girona"],
-    "Serie A": ["Juventus", "Inter Milan", "AC Milan", "Napoli", "AS Roma", "Lazio", "Atalanta", "Fiorentina", "Bologna", "Torino"],
-    "Bundesliga": ["Bayern Munich", "Dortmund", "RB Leipzig", "Bayer Leverkusen", "Eintracht Frankfurt", "Stuttgart", "Wolfsburg", "Gladbach", "Union Berlin", "Hoffenheim"],
-    "Ligue 1": ["PSG", "Marseille", "Lyon", "Monaco", "Nice", "Lille", "Lens", "Rennes", "Nantes", "Reims"],
-    "MLS": ["Inter Miami", "LA Galaxy", "NYCFC", "Atlanta United", "Seattle Sounders", "Portland Timbers", "LAFC", "Columbus Crew", "Toronto FC", "Chicago Fire", "Philadelphia Union", "NY Red Bulls"]
+    "Premier League": [
+      "Bournemouth",
+      "Arsenal",
+      "Aston Villa",
+      "Brentford",
+      "Brighton",
+      "Chelsea",
+      "Coventry City",
+      "Crystal Palace",
+      "Everton",
+      "Fulham",
+      "Hull City",
+      "Ipswich Town",
+      "Leeds United",
+      "Liverpool",
+      "Manchester City",
+      "Manchester United",
+      "Newcastle United",
+      "Nottingham Forest",
+      "Sunderland",
+      "Tottenham"
+    ],
+    "Championship": [
+      "Birmingham City",
+      "Blackburn Rovers",
+      "Bolton Wanderers",
+      "Bristol City",
+      "Burnley",
+      "Cardiff City",
+      "Charlton Athletic",
+      "Derby County",
+      "Lincoln City",
+      "Middlesbrough",
+      "Millwall",
+      "Norwich City",
+      "Portsmouth",
+      "Preston North End",
+      "Queens Park Rangers",
+      "Sheffield United",
+      "Southampton",
+      "Stoke City",
+      "Swansea City",
+      "Watford",
+      "West Brom",
+      "West Ham",
+      "Wolves",
+      "Wrexham"
+    ],
+    "La Liga": [
+      "Alavés",
+      "Athletic Bilbao",
+      "Atletico Madrid",
+      "FC Barcelona",
+      "Celta Vigo",
+      "Deportivo",
+      "Elche",
+      "Espanyol",
+      "Getafe",
+      "Levante",
+      "Málaga",
+      "Osasuna",
+      "Racing Santander",
+      "Rayo Vallecano",
+      "Real Betis",
+      "Real Madrid",
+      "Real Sociedad",
+      "Sevilla",
+      "Valencia",
+      "Villarreal"
+    ],
+    "Serie A": [
+      "AC Milan",
+      "AS Roma",
+      "Atalanta",
+      "Bologna",
+      "Cagliari",
+      "Como",
+      "Fiorentina",
+      "Frosinone",
+      "Genoa",
+      "Inter Milan",
+      "Juventus",
+      "Lazio",
+      "Lecce",
+      "Monza",
+      "Napoli",
+      "Parma",
+      "Sassuolo",
+      "Torino",
+      "Udinese",
+      "Venezia"
+    ],
+    "Bundesliga": [
+      "Union Berlin",
+      "Bayer Leverkusen",
+      "Bayern Munich",
+      "Dortmund",
+      "Gladbach",
+      "Eintracht Frankfurt",
+      "FC Augsburg",
+      "FC Cologne",
+      "Hamburg SV",
+      "Mainz",
+      "RB Leipzig",
+      "SC Freiburg",
+      "SC Paderborn 07",
+      "SV Elversberg",
+      "Schalke 04",
+      "Hoffenheim",
+      "Stuttgart",
+      "Werder Bremen"
+    ],
+    "Ligue 1": [
+      "AJ Auxerre",
+      "Monaco",
+      "Angers",
+      "Brest",
+      "Le Havre AC",
+      "Le Mans",
+      "Lens",
+      "Lille",
+      "Lorient",
+      "Lyon",
+      "Marseille",
+      "Nice",
+      "Paris FC",
+      "PSG",
+      "Rennes",
+      "Strasbourg",
+      "Toulouse",
+      "Troyes"
+    ],
+    "MLS": [
+      "Atlanta United",
+      "Austin FC",
+      "CF Montréal",
+      "Charlotte FC",
+      "Chicago Fire",
+      "Colorado Rapids",
+      "Columbus Crew",
+      "D.C. United",
+      "FC Cincinnati",
+      "FC Dallas",
+      "Houston Dynamo FC",
+      "Inter Miami",
+      "LA Galaxy",
+      "LAFC",
+      "Minnesota United FC",
+      "Nashville SC",
+      "New England Revolution",
+      "NYCFC",
+      "Orlando City SC",
+      "Philadelphia Union",
+      "Portland Timbers",
+      "Real Salt Lake",
+      "NY Red Bulls",
+      "San Diego FC",
+      "San Jose Earthquakes",
+      "Seattle Sounders",
+      "Sporting Kansas City",
+      "St. Louis CITY SC",
+      "Toronto FC",
+      "Vancouver Whitecaps"
+    ]
   },
   "aliases": {
-    "Tottenham": ["Tottenham Hotspur"],
-    "West Ham": ["West Ham United"],
-    "Brighton": ["Brighton & Hove Albion"],
-    "Wolves": ["Wolverhampton Wanderers"],
-    "Bournemouth": ["AFC Bournemouth"],
-    "West Brom": ["West Bromwich Albion"],
-    "FC Barcelona": ["Barcelona"],
-    "Atletico Madrid": ["Atlético Madrid"],
-    "Athletic Bilbao": ["Athletic Club"],
-    "Inter Milan": ["Internazionale", "Inter"],
-    "AS Roma": ["AS Roma", "Roma"],
-    "Dortmund": ["Borussia Dortmund"],
-    "Stuttgart": ["VfB Stuttgart"],
-    "Wolfsburg": ["VfL Wolfsburg"],
-    "Gladbach": ["Borussia Mönchengladbach"],
-    "Union Berlin": ["1. FC Union Berlin"],
-    "Hoffenheim": ["TSG Hoffenheim", "TSG 1899 Hoffenheim"],
-    "PSG": ["Paris Saint-Germain"],
-    "Inter Miami": ["Inter Miami CF"],
-    "LA Galaxy": ["LA Galaxy", "Los Angeles Galaxy"],
-    "NYCFC": ["New York City FC"],
-    "Atlanta United": ["Atlanta United FC"],
-    "Chicago Fire": ["Chicago Fire FC"],
-    "Seattle Sounders": ["Seattle Sounders FC"],
-    "LAFC": ["Los Angeles FC"],
-    "NY Red Bulls": ["New York Red Bulls", "Red Bull New York"]
-  }
+    "Tottenham": [
+      "Tottenham Hotspur",
+      "Spurs"
+    ],
+    "West Ham": [
+      "West Ham United"
+    ],
+    "Brighton": [
+      "Brighton & Hove Albion"
+    ],
+    "Wolves": [
+      "Wolverhampton Wanderers"
+    ],
+    "Bournemouth": [
+      "AFC Bournemouth"
+    ],
+    "West Brom": [
+      "West Bromwich Albion"
+    ],
+    "FC Barcelona": [
+      "Barcelona"
+    ],
+    "Atletico Madrid": [
+      "Atlético Madrid",
+      "Atlético"
+    ],
+    "Athletic Bilbao": [
+      "Athletic Club",
+      "Athletic"
+    ],
+    "Inter Milan": [
+      "Internazionale",
+      "Inter"
+    ],
+    "AS Roma": [
+      "AS Roma",
+      "Roma"
+    ],
+    "Dortmund": [
+      "Borussia Dortmund"
+    ],
+    "Stuttgart": [
+      "VfB Stuttgart"
+    ],
+    "Wolfsburg": [
+      "VfL Wolfsburg"
+    ],
+    "Gladbach": [
+      "Borussia Mönchengladbach"
+    ],
+    "Union Berlin": [
+      "1. FC Union Berlin"
+    ],
+    "Hoffenheim": [
+      "TSG Hoffenheim",
+      "TSG 1899 Hoffenheim"
+    ],
+    "PSG": [
+      "Paris Saint-Germain"
+    ],
+    "Inter Miami": [
+      "Inter Miami CF",
+      "Miami"
+    ],
+    "LA Galaxy": [
+      "LA Galaxy",
+      "Los Angeles Galaxy"
+    ],
+    "NYCFC": [
+      "New York City FC"
+    ],
+    "Atlanta United": [
+      "Atlanta United FC",
+      "Atlanta"
+    ],
+    "Chicago Fire": [
+      "Chicago Fire FC",
+      "Chicago"
+    ],
+    "Seattle Sounders": [
+      "Seattle Sounders FC",
+      "Seattle"
+    ],
+    "LAFC": [
+      "Los Angeles FC"
+    ],
+    "NY Red Bulls": [
+      "New York Red Bulls",
+      "Red Bull New York",
+      "Red Bull NY"
+    ],
+    "Coventry City": [
+      "Coventry"
+    ],
+    "Crystal Palace": [
+      "C Palace"
+    ],
+    "Hull City": [
+      "Hull"
+    ],
+    "Ipswich Town": [
+      "Ipswich"
+    ],
+    "Leeds United": [
+      "Leeds"
+    ],
+    "Manchester City": [
+      "Man City"
+    ],
+    "Manchester United": [
+      "Man Utd"
+    ],
+    "Newcastle United": [
+      "Newcastle"
+    ],
+    "Nottingham Forest": [
+      "Nottm Forest"
+    ],
+    "Birmingham City": [
+      "Birmingham"
+    ],
+    "Blackburn Rovers": [
+      "Blackburn"
+    ],
+    "Bolton Wanderers": [
+      "Bolton"
+    ],
+    "Cardiff City": [
+      "Cardiff"
+    ],
+    "Charlton Athletic": [
+      "Charlton"
+    ],
+    "Derby County": [
+      "Derby"
+    ],
+    "Middlesbrough": [
+      "Boro"
+    ],
+    "Preston North End": [
+      "Preston"
+    ],
+    "Queens Park Rangers": [
+      "QPR"
+    ],
+    "Sheffield United": [
+      "Sheffield Utd"
+    ],
+    "Stoke City": [
+      "Stoke"
+    ],
+    "Swansea City": [
+      "Swansea"
+    ],
+    "Racing Santander": [
+      "Racing"
+    ],
+    "Rayo Vallecano": [
+      "Rayo"
+    ],
+    "Real Betis": [
+      "Betis"
+    ],
+    "AC Milan": [
+      "Milan"
+    ],
+    "Bayer Leverkusen": [
+      "Leverkusen"
+    ],
+    "Bayern Munich": [
+      "Bayern"
+    ],
+    "Eintracht Frankfurt": [
+      "Frankfurt"
+    ],
+    "FC Augsburg": [
+      "Augsburg"
+    ],
+    "FC Cologne": [
+      "Cologne"
+    ],
+    "Hamburg SV": [
+      "Hamburg"
+    ],
+    "SC Freiburg": [
+      "Freiburg"
+    ],
+    "SC Paderborn 07": [
+      "Paderborn"
+    ],
+    "SV Elversberg": [
+      "Elversberg"
+    ],
+    "Schalke 04": [
+      "Schalke"
+    ],
+    "Werder Bremen": [
+      "Bremen"
+    ],
+    "AJ Auxerre": [
+      "Auxerre"
+    ],
+    "Monaco": [
+      "AS Monaco"
+    ],
+    "Rennes": [
+      "Stade Rennais"
+    ],
+    "Austin FC": [
+      "Austin"
+    ],
+    "Charlotte FC": [
+      "Charlotte"
+    ],
+    "Colorado Rapids": [
+      "Colorado"
+    ],
+    "Columbus Crew": [
+      "Columbus"
+    ],
+    "FC Cincinnati": [
+      "Cincinnati"
+    ],
+    "FC Dallas": [
+      "Dallas"
+    ],
+    "Houston Dynamo FC": [
+      "Houston"
+    ],
+    "Minnesota United FC": [
+      "Minnesota"
+    ],
+    "Nashville SC": [
+      "Nashville"
+    ],
+    "New England Revolution": [
+      "New England"
+    ],
+    "Orlando City SC": [
+      "Orlando"
+    ],
+    "Philadelphia Union": [
+      "Philadelphia"
+    ],
+    "Portland Timbers": [
+      "Portland"
+    ],
+    "Real Salt Lake": [
+      "Salt Lake"
+    ],
+    "San Diego FC": [
+      "San Diego"
+    ],
+    "San Jose Earthquakes": [
+      "San Jose"
+    ],
+    "Sporting Kansas City": [
+      "Kansas City"
+    ],
+    "St. Louis CITY SC": [
+      "St. Louis"
+    ],
+    "Toronto FC": [
+      "Toronto"
+    ],
+    "Vancouver Whitecaps": [
+      "Vancouver"
+    ]
+  },
+  "snapshotDate": "2026-11-07",
+  "canonicalSourceTeamIds": {
+    "382": "Manchester City",
+    "364": "Liverpool",
+    "359": "Arsenal",
+    "363": "Chelsea",
+    "367": "Tottenham",
+    "361": "Newcastle United",
+    "362": "Aston Villa",
+    "371": "West Ham",
+    "331": "Brighton",
+    "360": "Manchester United",
+    "368": "Everton",
+    "380": "Wolves",
+    "370": "Fulham",
+    "393": "Nottingham Forest",
+    "375": "Leicester City",
+    "349": "Bournemouth",
+    "384": "Crystal Palace",
+    "373": "Ipswich Town",
+    "376": "Southampton",
+    "337": "Brentford",
+    "366": "Sunderland",
+    "379": "Burnley",
+    "357": "Leeds United",
+    "381": "Norwich City",
+    "395": "Watford",
+    "398": "Sheffield United",
+    "369": "Middlesbrough",
+    "383": "West Brom",
+    "336": "Stoke City",
+    "388": "Coventry City",
+    "86": "Real Madrid",
+    "83": "FC Barcelona",
+    "1068": "Atletico Madrid",
+    "243": "Sevilla",
+    "89": "Real Sociedad",
+    "93": "Athletic Bilbao",
+    "94": "Valencia",
+    "102": "Villarreal",
+    "244": "Real Betis",
+    "9812": "Girona",
+    "111": "Juventus",
+    "110": "Inter Milan",
+    "103": "AC Milan",
+    "114": "Napoli",
+    "104": "AS Roma",
+    "112": "Lazio",
+    "105": "Atalanta",
+    "109": "Fiorentina",
+    "107": "Bologna",
+    "239": "Torino",
+    "132": "Bayern Munich",
+    "124": "Dortmund",
+    "11420": "RB Leipzig",
+    "131": "Bayer Leverkusen",
+    "125": "Eintracht Frankfurt",
+    "134": "Stuttgart",
+    "138": "Wolfsburg",
+    "268": "Gladbach",
+    "598": "Union Berlin",
+    "7911": "Hoffenheim",
+    "160": "PSG",
+    "176": "Marseille",
+    "167": "Lyon",
+    "174": "Monaco",
+    "2502": "Nice",
+    "166": "Lille",
+    "175": "Lens",
+    "169": "Rennes",
+    "165": "Nantes",
+    "3243": "Reims",
+    "20232": "Inter Miami",
+    "187": "LA Galaxy",
+    "17606": "NYCFC",
+    "18418": "Atlanta United",
+    "9726": "Seattle Sounders",
+    "9723": "Portland Timbers",
+    "18966": "LAFC",
+    "183": "Columbus Crew",
+    "7318": "Toronto FC",
+    "182": "Chicago Fire",
+    "10739": "Philadelphia Union",
+    "190": "NY Red Bulls"
+  },
+  "expectedLeagueCounts": {
+    "Premier League": 20,
+    "Championship": 24,
+    "La Liga": 20,
+    "Serie A": 20,
+    "Bundesliga": 18,
+    "Ligue 1": 18,
+    "MLS": 30
+  },
+  "catalogSources": [
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams?limit=1000",
+      "retrievedAt": "2026-11-07T16:49:58.606308+00:00",
+      "sourceTimestamp": null,
+      "season": {
+        "displayName": "2026",
+        "year": 2026
+      },
+      "competition": "eng.1",
+      "teamCount": 20,
+      "warnings": [
+        "Inventory has no source timestamp; retrievedAt is not a publication date"
+      ]
+    },
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.2/teams?limit=1000",
+      "retrievedAt": "2026-11-07T16:49:58.618047+00:00",
+      "sourceTimestamp": null,
+      "season": {
+        "displayName": "2026",
+        "year": 2026
+      },
+      "competition": "eng.2",
+      "teamCount": 24,
+      "warnings": [
+        "Inventory has no source timestamp; retrievedAt is not a publication date"
+      ]
+    },
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams?limit=1000",
+      "retrievedAt": "2026-11-07T16:50:01.383466+00:00",
+      "sourceTimestamp": null,
+      "season": {
+        "displayName": "2026",
+        "year": 2026
+      },
+      "competition": "esp.1",
+      "teamCount": 20,
+      "warnings": [
+        "Inventory has no source timestamp; retrievedAt is not a publication date"
+      ]
+    },
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/teams?limit=1000",
+      "retrievedAt": "2026-11-07T16:50:01.755340+00:00",
+      "sourceTimestamp": null,
+      "season": {
+        "displayName": "2026",
+        "year": 2026
+      },
+      "competition": "ita.1",
+      "teamCount": 20,
+      "warnings": [
+        "Inventory has no source timestamp; retrievedAt is not a publication date"
+      ]
+    },
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/teams?limit=1000",
+      "retrievedAt": "2026-11-07T16:50:06.781937+00:00",
+      "sourceTimestamp": null,
+      "season": {
+        "displayName": "2026",
+        "year": 2026
+      },
+      "competition": "ger.1",
+      "teamCount": 18,
+      "warnings": [
+        "Inventory has no source timestamp; retrievedAt is not a publication date"
+      ]
+    },
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/fra.1/teams?limit=1000",
+      "retrievedAt": "2026-11-07T16:50:08.143382+00:00",
+      "sourceTimestamp": null,
+      "season": {
+        "displayName": "2026",
+        "year": 2026
+      },
+      "competition": "fra.1",
+      "teamCount": 18,
+      "warnings": [
+        "Inventory has no source timestamp; retrievedAt is not a publication date"
+      ]
+    },
+    {
+      "provider": "ESPN",
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/teams?limit=1000",
+      "retrievedAt": "2026-11-07T16:50:11.296703+00:00",
+      "sourceTimestamp": null,
+      "season": {
+        "displayName": "2026",
+        "year": 2026
+      },
+      "competition": "usa.1",
+      "teamCount": 30,
+      "warnings": [
+        "Inventory has no source timestamp; retrievedAt is not a publication date"
+      ]
+    }
+  ],
+  "excludedLegacyClubs": [
+    {
+      "gameName": "Leicester City",
+      "sourceTeamId": "375",
+      "sourceLeagueCode": "eng.3"
+    },
+    {
+      "gameName": "Girona",
+      "sourceTeamId": "9812",
+      "sourceLeagueCode": "esp.2"
+    },
+    {
+      "gameName": "Wolfsburg",
+      "sourceTeamId": "138",
+      "sourceLeagueCode": "ger.2"
+    },
+    {
+      "gameName": "Nantes",
+      "sourceTeamId": "165",
+      "sourceLeagueCode": "fra.2"
+    },
+    {
+      "gameName": "Reims",
+      "sourceTeamId": "3243",
+      "sourceLeagueCode": "fra.2"
+    }
+  ]
 }

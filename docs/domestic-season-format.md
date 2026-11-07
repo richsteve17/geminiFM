@@ -1,0 +1,43 @@
+# Domestic season format
+
+Verified on 2026-11-07. MLS 2026 has 30 clubs in two 15-club conferences. Each plays 34 regular-season games: 28 against conference opponents home and away, plus six distinct cross-conference opponents, for 17 home and 17 away games.[1]
+
+Each conference qualifies seeds 1–7 to Round One; seeds 8–9 contest a single Wild Card match at seed 8. Wild Card and Round One ties go directly to penalties after 90 minutes. Round One is first to two match wins, home–away–home for the higher seed; no aggregate score. Conference Semifinals have fixed bracket pairings 1/8/9 winner versus 4/5 winner, and 2/7 winner versus 3/6 winner. Semifinals, Conference Finals and MLS Cup use full 30-minute extra time before penalties if still tied. The higher conference seed hosts conference elimination games; the finalist with the better regular-season overall record hosts MLS Cup.[2]
+
+The dated November 5 official standings article orders tiebreakers as wins, goal difference, goals for, fewest disciplinary points per match, away goal difference, away goals for, home goal difference, home goals for, then a coin toss or drawing of lots. The undated competition-guidelines page inserts intraconference head-to-head before disciplinary points. This implementation follows the newer, specifically dated Decision Day article and records this official-source inconsistency rather than silently combining two orders.[1] [3]
+
+## References
+
+[1]: https://www.mlssoccer.com/about/competition-guidelines "Official MLS competition guidelines and 2026 conference memberships"
+[2]: https://www.mlssoccer.com/news/audi-2026-mls-cup-playoffs-format-how-it-works "Official Audi 2026 MLS Cup Playoffs format"
+[3]: https://www.mlssoccer.com/news/tiebreakers-for-2026-mls-regular-season-standings "Official MLS standings tiebreakers, November 5 2026"
+
+## Implemented scheduling and integration
+
+`src/engine/domesticSeason.ts` exports `generateDomesticFixtures(teams)` and `getDomesticSeasonLength(fixtures)`. European divisions use complete double round robins for their supplied membership; an odd count uses genuine byes, never a placeholder club. International and Champions League entries are excluded. The current expanded inventory was checked at 20 Premier League, 24 Championship, 20 La Liga, 20 Serie A, 18 Bundesliga, 18 Ligue 1 and 30 MLS clubs: 2,814 total domestic matches, of which 510 are MLS.
+
+MLS scheduling is explicitly **synthetic**, not the official 2026 opponent selection or dates. It has two 15-club conference round robins taking 30 abstract slots, including two byes per club, followed by six cross-conference matchings. Each MLS club plays exactly 34 games, 17 home and 17 away, including six distinct cross-conference opponents. The 36 abstract slots are not calendar weeks or the real league's 35 matchdays. The official schedule-release page confirms all 510 games and links a separate full schedule surface, but did not expose a complete structured schedule in the extracted announcement; no actual-fixture import was attempted beyond this bounded source check.[4] No provider runs in the game loop.
+
+`domesticSlotToWeek(slot)` skips the actual Champions League game weeks 5, 9, 13, 17, 21, 25, 29 and 33. For example, domestic slot 8 becomes game week 10, not the formerly colliding week 9. Championship slot 46 becomes game week 54. MLS slot 36 becomes game week 44, with postseason added from week 45. App retains its existing 10-week end-of-season overhead, so the complete current universe has a 64-week game season; these remain abstract simulation weeks, not real dates.
+
+App's shared `createClubSeason` is now used by both new start and rollover. `createSeasonTable(teams, clParticipants)` creates separate `(league, teamName)` rows for domestic play and Champions League entrants. Background and live accounting both match those composite keys. Played fixtures are excluded from background replay, and already recorded live fixtures cannot be restarted/re-finished. Rollover handles a null manager club and resets the next campaign even when dismissal causes an early return. Board evaluation no longer announces fictional relegation into unsupported divisions; no promotion/relegation engine was added.
+
+Continue still restores `parsed.teams`, fixtures and results rather than sourcing a new club universe. Incomplete legacy MLS careers retain their existing regular-season game-week template at rollover, with results cleared as normal for a new season. They do not receive fabricated 30-club memberships or current-format playoffs. New/current MLS generation rejects incomplete or unknown membership instead of silently applying a European 58-game season.
+
+## MLS helper contracts
+
+`getMLSConference(teamOrName)` handles official 2026 conference membership plus existing game aliases. `getMLSStandings(teams, fixtures, options)` derives regular-season totals, home/away goals and the dated official tiebreaker order. `options.disciplinaryPoints` accepts a complete external foul/card/staff ledger; App currently supplies none, so this criterion is neutral rather than falsely inferred from incomplete events. The final coin toss/drawing of lots is a deterministic seeded game draw. `options.cancelledMatches` switches standings to per-game criteria only when explicitly supplied; automatic postseason progression currently requires a completed 34-game regular season per club and does not resolve cancellations.
+
+`generateMLSPlayoffFixtures(teams, fixtures, nextWeek)` returns only missing next fixtures and never changes a recorded result. App calls it inside `proceedToNextWeek`, after current-week background simulation and before storing the new ledger, skipping reserved European weeks. Seeds 8 and 9 contest each conference Wild Card; seeds 1–7 wait for their winners. Round One uses the fixed 1–wildcard, 2–7, 3–6, 4–5 bracket and first to two match wins, scheduling a third game only after a split. Semifinals preserve the bracket instead of reseeding. Conference rounds use the higher original seed's home ground; Cup hosting uses overall regular-season priority.
+
+Postseason fixtures have `league: 'MLS'`, `isKnockout: true`, `tournamentId: 'mls-playoffs-2026-format'`, stable stage/series/game IDs and existing supported `Fixture.stage` values: `Play-offs` means Wild Card; `Round of 16` means Round One Best-of-3; `Quarter Final` means Conference Semifinal; `Semi Final` means Conference Final; `Final` means MLS Cup. `isMLSPlayoffFixture` and `getMLSPlayoffMatchRules` expose unambiguous format-specific labels, extra-time rules and wins required without changing the persisted Fixture schema.
+
+`resolveMLSPlayoffMatch(fixture, home, away)` reuses existing deterministic quick-match, segment and shootout engines. Wild Card/Round One ties go directly to shootouts at 90 minutes; later rounds simulate actual 91–120-minute goal events before penalties. App's live playback uses the same stage-specific boundary, recording the shootout commentary at the real completion minute rather than always minute 120. `getFixtureWinner` returns no winner for pending, malformed or unresolved drawn results. `getMLSSeasonHonors` distinguishes `MLS Supporters’ Shield` from `MLS Cup Champion`; App writes these separately to career history, including the dismissal branch. An overall regular-season winner is never labelled `MLS Champion` merely for topping the table.
+
+The 2026 format is a pinned rules baseline, not a claim about later real-world MLS seasons. Champions League league-phase participant rows and calendar collisions are repaired here, but its existing synthetic Swiss pairing method, missing club-mode knockout progression, general league-table presentation and trophy-summary widgets are not redesigned. No browser end-to-end smoke test was performed; focused executable engine tests plus App source-wiring guards cover the bounded change.
+
+[4]: https://www.mlssoccer.com/news/mls-announces-2026-regular-season-schedule "Official MLS 2026 schedule announcement, November 20 2025"
+
+## Review fixes
+
+Empty weeks now expose Continue (disabled while loading). Weekly advances use synchronous in-flight and career/year/week commit guards, defer autosave until completion, and restore captured teams/finances/ledger on an error. Manual saves and leaving the career are blocked during an active advance. Unresolved season fixtures block rollover rather than disappearing. Odd short continental fields use byes rather than self-fixtures. Executable fixture tests and source-wiring regressions cover these confirmed bugs; no mounted whole-season E2E claim is made.

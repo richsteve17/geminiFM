@@ -6,6 +6,10 @@ declare const __MANUS_FM_BUILT_AT__: string;
 
 export const ACTIVE_SEASON = '2026/27';
 export const CURRENT_BUILD_CHANGES = [
+    'Complete current membership for 150 clubs across seven supported leagues; 4,601 unique playable source athletes.',
+    'European home/away seasons and MLS 34-game conference schedule plus MLS Cup playoff progression. Opponent calendars are simulated.',
+    'Separate continental and domestic standings, replay guards, corrected league-size evaluation and safe unemployed rollover.',
+
     "xGaffer '28 is the approved product name and edition. The edition is distinct from the 2026/27 roster season and the 2026 World Cup tutorial; historic save/profile keys remain compatible.",
     'New careers use refreshed current-source squads for all 82 playable clubs: 2,538 unique players, snapshot 2026-11-07. Actual membership, names, supplied/source identities, source ages/DOB and shirt numbers are separate from versioned game-derived ratings and contract economics.',
     'The tutorial uses the supplied authoritative 48 national squads / 1,244 players, with their exact membership and corrected Jordan/Panama entries. World Cup selection is no longer a generic 26-player cut from an observed pool.',

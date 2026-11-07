@@ -1,6 +1,7 @@
 
 import type { Fixture, Team, Player, Formation, PlayerPosition } from './types';
 import { simulateDeterministicQuickMatch } from './engine/matchEngine';
+import { generateDomesticFixtures } from './engine/domesticSeason';
 
 export { FORMATION_SLOTS, analyzeTactics } from './engine/tactics';
 export type { TacticalAssignment, TacticalAnalysis } from './engine/tactics';
@@ -49,59 +50,13 @@ export const generateName = (nationalityCode: string): string => {
     return `${first.charAt(0)}. ${last}`;
 };
 
-export const generateFixtures = (teams: Team[]): Fixture[] => {
-    const fixtures: Fixture[] = [];
-    const leagues = Array.from(new Set(teams.map(t => t.league)));
-
-    leagues.forEach(league => {
-        const leagueTeams = teams.filter(t => t.league === league).map(t => t.name);
-        if (leagueTeams.length < 2) return;
-        
-        if (leagueTeams.length % 2 !== 0) {
-            leagueTeams.push('dummy');
-        }
-
-        const numTeams = leagueTeams.length;
-        const rounds = numTeams - 1;
-        const matchesPerRound = numTeams / 2;
-        let roundTeams = [...leagueTeams];
-
-        for (let round = 0; round < rounds; round++) {
-            for (let match = 0; match < matchesPerRound; match++) {
-                const home = roundTeams[match];
-                const away = roundTeams[numTeams - 1 - match];
-
-                if (home !== 'dummy' && away !== 'dummy') {
-                    fixtures.push({ 
-                        id: `${league}-${round}-${home}-${away}`,
-                        week: round + 1,
-                        league: league as any,
-                        homeTeam: home, 
-                        awayTeam: away,
-                        played: false
-                    });
-                    fixtures.push({
-                        id: `${league}-${round+rounds}-${away}-${home}`,
-                        week: round + 1 + rounds,
-                        league: league as any,
-                        homeTeam: away,
-                        awayTeam: home,
-                        played: false
-                    });
-                }
-            }
-            const lastTeam = roundTeams.pop();
-            if (lastTeam) {
-                roundTeams.splice(1, 0, lastTeam);
-            }
-        }
-    });
-
-    return fixtures.sort((a, b) => a.week - b.week);
-};
+export const generateFixtures = (teams: Team[]): Fixture[] => generateDomesticFixtures(teams);
 
 export const generateSwissFixtures = (teams: Team[]): Fixture[] => {
-    const teamNames = teams.map(t => t.name);
+    const teamNames: (string | null)[] = teams.map(t => t.name);
+    if (new Set(teamNames).size !== teamNames.length) throw new Error('Duplicate continental club identity');
+    if (teamNames.length < 2) return [];
+    if (teamNames.length % 2) teamNames.push(null);
     const n = teamNames.length;
     const rounds = n - 1;
     const matchesPerRound = n / 2;
@@ -111,7 +66,8 @@ export const generateSwissFixtures = (teams: Team[]): Fixture[] => {
     for (let r = 0; r < rounds; r++) {
         const roundFixtures: {home: string, away: string}[] = [];
         for (let i = 0; i < matchesPerRound; i++) {
-            roundFixtures.push({ home: roundTeams[i], away: roundTeams[n - 1 - i] });
+            const home = roundTeams[i], away = roundTeams[n - 1 - i];
+            if (home && away && home !== away) roundFixtures.push({ home, away });
         }
         allRounds.push(roundFixtures);
         const last = roundTeams.pop();

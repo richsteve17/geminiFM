@@ -3,6 +3,7 @@ import { TEAMS } from '../constants';
 import type { Player, Team } from '../types';
 import {
     CLUB_ROSTER_CATALOG, CLUB_ROSTER_GAME_DERIVATION_VERSION, CLUB_ROSTER_SNAPSHOT, CLUB_ROSTER_SNAPSHOT_DATE,
+    CLUB_ROSTER_NEUTRAL_PRESET,
     createCurrentFreeAgentMarket, getClubRosterAge, getClubRosterCoverage, getClubRosterSource,
     getCurrentClubTeams, getRawClubRoster, type ClubRosterRecord, type ClubRosterSnapshot, type ClubSourceAthlete,
 } from '../engine/clubRosters';
@@ -19,7 +20,7 @@ function athlete(id: string, position = 'M', overrides: Partial<ClubSourceAthlet
 }
 function record(name = 'Fixture Club', players = [athlete('900001')], overrides: Partial<ClubRosterRecord> = {}): ClubRosterRecord {
     return { gameName: name, gameLeague: 'Premier League', sourceTeamId: '100', sourceName: name,
-        sourceLeagueCode: 'eng.2', sources: [{ provider: 'fixture', url: 'https://example.test/roster', retrievedAt: '2026-11-07T00:00:00Z' }],
+        sourceLeagueCode: 'eng.1', sources: [{ provider: 'fixture', url: 'https://example.test/roster', retrievedAt: '2026-11-07T00:00:00Z' }],
         players, warnings: [], coverage: 'fixture-current', ...overrides };
 }
 function snapshot(teams: ClubRosterRecord[]): ClubRosterSnapshot {
@@ -156,21 +157,44 @@ function seed(name = 'Fixture Club', players: Player[] = [seedPlayer()]): Team {
             expect(club.clubRosterSource.completePlayableMembership).toBe(false);
             expect(club.weeklyWageBill).toBe(0);
         }
-        expect(getClubRosterCoverage(fresh).missingClubs).toEqual(['Missing Club', 'Empty Club']);
+        expect(Object.keys(fresh)).toEqual(['Empty']);
+        expect(getClubRosterCoverage(fresh).missingClubs).toEqual(['Empty Club']);
+        expect(input.Missing.players).toHaveLength(1);
         expect(getClubRosterSource(input.Missing)).toBeUndefined();
     });
 
-    it('preserves club economy/theme/objectives and game league while recording actual source competition', () => {
+    it('preserves seed key/economy/theme/objectives while correcting league from the catalog', () => {
         const template = seed();
-        const fresh = getCurrentClubTeams({ Fixture: template }, snapshot([record()])).Fixture;
+        const fresh = getCurrentClubTeams({ Fixture: template }, snapshot([record('Fixture Club', undefined, { gameLeague: 'Championship', sourceLeagueCode: 'eng.2' })])).Fixture;
         expect(fresh.balance).toBe(template.balance);
         expect(fresh.prestige).toBe(template.prestige);
         expect(fresh.objectives).toEqual(template.objectives);
         expect(fresh.colors).toEqual(template.colors);
         expect(fresh.transferBudget).toBe(template.transferBudget);
-        expect(fresh.league).toBe('Premier League');
+        expect(fresh.league).toBe('Championship');
+        expect(template.league).toBe('Premier League');
+        expect(fresh.clubRosterSource.gameDerivedClub).toMatchObject({ preset: 'existing-game-seed', economics: true, prestige: true, colors: 'existing-game-theme' });
         expect(fresh.clubRosterSource.sourceLeagueCode).toBe('eng.2');
         expect(fresh.weeklyWageBill).toBe(fresh.players.reduce((sum, p) => sum + p.wage, 0));
+    });
+
+    it('introduces all source catalog clubs without seeds using labeled neutral game presets', () => {
+        const source = snapshot([record('New Club')]);
+        const fresh = getCurrentClubTeams({}, source)['New Club'];
+        expect(fresh.players.map(player => player.externalId)).toEqual(['espn:900001']);
+        expect(fresh.balance).toBe(CLUB_ROSTER_NEUTRAL_PRESET.balance);
+        expect(fresh.prestige).toBe(CLUB_ROSTER_NEUTRAL_PRESET.prestige);
+        expect(fresh.colors).toEqual(CLUB_ROSTER_NEUTRAL_PRESET.colors);
+        expect(fresh.clubRosterSource.gameDerivedClub).toMatchObject({ preset: 'neutral-game-preset', economics: true, prestige: true, colors: 'neutral-ui-palette' });
+        expect(fresh.rosterWarnings.some(warning => warning.includes('not observed club facts or an authentic kit'))).toBe(true);
+    });
+
+    it('matches previously sourced seed attributes by observed ID despite changed display names', () => {
+        const old = getCurrentClubTeams({ OldKey: seed('Fixture Club') }, snapshot([record()])).OldKey;
+        const fresh = getCurrentClubTeams({ OldKey: old }, snapshot([record('Renamed Club')]));
+        expect(Object.keys(fresh)).toEqual(['OldKey']);
+        expect(fresh.OldKey.name).toBe('Renamed Club');
+        expect(fresh.OldKey.balance).toBe(old.balance);
     });
 
     it('makes selection and economics repeatable without using Math.random, clock or source order', () => {
@@ -283,9 +307,24 @@ describe('Source snapshot metadata and age semantics', () => {
     });
 
     it('hydrates all catalog clubs from their actual snapshot and never creates duplicate cross-club IDs', () => {
-        expect(CLUB_ROSTER_CATALOG).toHaveLength(82);
+        expect(CLUB_ROSTER_CATALOG).toHaveLength(150);
         const before = JSON.stringify(TEAMS);
         const fresh = getCurrentClubTeams(TEAMS);
+        expect(Object.keys(fresh)).toHaveLength(150);
+        expect(Object.keys(getCurrentClubTeams({}))).toHaveLength(150);
+        expect(Object.values(fresh).reduce<Record<string, number>>((counts, club) => ({ ...counts, [club.league]: (counts[club.league] || 0) + 1 }), {}))
+            .toEqual({ 'Premier League': 20, Championship: 24, 'La Liga': 20, 'Serie A': 20, Bundesliga: 18, 'Ligue 1': 18, MLS: 30 });
+        for (const name of ['Leicester City', 'Girona', 'Wolfsburg', 'Nantes', 'Reims']) expect(fresh[name]).toBeUndefined();
+        expect(fresh.Sunderland.league).toBe('Premier League');
+        expect(fresh['West Ham'].league).toBe('Championship');
+        expect(fresh.Wolves.league).toBe('Championship');
+        expect(fresh['FC Barcelona'].name).toBe('FC Barcelona');
+        expect(fresh['NY Red Bulls'].name).toBe('NY Red Bulls');
+        expect(getClubRosterCoverage(fresh)).toMatchObject({ requestedClubs: 150, sourcedClubs: 149, partialClubs: 1, missingClubs: [], playablePlayers: 4601 });
+        expect(getRawClubRoster('Málaga')!.players.some(p => p.externalId === 'espn:213535')).toBe(true);
+        expect(fresh['Málaga'].players.some(p => p.externalId === 'espn:213535')).toBe(false);
+        expect(fresh.Lens.players.some(p => p.externalId === 'espn:213535')).toBe(true);
+        expect(fresh['Málaga'].unresolvedRosterPlayers).toContainEqual(expect.objectContaining({ externalId: 'espn:213535', kind: 'ownership-conflict' }));
         const nationalPlayers = new Map(NATIONAL_ROSTER_CATALOG.flatMap(n => getNationalSquadPool(n.countryCode)).map(p => [p.externalId, p]));
         const externalIds: string[] = [];
         for (const club of Object.values(fresh)) {
