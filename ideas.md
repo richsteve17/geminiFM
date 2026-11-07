@@ -1,28 +1,17 @@
-# Manus FM — Visual Direction
+# Manus FM — Football editorial / club office
 
-## Identity
+The November 2026 screenshots demonstrate that previous updates left the Gemini-era layout intact. The approved next change is a whole-interface aesthetic redesign, not another asset swap or palette-only reskin.
 
-**Manus FM** is a dark, high-pressure football command centre. The manager should feel inside a live match operation: tactical glass, stadium floodlight spill, electrical scoreboards, and an AI staff room that is always watching the next decision.
+## Direction
 
-This is not a spreadsheet dashboard and not a cartoon mobile game.
+Football editorial and the professional club office: chalk-white paper, dark evergreen/ink, condensed sports typography, ruled tables, compact folios, authentic club identity, and a contrasting broadcast match panel. No oversized centered glowing logo, navy glass-card wall, fake terminal hero badges, rainbow navigation or marketing copy invention. Reuse existing factual game labels and descriptions.
 
-## Design language
+A compact masthead leads into an asymmetric home: career actions and saved-game information are immediately usable; authentic stadium photography occupies a deliberate visual region, with source attribution and no false claim that it is the selected club's stadium. Kits remain an archive with real photographs and explicit theme accents. AI/cost settings and the real release record remain accessible but do not dominate the first screen.
 
-- **Base:** near-black charcoal and deep stadium navy.
-- **Signal colors:** electric pitch green, trophy gold, urgent red, broadcast cyan.
-- **Surfaces:** layered smoked glass, sharp ruled panels, subtle scanlines, thin luminous seams.
-- **Typography:** condensed bold headers, high-legibility data text, numbers that read like a broadcast scorebug.
-- **Motion:** purposeful, short tactical transitions; no floaty SaaS animation.
-- **PitchView:** cinematic procedural 3D stadium field; camera language shifts with pressure and crowd intensity. The tactical board remains a precision tool, not a replacement match view.
-- **Atmosphere:** crowd/terrace intensity visibly influences the broadcast presentation and sits behind the data rather than obscuring it.
+In-game: persistent club workspace at desktop, accessible compact navigation on phones, clear screen titles, a large broadcast match frame, data-led squad/transfer surfaces and structured staff/conversation layouts. Every screen inherits shared typography, buttons, forms, surfaces and feedback states. Major screens also change their composition, not merely their colours.
 
-## Brand mark brief
+## Implementation
 
-Use a simple scalable symbol: a fractured football-panel monogram built around the letters **MFM**, with a match-clock slash/forward chevron. It must work as a square favicon without readable small text.
+Use shared semantic classes/tokens in `src/interface.css`. Keep existing callbacks, state, accessible controls, error/loading states, source metadata and all simulation/AI/audio/save/contract/tutorial logic. Scope the broadcast's dark surfaces explicitly so general paper styling does not make the pitch or its controls unreadable. Club-selected colours apply to identity/theme accents without reintroducing full-screen glow.
 
-## Non-negotiables
-
-- No player portraits, fake player faces, or photoreal likenesses.
-- No generic blue SaaS cards.
-- No dense unstructured data walls.
-- Real data must disclose source/derived/unknown state in quiet, usable labels.
+Responsive typography and safe-area-aware controls; readable data numbers and 44px primary touch targets. Barlow Condensed headings and IBM Plex Sans body text, with system fallbacks. Source-backed photos/crests/kits remain genuine; no fake player portraits, invented shirts, scores or roster facts.

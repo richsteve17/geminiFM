@@ -23,19 +23,19 @@ interface TacticsManagerProps {
 }
 
 const getPositionColor = (position: PlayerPosition) => {
-    if (position === 'GK') return 'bg-yellow-950/80 border border-yellow-800 text-yellow-400';
-    if (['LB', 'RB', 'CB', 'LWB', 'RWB'].includes(position)) return 'bg-blue-950/80 border border-blue-800 text-blue-400';
-    if (['DM', 'CM', 'AM', 'LM', 'RM'].includes(position)) return 'bg-green-950/80 border border-green-800 text-green-400';
-    return 'bg-red-950/80 border border-red-800 text-red-400';
+    if (position === 'GK') return 'is-gk';
+    if (['LB', 'RB', 'CB', 'LWB', 'RWB'].includes(position)) return 'is-def';
+    if (['DM', 'CM', 'AM', 'LM', 'RM'].includes(position)) return 'is-mid';
+    return 'is-fwd';
 };
 
 const getPersonalityBadgeColor = (personality: string) => {
     switch (personality) {
-        case 'Leader': return 'text-yellow-400 bg-yellow-900/30 border-yellow-800';
-        case 'Young Prospect': return 'text-teal-400 bg-teal-900/30 border-teal-800';
-        case 'Professional': return 'text-emerald-400 bg-emerald-900/30 border-emerald-800';
-        case 'Volatile': return 'text-red-400 bg-red-900/30 border-red-800';
-        default: return 'text-gray-400 bg-gray-800 border-gray-700';
+        case 'Leader': return 'fm-tactics-status-caution';
+        case 'Young Prospect': return 'fm-tactics-status-positive';
+        case 'Professional': return 'fm-tactics-status-positive';
+        case 'Volatile': return 'fm-tactics-status-danger';
+        default: return 'fm-roster-detail';
     }
 };
 
@@ -138,26 +138,26 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
 
         // Effects & Status
         const effects: React.ReactNode[] = [];
-        if (player.status.type === 'Injured') effects.push(<Ambulance key="inj" className="h-3.5 w-3.5 text-red-400" strokeWidth={1.75} role="img" aria-label={`Injured (${player.status.weeks} weeks)`} />);
-        if (player.status.type === 'Suspended') effects.push(<BadgeAlert key="sus" className="h-3.5 w-3.5 text-red-400" strokeWidth={1.75} role="img" aria-label="Suspended" />);
+        if (player.status.type === 'Injured') effects.push(<Ambulance key="inj" className="h-3.5 w-3.5 fm-tactics-status-danger" strokeWidth={1.75} role="img" aria-label={`Injured (${player.status.weeks} weeks)`} />);
+        if (player.status.type === 'Suspended') effects.push(<BadgeAlert key="sus" className="h-3.5 w-3.5 fm-tactics-status-danger" strokeWidth={1.75} role="img" aria-label="Suspended" />);
 
         player.effects.forEach((eff, i) => {
             if (eff.type === 'PostTournamentMorale') {
-                if (eff.morale === 'FiredUp') effects.push(<Flame key={`m-${i}`} className="h-3.5 w-3.5 text-orange-400" strokeWidth={1.75} role="img" aria-label="Morale: fired up" />);
-                if (eff.morale === 'Winner') effects.push(<Trophy key={`m-${i}`} className="h-3.5 w-3.5 text-amber-400" strokeWidth={1.75} role="img" aria-label="Morale: winner" />);
-                if (eff.morale === 'Disappointed') effects.push(<Frown key={`m-${i}`} className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} role="img" aria-label="Morale: disappointed" />);
+                if (eff.morale === 'FiredUp') effects.push(<Flame key={`m-${i}`} className="h-3.5 w-3.5 fm-tactics-status-caution" strokeWidth={1.75} role="img" aria-label="Morale: fired up" />);
+                if (eff.morale === 'Winner') effects.push(<Trophy key={`m-${i}`} className="h-3.5 w-3.5 fm-tactics-status-caution" strokeWidth={1.75} role="img" aria-label="Morale: winner" />);
+                if (eff.morale === 'Disappointed') effects.push(<Frown key={`m-${i}`} className="h-3.5 w-3.5 fm-roster-detail" strokeWidth={1.75} role="img" aria-label="Morale: disappointed" />);
             }
             if (eff.type === 'BadChemistry') {
-                effects.push(<CircleAlert key={`c-${i}`} className="h-3.5 w-3.5 text-orange-400" strokeWidth={1.75} role="img" aria-label={`Chemistry rift with ${eff.with}`} />);
+                effects.push(<CircleAlert key={`c-${i}`} className="h-3.5 w-3.5 fm-tactics-status-caution" strokeWidth={1.75} role="img" aria-label={`Chemistry rift with ${eff.with}`} />);
             }
             if (eff.type === 'InternationalRift') {
-                const color = eff.severity === 'serious' ? 'text-red-500' : eff.severity === 'moderate' ? 'text-orange-500' : 'text-yellow-500';
+                const color = eff.severity === 'serious' ? 'fm-tactics-status-danger' : eff.severity === 'moderate' ? 'fm-tactics-status-caution' : 'fm-tactics-status-caution';
                 effects.push(
                     <CircleAlert key={`ir-${i}`} className={`h-3.5 w-3.5 ${color}`} strokeWidth={1.75} role="img" aria-label={`International rift (${eff.severity}) with ${eff.with}: ${eff.message}`} />
                 );
             }
             if (eff.type === 'TeammateBond') {
-                effects.push(<Handshake key={`tb-${i}`} className="h-3.5 w-3.5 text-cyan-400" strokeWidth={1.75} role="img" aria-label={`Teammate bond with ${eff.with}: ${eff.message}`} />);
+                effects.push(<Handshake key={`tb-${i}`} className="h-3.5 w-3.5 fm-tactics-status-positive" strokeWidth={1.75} role="img" aria-label={`Teammate bond with ${eff.with}: ${eff.message}`} />);
             }
         });
 
@@ -176,9 +176,7 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
                 }}
                 onDragOver={(e) => {
                     e.preventDefault();
-                    if (dragSourcePlayer && dragSourcePlayer !== player.name) {
-                        setDragOverPlayer(player.name);
-                    }
+                    if (dragSourcePlayer && dragSourcePlayer !== player.name) setDragOverPlayer(player.name);
                 }}
                 onDragLeave={() => {
                     if (dragOverPlayer === player.name) setDragOverPlayer(null);
@@ -195,111 +193,66 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
                     setDragSourcePlayer(null);
                 }}
                 onClick={() => handleListClick(player)}
-                className={`p-3 rounded-lg border cursor-pointer flex items-center gap-3 transition-all group ${
-                    dragOverPlayer === player.name ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-950/20' :
-                    isSelected ? 'bg-yellow-950/40 border-yellow-500 ring-1 ring-yellow-500' :
-                    player.status.type === 'Injured' ? 'bg-red-950/40 border-red-500/80' :
-                    isBench ? 'bg-gray-900/40 border-gray-800 hover:bg-gray-800/80 opacity-85 hover:opacity-100' :
-                    'bg-gray-850 border-gray-800 hover:bg-gray-850'
-                }`}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleListClick(player);
+                    }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                aria-label={`${player.name}, ${player.position}, ${player.rating}, ${player.condition}% fit`}
+                className={`fm-roster-row grid grid-cols-[2.25rem_minmax(0,1fr)_3.5rem_2rem] sm:grid-cols-[2.5rem_minmax(0,1fr)_4.5rem_2.5rem] items-center gap-2 sm:gap-3 py-3 px-2 cursor-pointer ${dragOverPlayer === player.name ? 'is-drop-target' : ''} ${isSelected ? 'is-selected' : ''} ${player.status.type === 'Injured' ? 'is-injured' : ''} ${isBench ? 'is-bench' : ''}`}
             >
-                <span className={`w-9 h-7 text-[10px] font-black flex items-center justify-center rounded-md ${getPositionColor(player.position)}`}>
-                    {player.position}
-                </span>
-
-                <div className="flex-grow min-w-0">
-                    <div className="flex items-center gap-2">
-                        <p className={`text-sm font-bold truncate ${isSelected ? 'text-yellow-300' : 'text-gray-100'}`}>
-                            {player.name}
-                        </p>
+                <span className={`fm-roster-position text-[10px] font-bold py-1 text-center ${getPositionColor(player.position)}`}>{player.position}</span>
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-sm font-semibold" title={player.name}>{player.name}</p>
                         <div className="flex gap-1 items-center">{effects}</div>
-                        {outOfPosition && (
-                            <CircleAlert className="h-3.5 w-3.5 text-orange-400" strokeWidth={1.75} role="img" aria-label={`Playing as ${assignment?.formationRole}`} />
-                        )}
+                        {outOfPosition && <CircleAlert className="h-3.5 w-3.5 fm-tactics-status-caution" strokeWidth={1.75} role="img" aria-label={`Playing as ${assignment?.formationRole}`} />}
                     </div>
-                    
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className={`text-[8px] font-extrabold px-1.5 py-0.5 rounded border ${personalityColor} uppercase tracking-wider`}>
-                            {player.personality}
-                        </span>
-                        
-                        {/* Condition Bar */}
-                        <div className="flex items-center gap-1.5">
-                            <span className="text-[8px] text-gray-500 font-bold uppercase">FIT:</span>
-                            <div className="w-12 h-1.5 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
-                                <div 
-                                    className={`h-full ${player.condition > 80 ? 'bg-emerald-500' : player.condition > 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                    style={{ width: `${player.condition}%` }}
-                                ></div>
-                            </div>
-                            <span className={`text-[8px] font-bold font-mono ${player.condition > 80 ? 'text-emerald-400' : player.condition > 60 ? 'text-yellow-400' : 'text-red-400'}`}>
-                                {player.condition}%
-                            </span>
-                        </div>
-
-                        {!isNationalTeam && (
-                            <span className="text-[8px] text-gray-500 font-medium">
-                                {player.contractExpires === 0 ? <span className="text-red-400 font-bold">Expiring!</span> : `${player.contractExpires}y`} &bull; ${player.wage.toLocaleString()}/wk
-                            </span>
-                        )}
-                        
-                        {player.stats && player.stats.appearances > 0 && (
-                            <span className="text-[8px] font-bold text-blue-300 bg-blue-950/40 px-1.5 py-0.5 border border-blue-900/60 rounded">
-                                Rating: <Star size={10} strokeWidth={1.75} className="inline-block align-middle" aria-hidden="true" /> {player.stats.averageRating} &bull; Goals: {player.stats.goals}
-                            </span>
-                        )}
+                    <div className="fm-roster-detail flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[10px]">
+                        <span className={`fm-roster-personality font-semibold ${personalityColor}`}>{player.personality}</span>
+                        {!isNationalTeam && <span>{player.contractExpires === 0 ? <span className="fm-tactics-status-danger font-semibold">Expiring!</span> : `${player.contractExpires}y`} &bull; ${player.wage.toLocaleString()}/wk</span>}
+                        {player.stats && player.stats.appearances > 0 && <span className="fm-roster-season-stat">Rating: <Star size={10} strokeWidth={1.75} className="inline-block align-middle" aria-hidden="true" /> {player.stats.averageRating} &bull; Goals: {player.stats.goals}</span>}
                     </div>
                 </div>
-
-                {isSelected ? (
-                    <ArrowsRightLeftIcon className="w-4 h-4 text-yellow-400 animate-pulse flex-shrink-0" />
-                ) : (
-                    <span className={`text-base font-mono font-black flex-shrink-0 ${player.rating >= 85 ? 'text-yellow-400' : 'text-green-400'}`}>
-                        {player.rating}
-                    </span>
-                )}
+                <div className="text-right">
+                    <span className="fm-roster-detail block text-[9px] uppercase">FIT:</span>
+                    <span className={`text-[11px] font-semibold tabular-nums ${player.condition > 80 ? 'fm-tactics-status-positive' : player.condition > 60 ? 'fm-tactics-status-caution' : 'fm-tactics-status-danger'}`}>{player.condition}%</span>
+                    <div className="fm-roster-condition h-1 mt-1 overflow-hidden">
+                        <div className={`h-full ${player.condition > 80 ? 'fm-tactics-fill-positive' : player.condition > 60 ? 'fm-tactics-fill-caution' : 'fm-tactics-fill-danger'}`} style={{ width: `${player.condition}%` }} />
+                    </div>
+                </div>
+                {isSelected ? <ArrowsRightLeftIcon className="w-5 h-5 fm-tactics-status-caution justify-self-end" /> : <span className={`fm-roster-rating text-xl font-bold tabular-nums text-right ${player.rating >= 85 ? 'is-high' : ''}`}>{player.rating}</span>}
             </li>
         );
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left Column: Widescreen Pitch Visualizer & Selection */}
-            <div className="lg:col-span-7 flex flex-col gap-6">
-                <div className="bg-gray-800/60 border border-gray-700 p-5 rounded-xl shadow-xl backdrop-blur-md">
-                    {/* Setup Toggles */}
-                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-700/50">
-                        <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                            <ClipboardList className="h-4 w-4 text-slate-400" strokeWidth={1.75} /> Pitch Lineup & Tactics
-                        </h3>
-                        <div className="flex gap-3">
-                            <div>
-                                <select 
-                                    value={team.tactic.formation} 
-                                    onChange={e => onTacticChange({ formation: e.target.value as Formation })} 
-                                    className="bg-gray-900 border border-gray-700 text-xs rounded-md p-1.5 font-bold text-white focus:outline-none"
-                                >
-                                    {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <select 
-                                    value={team.tactic.mentality} 
-                                    onChange={e => onTacticChange({ mentality: e.target.value as Mentality })} 
-                                    className="bg-gray-900 border border-gray-700 text-xs rounded-md p-1.5 font-bold text-white focus:outline-none"
-                                >
-                                    {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Glossy Pitch Board */}
-                    <div className="max-w-[450px] mx-auto shadow-2xl rounded-lg overflow-hidden border border-gray-800">
-                        <TacticsBoard 
-                            assignments={tacticalAnalysis.assignments} 
-                            formation={team.tactic.formation} 
-                            onSlotClick={handleSlotClick} 
+        <section className="fm-tactics space-y-5">
+            <header className="fm-tactics-header flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4">
+                <div>
+                    <p className="fm-eyebrow mb-1">{team.name}</p>
+                    <h2 className="fm-screen-title text-3xl sm:text-4xl">Pitch Lineup & Tactics</h2>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <select value={team.tactic.formation} onChange={e => onTacticChange({ formation: e.target.value as Formation })} aria-label="Formation" className="fm-field min-w-[100px] text-sm">
+                        {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                    <select value={team.tactic.mentality} onChange={e => onTacticChange({ mentality: e.target.value as Mentality })} aria-label="Mentality" className="fm-field min-w-[130px] text-sm">
+                        {MENTALITIES.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                </div>
+            </header>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)] gap-5 xl:gap-7 items-start">
+                <aside className="fm-tactics-workboard lg:order-2 lg:sticky lg:top-[88px] min-w-0">
+                    <div className="max-w-[460px] mx-auto">
+                        <TacticsBoard
+                            assignments={tacticalAnalysis.assignments}
+                            formation={team.tactic.formation}
+                            onSlotClick={handleSlotClick}
                             onSlotSwap={(fromIndex, toIndex) => {
                                 if (fromIndex === toIndex) return;
                                 const currentStarters = [...starters];
@@ -307,109 +260,52 @@ const TacticsManager: React.FC<TacticsManagerProps> = ({
                                 const temp = currentStarters[fromIndex];
                                 currentStarters[fromIndex] = currentStarters[toIndex];
                                 currentStarters[toIndex] = temp;
-                                if (onReorderPlayers) {
-                                    onReorderPlayers([...currentStarters, ...bench]);
-                                }
+                                if (onReorderPlayers) onReorderPlayers([...currentStarters, ...bench]);
                                 setSelectedSlot(null);
                             }}
                             selectedSlotIndex={selectedSlot}
                         />
+                        <div className="fm-tactics-report pt-4">
+                            <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
+                                <h3 className="fm-eyebrow flex items-center gap-2"><ClipboardList className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />Tactical Analysis Report</h3>
+                                <span className={`text-sm font-bold tabular-nums ${tacticalAnalysis.score > 80 ? 'fm-tactics-status-positive' : tacticalAnalysis.score > 50 ? 'fm-tactics-status-caution' : 'fm-tactics-status-danger'}`}>{tacticalAnalysis.score}% Efficiency</span>
+                            </div>
+                            <div className="space-y-2">
+                                {tacticalAnalysis.feedback.length > 0 ? tacticalAnalysis.feedback.map((msg, i) => <p key={i} className="text-xs leading-relaxed flex items-start gap-2"><span aria-hidden="true">•</span>{msg}</p>) : <p className="fm-roster-detail text-xs italic">No selections warnings. Roster is fully optimized.</p>}
+                            </div>
+                        </div>
                     </div>
-                </div>
-
-                {/* Efficiency Analysis Panel */}
-                <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-5 shadow-xl backdrop-blur-md">
-                    <div className="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
-                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Tactical Analysis Report</h4>
-                        <span className={`px-2 py-0.5 rounded text-xs font-black font-mono shadow ${
-                            tacticalAnalysis.score > 80 ? 'bg-green-950/70 border border-green-800 text-green-400' :
-                            tacticalAnalysis.score > 50 ? 'bg-yellow-950/70 border border-yellow-800 text-yellow-400' :
-                            'bg-red-950/70 border border-red-800 text-red-500'
-                        }`}>
-                            {tacticalAnalysis.score}% Efficiency
-                        </span>
-                    </div>
-                    <div className="space-y-2">
-                        {tacticalAnalysis.feedback.length > 0 ? (
-                            tacticalAnalysis.feedback.map((msg, i) => (
-                                <p key={i} className="text-xs text-slate-300 flex items-start gap-2">
-                                    <span className="text-slate-500 mt-0.5">•</span> {msg}
-                                </p>
-                            ))
-                        ) : (
-                            <p className="text-xs text-slate-500 italic">No selections warnings. Roster is fully optimized.</p>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Right Column: Spacious Squad Roster List */}
-            <div className="lg:col-span-5 space-y-6">
-                <div className="bg-gray-800/60 border border-gray-700 p-5 rounded-xl shadow-xl backdrop-blur-md">
-                    <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-700/50">
-                        <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                            <UsersRound className="h-4 w-4 text-slate-400" strokeWidth={1.75} /> Starting XI ({starters.length}/11)
-                        </h3>
-                        {isMatchLive && (
-                            <span className="text-xs text-blue-400 font-bold bg-blue-950/45 px-2 py-0.5 rounded border border-blue-900">
-                                SUBS USED: {subsUsed}/5
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Expiring contracts banner inside panel */}
+                </aside>
+                <div className="fm-panel fm-roster-sheet lg:order-1 min-w-0 px-3 sm:px-4">
                     {!isNationalTeam && playersWithContractIssues.length > 0 && gameState === GameState.PRE_MATCH && (
-                        <div className="mb-4">
-                            <button 
-                                onClick={() => setShowContracts(!showContracts)}
-                                className="w-full flex justify-between items-center text-xs font-black bg-red-950/50 text-red-300 border border-red-900/60 p-2.5 rounded-lg hover:bg-red-900/30 transition-colors"
-                            >
-                                <span className="flex items-center"><DocumentCheckIcon className="w-4 h-4 mr-1.5 text-red-400" /> {playersWithContractIssues.length} Payroll Contracts Expiring</span>
-                                <ChevronDownIcon className={`w-4 h-4 transition-transform ${showContracts ? 'rotate-180' : ''}`} />
+                        <div className="fm-roster-contracts py-3">
+                            <button onClick={() => setShowContracts(!showContracts)} aria-expanded={showContracts} className="fm-button-secondary w-full flex justify-between items-center gap-2 px-3 text-xs">
+                                <span className="flex items-center gap-2"><DocumentCheckIcon className="w-4 h-4 shrink-0" />{playersWithContractIssues.length} Payroll Contracts Expiring</span>
+                                <ChevronDownIcon className={`w-4 h-4 shrink-0 transition-transform ${showContracts ? 'rotate-180' : ''}`} />
                             </button>
-                            {showContracts && (
-                                <div className="mt-2 space-y-2 animate-in slide-in-from-top-2 duration-150">
-                                    {playersWithContractIssues.map(player => (
-                                        <div key={`con-${player.name}`} className="flex justify-between items-center p-2 rounded-lg bg-gray-900/50 border border-gray-800">
-                                            <span className="text-xs font-bold text-gray-200">{player.name} ({player.position})</span>
-                                            <button 
-                                                onClick={() => onStartContractTalk(player)} 
-                                                className="text-[10px] font-black bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded uppercase tracking-wider"
-                                            >
-                                                RENEW
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            {showContracts && <div className="mt-2">
+                                {playersWithContractIssues.map(player => <div key={`con-${player.name}`} className="fm-roster-contract-row flex justify-between items-center gap-3 py-2"><span className="text-xs font-semibold">{player.name} ({player.position})</span><button onClick={() => onStartContractTalk(player)} className="fm-button px-3 text-xs">RENEW</button></div>)}
+                            </div>}
                         </div>
                     )}
-
-                    {/* Swap Mode Indicator */}
-                    {selectedListPlayer && (
-                        <div className="bg-blue-950/55 border border-blue-800 p-3 rounded-lg text-center animate-pulse mb-3">
-                            <p className="text-xs font-black text-blue-200 uppercase tracking-widest">Swap Mode Active</p>
-                            <p className="text-[10px] text-blue-400 mt-0.5">Click another player in the squad below to swap them.</p>
-                            <button onClick={() => setSelectedListPlayer(null)} className="text-[10px] text-red-400 font-bold underline mt-1.5 uppercase">Cancel Swap</button>
+                    {selectedListPlayer && <div className="fm-roster-swap py-3 text-xs" aria-live="polite">
+                        <div className="flex justify-between items-center gap-2"><p className="font-bold">Swap Mode Active</p><button onClick={() => setSelectedListPlayer(null)} className="fm-button-secondary px-3 text-xs">Cancel Swap</button></div>
+                        <p className="mt-1">Click another player in the squad below to swap them.</p>
+                    </div>}
+                    <section aria-label="Starting XI">
+                        <div className="fm-roster-section-heading flex flex-wrap justify-between items-center gap-3 py-4">
+                            <h3 className="fm-eyebrow flex items-center gap-2"><UsersRound className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />Starting XI ({starters.length}/11)</h3>
+                            {isMatchLive && <span className="fm-tactics-status-caution text-xs font-bold tabular-nums">SUBS USED: {subsUsed}/5</span>}
                         </div>
-                    )}
-
-                    <ul className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                        {starters.map(p => renderPlayerItem(p, false))}
-                    </ul>
-                </div>
-
-                <div className="bg-gray-800/60 border border-gray-700 p-5 rounded-xl shadow-xl backdrop-blur-md">
-                    <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest mb-4 pb-3 border-b border-gray-700/50 flex items-center gap-2">
-                        <Armchair className="h-4 w-4 text-slate-400" strokeWidth={1.75} /> Substitutes & Reserves ({bench.length})
-                    </h3>
-                    
-                    <ul className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                        {bench.map(p => renderPlayerItem(p, true))}
-                    </ul>
+                        <ul className="m-0 p-0 list-none">{starters.map(p => renderPlayerItem(p, false))}</ul>
+                    </section>
+                    <section aria-label="Substitutes & Reserves" className="pb-2">
+                        <h3 className="fm-roster-section-heading fm-eyebrow py-4 flex items-center gap-2"><Armchair className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />Substitutes & Reserves ({bench.length})</h3>
+                        <ul className="m-0 p-0 list-none">{bench.map(p => renderPlayerItem(p, true))}</ul>
+                    </section>
                 </div>
             </div>
-        </div>
+        </section>
     );
 };
 

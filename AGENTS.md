@@ -52,3 +52,9 @@ All AI requests must transit the validated `/api/ai` gateway.
 - National snapshots are sourced pools, not official final squads or qualification. Keep stable external IDs, source dates and game-derived values explicit. Never refresh a saved player’s stats/history/age from a new source snapshot.
 - Relationship severity must follow actual international events, stakes, club membership and participation. Shared-nationality bonds cannot cancel serious personal feuds. Mediation must validate exact answer evidence; benching is separation, not amnesia.
 - Use compact career serialization to omit duplicate national source pools, not actual saved football or relationship facts. Apply training impairment to positive development, never by damping negative performance toward zero.
+
+## Shared interface system
+- `src/interface.css` owns paper/ink/forest/brass tokens, local typography, responsive workspace geometry and common control sizing. Use semantic `fm-*` hooks; do not restore the centered glowing logo, navy glass-card wall or rainbow navigation.
+- Dark surfaces must declare `fm-inverse` so text, fields, status colours and border tokens change together. Pair foreground/background semantics; do not paste pale utility text onto paper or dark ink onto a dark log.
+- Keep primary actions, exact contract/answer inputs, source labels, retries and existing consequence/save callbacks when changing layout. The kit archive is factual photography; club theme colours are accents, not a reason to recolour the entire workspace.
+- Venue photography requires location/date/attribution; do not present Wembley as a selected club's ground. Font licences remain in `public/fonts/`. Phone form text stays readable and user zoom remains enabled.

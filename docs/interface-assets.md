@@ -1,0 +1,5 @@
+# Interface assets — football editorial revision
+
+The home stadium photograph is **Wembley Stadium**, photographed by **Wonker** on 27 February 2011. Source: https://commons.wikimedia.org/wiki/File:Wembley_Stadium.jpg ; original Flickr attribution: https://www.flickr.com/photos/94056408@N00/5485260587 . Licensed CC BY 2.0: https://creativecommons.org/licenses/by/2.0/ . The local WebP derivative is downscaled and displayed with monochrome tonal treatment/responsive cropping. The home includes attribution and a license link. It is atmosphere/venue photography, not a claim that this is the selected club's home ground or a current-season match.
+
+Fonts are **Barlow Condensed** and **IBM Plex Sans**, fetched from Google's official Fonts stylesheet/font CDN, packaged locally with system fallbacks. The existing genuine kit-photo and club-crest catalogs retain their independent provenance ledgers. No new player faces, fictional jerseys, generated stadium lookalikes, dummy statistics or fabricated football data are added.

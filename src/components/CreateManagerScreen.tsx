@@ -1,8 +1,6 @@
-
 import React, { useState } from 'react';
 import { EXPERIENCE_LEVELS } from '../constants';
 import type { ExperienceLevel } from '../types';
-import { UserIcon } from './icons/UserIcon';
 
 interface CreateManagerScreenProps {
     onCreate: (name: string, experience: ExperienceLevel) => void;
@@ -23,82 +21,42 @@ const CreateManagerScreen: React.FC<CreateManagerScreenProps> = ({ onCreate, onB
     };
 
     return (
-        <div className="mt-12 max-w-2xl mx-auto px-4">
-            <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Create Your Profile</h2>
-                <p className="text-lg text-gray-400">Your World Cup tutorial record determines starting job access.</p>
-                {tutorialSummary && <p className="text-sm text-emerald-300 mt-3">{tutorialSummary}</p>}
-            </div>
-
-            <form onSubmit={handleSubmit} className="bg-gray-800/50 rounded-xl shadow-lg border border-gray-700 p-6 md:p-8">
-                <div className="mb-6">
-                    <label htmlFor="managerName" className="block text-sm font-bold text-gray-300 mb-2">
-                        Manager Name
-                    </label>
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <UserIcon className="h-5 w-5 text-gray-400" />
+        <section className="fm-screen max-w-5xl mx-auto px-4 py-8">
+            <header className="mb-8 border-b border-[#172B24]/25 pb-6">
+                <p className="fm-eyebrow">Manager Profile</p>
+                <h2 className="fm-screen-title">Create Your Profile</h2>
+            </header>
+            <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start">
+                <aside className="border-l-2 border-[#A47837] pl-5">
+                    <p className="text-lg leading-relaxed">Your World Cup tutorial record determines starting job access.</p>
+                    {tutorialSummary && <p className="mt-4 text-sm leading-relaxed" role="status">{tutorialSummary}</p>}
+                </aside>
+                <form onSubmit={handleSubmit} className="fm-panel p-5 sm:p-7">
+                    <div className="mb-7">
+                        <label htmlFor="managerName" className="block font-semibold mb-2">Manager Name</label>
+                        <input type="text" id="managerName" required className="fm-field w-full" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} />
+                    </div>
+                    <fieldset className="mb-7">
+                        <legend className="block font-semibold mb-4">Past Playing Experience — profile only, not an unlock</legend>
+                        <div className="border-y border-[#172B24]/20 divide-y divide-[#172B24]/15">
+                            {EXPERIENCE_LEVELS.map(level => (
+                                <label key={level.id} className={`flex items-start gap-4 py-4 pl-3 pr-2 border-l-2 cursor-pointer transition-colors ${selectedExpId === level.id ? 'border-[#A47837] bg-[#A47837]/10' : 'border-transparent hover:bg-[#172B24]/5'}`}>
+                                    <input type="radio" name="experience" value={level.id} checked={selectedExpId === level.id} onChange={() => setSelectedExpId(level.id)} className="mt-1 w-5 h-5 shrink-0 accent-[#18392F]" />
+                                    <div>
+                                        <span className="block text-lg font-semibold">{level.label}</span>
+                                        <span className="block text-sm leading-relaxed mt-1">Profile background only. Starting clubs are determined by your World Cup tutorial record.</span>
+                                    </div>
+                                </label>
+                            ))}
                         </div>
-                        <input
-                            type="text"
-                            id="managerName"
-                            required
-                            className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-3"
-                            placeholder="Enter your name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                <div className="mb-8">
-                    <label className="block text-sm font-bold text-gray-300 mb-4">
-                        Past Playing Experience — profile only, not an unlock
-                    </label>
-                    <div className="space-y-3">
-                        {EXPERIENCE_LEVELS.map(level => (
-                            <label 
-                                key={level.id} 
-                                className={`flex items-start p-4 rounded-lg border cursor-pointer transition-all duration-200 ${selectedExpId === level.id ? 'bg-blue-900/40 border-blue-500 ring-1 ring-blue-500' : 'bg-gray-700/30 border-gray-600 hover:bg-gray-700/50'}`}
-                            >
-                                <input 
-                                    type="radio" 
-                                    name="experience" 
-                                    value={level.id} 
-                                    checked={selectedExpId === level.id}
-                                    onChange={() => setSelectedExpId(level.id)}
-                                    className="mt-1 w-4 h-4 text-blue-600 bg-gray-700 border-gray-500 focus:ring-blue-500"
-                                />
-                                <div className="ml-4">
-                                    <span className={`block text-base font-semibold ${selectedExpId === level.id ? 'text-blue-400' : 'text-gray-200'}`}>
-                                        {level.label}
-                                    </span>
-                                    <span className="block text-sm text-gray-400 mt-1">
-                                        Profile background only. Starting clubs are determined by your World Cup tutorial record.
-                                    </span>
-                                </div>
-                            </label>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex gap-4">
-                    <button
-                        type="button"
-                        onClick={onBack}
-                        className="w-1/3 py-3 px-4 bg-gray-700 text-gray-300 font-bold rounded-lg hover:bg-gray-600 transition-colors"
-                    >
-                        Back
-                    </button>
-                    <button
-                        type="submit"
-                        className="w-2/3 py-3 px-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        Start Career
-                    </button>
-                </div>
-            </form>
-        </div>
+                    </fieldset>
+                    <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#172B24]/20 pt-5">
+                        <button type="button" onClick={onBack} className="fm-button-secondary">Back</button>
+                        <button type="submit" className="fm-button">Start Career</button>
+                    </footer>
+                </form>
+            </div>
+        </section>
     );
 };
 

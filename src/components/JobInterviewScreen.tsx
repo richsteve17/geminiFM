@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Lightbulb, Target } from 'lucide-react';
 import type { Interview } from '../types';
 import { FootballIcon } from './icons/FootballIcon';
-import { UserIcon } from './icons/UserIcon';
 import { TEAMS } from '../constants';
 import ClubCrest from './ClubIdentity';
 
@@ -28,44 +27,54 @@ const JobInterviewScreen: React.FC<JobInterviewScreenProps> = ({ interview, isLo
 
     if (isLoading && !jobOffer) {
         return (
-            <div className="text-center mt-20 flex flex-col items-center justify-center min-h-[200px]">
-                <FootballIcon className="w-12 h-12 text-green-400 animate-spin mb-4" />
-                <p className="text-xl font-semibold animate-pulse">{interview ? "Evaluating answers..." : "Contacting the chairman..."}</p>
-            </div>
+            <section className="fm-screen max-w-3xl mx-auto px-4 py-8" role="status" aria-live="polite">
+                <div className="fm-panel p-6 sm:p-8 border-t-4 border-[#A47837]">
+                    <p className="fm-eyebrow">Chairman Vacancy Panel</p>
+                    <div className="flex items-center gap-3 mt-3">
+                        <FootballIcon className="w-6 h-6 text-[#18392F] animate-spin shrink-0" />
+                        <h2 className="fm-screen-title">{interview ? "Evaluating answers..." : "Contacting the chairman..."}</h2>
+                    </div>
+                </div>
+            </section>
         );
     }
-    
+
     if (error) {
-         return (
-             <div className="mt-20 max-w-2xl mx-auto text-center p-8 bg-red-900/50 border border-red-700 rounded-lg">
-                <h2 className="text-2xl font-bold text-red-400 mb-4">Interview Cancelled</h2>
-                <p className="text-white">{error}</p>
-                <button onClick={() => onFinish(false)} className="mt-6 py-2 px-6 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">
-                    Return to Job Centre
-                </button>
-             </div>
-         );
+        return (
+            <section className="fm-screen max-w-3xl mx-auto px-4 py-8">
+                <div className="fm-panel p-6 sm:p-8 border-t-4 border-[#8C3931]" role="alert">
+                    <p className="fm-eyebrow">Chairman Vacancy Panel</p>
+                    <h2 className="fm-screen-title">Interview Cancelled</h2>
+                    <p className="mt-4 leading-relaxed">{error}</p>
+                    <footer className="mt-6 border-t border-[#172B24]/20 pt-5">
+                        <button onClick={() => onFinish(false)} className="fm-button-secondary">Return to Job Centre</button>
+                    </footer>
+                </div>
+            </section>
+        );
     }
 
     if (jobOffer) {
         return (
-             <div className="mt-20 max-w-2xl mx-auto text-center p-8 bg-gray-800/50 border border-gray-700 rounded-lg">
-                <h2 className={`text-3xl font-bold mb-4 ${jobOffer.offer ? 'text-green-400' : 'text-red-400'}`}>
-                    {jobOffer.offer ? "You're Hired!" : "Application Unsuccessful"}
-                </h2>
-                <div className="text-left bg-gray-900/50 p-6 rounded-md my-6 border border-gray-600">
-                    <p className="italic text-gray-300 text-lg">" {jobOffer.reasoning} "</p>
+            <section className="fm-screen max-w-3xl mx-auto px-4 py-8">
+                <div className="fm-panel p-6 sm:p-8">
+                    <header className="border-b border-[#172B24]/25 pb-5">
+                        <p className="fm-eyebrow">Chairman Vacancy Panel</p>
+                        <h2 className="fm-screen-title">{jobOffer.offer ? "You're Hired!" : "Application Unsuccessful"}</h2>
+                    </header>
+                    <div className="fm-transcript py-6">
+                        <p className="font-semibold text-sm mb-3">Chairman</p>
+                        <blockquote className="text-lg leading-relaxed whitespace-pre-line">“{jobOffer.reasoning}”</blockquote>
+                    </div>
+                    <footer className="border-t border-[#172B24]/20 pt-5">
+                        {jobOffer.offer ? (
+                            <button onClick={() => onFinish(true)} className="fm-button">Accept Job</button>
+                        ) : (
+                            <button onClick={() => onFinish(false)} className="fm-button-secondary">Return to Job Centre</button>
+                        )}
+                    </footer>
                 </div>
-                {jobOffer.offer ? (
-                    <button onClick={() => onFinish(true)} className="py-3 px-8 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors shadow-lg shadow-green-900/50">
-                        Accept Job
-                    </button>
-                ) : (
-                    <button onClick={() => onFinish(false)} className="py-3 px-8 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors">
-                        Return to Job Centre
-                    </button>
-                )}
-            </div>
+            </section>
         );
     }
 
@@ -91,100 +100,61 @@ const JobInterviewScreen: React.FC<JobInterviewScreenProps> = ({ interview, isLo
     };
 
     return (
-        <div className="max-w-6xl mx-auto px-4 mt-8 pb-12">
-            <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-white mb-2">Job Interview: {interview.teamName}</h2>
-                <p className="text-xs text-gray-400 uppercase tracking-widest">
-                    Interview room &bull; Chairman Vacancy Panel
-                </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Left side: Conversation Area */}
-                <div className="lg:col-span-8 bg-gray-800/50 border border-gray-700 rounded-xl p-6 shadow-xl space-y-6">
-                    <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-full bg-blue-900 flex items-center justify-center flex-shrink-0 border-2 border-blue-700">
-                             <UserIcon className="w-6 h-6 text-blue-300" />
+        <section className="fm-screen max-w-6xl mx-auto px-4 py-8">
+            <header className="flex flex-wrap items-end justify-between gap-4 mb-8 border-b border-[#172B24]/25 pb-6">
+                <div>
+                    <p className="fm-eyebrow">Interview room · Chairman Vacancy Panel</p>
+                    <h2 className="fm-screen-title">Job Interview: {interview.teamName}</h2>
+                </div>
+                <p className="text-sm tabular-nums">Question {interview.currentQuestionIndex + 1} of {interview.questions.length}</p>
+            </header>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
+                {targetClub && (
+                    <aside className="lg:col-span-4 lg:order-first order-last border-t-2 border-[#A47837] pt-5">
+                        <div className="flex items-center gap-3 mb-5">
+                            <ClubCrest name={interview.teamName} size="h-10 w-10" />
+                            <h3 className="text-2xl font-semibold">Club Profile</h3>
                         </div>
-                        <div className="bg-gray-700/50 p-4 rounded-lg rounded-tl-none border border-gray-600 flex-grow">
-                            <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Chairman</p>
-                            <p className="text-white text-lg leading-relaxed font-serif">"{currentQuestion}"</p>
-                        </div>
+                        <dl className="divide-y divide-[#172B24]/15 border-y border-[#172B24]/20 text-sm">
+                            <div className="flex flex-wrap justify-between gap-2 py-3"><dt>Prestige</dt><dd className="font-semibold tabular-nums">{targetClub.prestige}/100</dd></div>
+                            <div className="flex flex-wrap justify-between gap-2 py-3"><dt>Transfer Budget</dt><dd className="font-semibold tabular-nums">${targetClub.transferBudget.toLocaleString()}</dd></div>
+                        </dl>
+                        <section className="py-5 border-b border-[#172B24]/20">
+                            <h4 className="font-semibold mb-3">Club Objectives</h4>
+                            <ul className="space-y-3">
+                                {targetClub.objectives.map((obj, i) => (
+                                    <li key={i} className="text-sm leading-relaxed flex items-start gap-2">
+                                        <Target className="h-4 w-4 mt-0.5 shrink-0 text-[#A47837]" strokeWidth={1.75} aria-hidden="true" />{obj}
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                        <section className="pt-5">
+                            <h3 className="text-2xl font-semibold mb-3">Board Philosophy</h3>
+                            <dl className="text-sm"><dt>Chairman Type</dt><dd className="font-semibold mt-1">{interview.chairmanPersonality}</dd></dl>
+                            <p className="mt-4 flex items-start gap-2 text-sm leading-relaxed">
+                                <Lightbulb className="mt-1 h-4 w-4 shrink-0 text-[#A47837]" strokeWidth={1.75} aria-hidden="true" />
+                                <span><strong>Preference:</strong> {getChairmanGuidance(interview.chairmanPersonality)}</span>
+                            </p>
+                        </section>
+                    </aside>
+                )}
+                <div className={`${targetClub ? 'lg:col-span-8' : 'lg:col-span-12'} fm-panel p-5 sm:p-7`}>
+                    <div className="fm-transcript pb-6">
+                        <p className="fm-eyebrow mb-3">Chairman</p>
+                        <blockquote className="text-xl sm:text-2xl leading-relaxed whitespace-pre-line">“{currentQuestion}”</blockquote>
                     </div>
-                    
-                    <form onSubmit={handleSubmit} className="flex items-start gap-4 pt-6 border-t border-gray-700/50">
-                        <div className="w-12 h-12 rounded-full bg-green-900 flex items-center justify-center flex-shrink-0 border-2 border-green-700">
-                             <UserIcon className="w-6 h-6 text-green-300" />
-                        </div>
-                        <div className="flex-grow space-y-4">
-                            <textarea
-                                value={currentAnswer}
-                                onChange={(e) => setCurrentAnswer(e.target.value)}
-                                className="w-full p-3 bg-gray-750 border border-gray-600 rounded-lg text-white focus:ring-1 focus:ring-emerald-500 transition-colors focus:outline-none"
-                                placeholder="State your philosophy and address the board..."
-                                rows={4}
-                                required
-                                autoFocus
-                            />
-                            <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-500 italic">Question {interview.currentQuestionIndex + 1} of {interview.questions.length}</span>
-                                <button type="submit" className="py-2.5 px-6 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors">
-                                    Submit Answer
-                                </button>
-                            </div>
+                    <form onSubmit={handleSubmit} className="border-t border-[#172B24]/20 pt-6 space-y-4">
+                        <label htmlFor="interview-answer" className="block font-semibold">Your Response</label>
+                        <textarea id="interview-answer" value={currentAnswer} onChange={(e) => setCurrentAnswer(e.target.value)} className="fm-field w-full" placeholder="State your philosophy and address the board..." rows={4} required autoFocus />
+                        <div className="flex flex-wrap justify-between items-center gap-3">
+                            <span className="text-sm tabular-nums">Question {interview.currentQuestionIndex + 1} of {interview.questions.length}</span>
+                            <button type="submit" className="fm-button">Submit Answer</button>
                         </div>
                     </form>
                 </div>
-
-                {/* Right side: Important Details Sidebar */}
-                {targetClub && (
-                    <div className="lg:col-span-4 space-y-6">
-                        {/* Club Identity Card */}
-                        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-5 shadow-lg backdrop-blur-md">
-                            <div className="mb-3 flex items-center gap-2 border-b border-gray-700/50 pb-2">
-                                <ClubCrest name={interview.teamName} size="h-8 w-8" />
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Club Profile</h3>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500 uppercase font-bold">Prestige</span>
-                                    <span className="text-sm font-black text-white">{targetClub.prestige}/100</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500 uppercase font-bold">Transfer Budget</span>
-                                    <span className="text-sm font-black text-emerald-400 font-mono">${targetClub.transferBudget.toLocaleString()}</span>
-                                </div>
-                                <div>
-                                    <span className="text-xs text-slate-500 uppercase font-bold block mb-1">Club Objectives</span>
-                                    <div className="space-y-1">
-                                        {targetClub.objectives.map((obj, i) => (
-                                            <div key={i} className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-                                                <Target className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={1.75} aria-hidden="true" /> {obj}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Chairman Personality card */}
-                        <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-5 shadow-lg backdrop-blur-md">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-gray-700/50">Board Philosophy</h3>
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-slate-500 uppercase font-bold">Chairman Type</span>
-                                    <span className="px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-xs font-black text-blue-400">{interview.chairmanPersonality}</span>
-                                </div>
-                                <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-slate-400 font-sans">
-                                    <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={1.75} aria-hidden="true" />
-                                    <span><strong className="text-slate-300">Preference:</strong> {getChairmanGuidance(interview.chairmanPersonality)}</span>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
-        </div>
+        </section>
     );
 };
 

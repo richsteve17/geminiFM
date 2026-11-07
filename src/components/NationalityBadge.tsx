@@ -76,7 +76,7 @@ export const NationalityBadge: React.FC<NationalityBadgeProps> = ({ nationality,
 
     return (
         <span
-            className={`inline-flex max-w-full items-center rounded border border-cyan-900/70 bg-cyan-950/30 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-cyan-200 ${className}`}
+            className={`fm-nationality inline-flex max-w-full items-center rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.08em] ${className}`}
             title={`Nationality: ${description}`}
             aria-label={`Nationality: ${description}`}
             data-nationality={label}

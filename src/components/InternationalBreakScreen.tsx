@@ -29,40 +29,73 @@ const InternationalBreakScreen: React.FC<InternationalBreakScreenProps> = ({ tou
     const own = incidents.filter(i => i.clubName === clubName);
     const last = revealed.at(-1) || null;
     return (
-        <section className="rounded-xl border border-slate-700 bg-slate-900 p-4 md:p-6 space-y-5">
-            <div className="flex gap-3 items-start">
-                <Globe2 className="shrink-0 text-emerald-300" aria-hidden="true" />
-                <div><h2 className="font-bold text-xl text-white">International Duty & Returns</h2><p className="text-sm text-slate-400">Watch resolved international matches and inspect what comes back to your club. These are game results, not live football.</p></div>
-            </div>
-            <button onClick={onOpenInbox} className="rounded bg-emerald-800 text-emerald-100 px-4 py-2 text-sm font-bold">Manage return incidents ({own.filter(i => !['resolved', 'expired'].includes(i.state) && i.kind !== 'bond').length})</button>
-            {!tournament ? <p className="text-slate-400">The next international window is at weeks 10, 20 or 30. Friendlies run outside tournament years; Euros and World Cups retain their group and knockout results.</p> : (
-                <>
-                    <label className="block text-sm text-slate-300" htmlFor="international-fixture">{tournament.type} — recorded match</label>
-                    <select id="international-fixture" value={selected?.id || ''} onChange={e => setSelectedId(e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded p-3 text-white text-sm">
-                        {fixtures.map(f => <option key={f.id} value={f.id}>{f.stage || 'Friendly'}: {f.homeTeam} {f.score} {f.awayTeam}{f.penaltyWinner ? ` · ${f.penaltyWinner === 'home' ? f.homeTeam : f.awayTeam} won penalties` : ''}</option>)}
-                    </select>
+        <section className="fm-screen space-y-7">
+            <header className="border-b border-[#172B24]/25 pb-6">
+                <p className="fm-eyebrow flex items-center gap-2"><Globe2 className="w-5 h-5 shrink-0" aria-hidden="true" />International Duty</p>
+                <h2 className="fm-screen-title">International Duty & Returns</h2>
+                <div className="mt-3 flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+                    <p className="max-w-2xl text-sm leading-relaxed">Watch resolved international matches and inspect what comes back to your club. These are game results, not live football.</p>
+                    <button onClick={onOpenInbox} className="fm-button shrink-0">Manage return incidents ({own.filter(i => !['resolved', 'expired'].includes(i.state) && i.kind !== 'bond').length})</button>
+                </div>
+            </header>
+            {!tournament ? (
+                <div className="fm-panel p-5 sm:p-7"><p className="leading-relaxed">The next international window is at weeks 10, 20 or 30. Friendlies run outside tournament years; Euros and World Cups retain their group and knockout results.</p></div>
+            ) : (
+                <section className="fm-panel p-4 sm:p-6 space-y-5">
+                    <div>
+                        <label className="block font-semibold mb-3" htmlFor="international-fixture">{tournament.type} — recorded match</label>
+                        <select id="international-fixture" value={selected?.id || ''} onChange={e => setSelectedId(e.target.value)} className="fm-field w-full">
+                            {fixtures.map(f => <option key={f.id} value={f.id}>{f.stage || 'Friendly'}: {f.homeTeam} {f.score} {f.awayTeam}{f.penaltyWinner ? ` · ${f.penaltyWinner === 'home' ? f.homeTeam : f.awayTeam} won penalties` : ''}</option>)}
+                        </select>
+                    </div>
                     {selected && (
                         <>
                             {events.length ? (
                                 <>
-                                    <Suspense fallback={<p className="text-slate-400">Loading broadcast…</p>}><PitchView homeTeamName={selected.homeTeam} awayTeamName={selected.awayTeam} homeTeam={tournament.teams[selected.homeTeam]} awayTeam={tournament.teams[selected.awayTeam]} currentMinute={minute} homeScore={goalScore(selected.homeTeam)} awayScore={goalScore(selected.awayTeam)} momentum={last?.momentumAfter || 0} lastEvent={last} paused={!playing} /></Suspense>
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <button onClick={() => setPlaying(p => !p)} className="rounded bg-slate-700 px-3 py-2 flex gap-2 text-white text-sm">{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}{playing ? 'Pause replay' : 'Play recorded highlights'}</button>
-                                        <button onClick={() => { setMinute(0); setPlaying(false); }} className="rounded bg-slate-700 p-2 text-white" aria-label="Restart international replay"><RotateCcw size={16} aria-hidden="true" /></button>
-                                        <span className="font-mono text-slate-300">{minute}′ / {end}′</span>
+                                    <div className="fm-broadcast fm-inverse overflow-hidden bg-[#101E1B]">
+                                        <Suspense fallback={<p className="p-5 text-[#F4F1E9]" role="status">Loading broadcast…</p>}>
+                                            <PitchView homeTeamName={selected.homeTeam} awayTeamName={selected.awayTeam} homeTeam={tournament.teams[selected.homeTeam]} awayTeam={tournament.teams[selected.awayTeam]} currentMinute={minute} homeScore={goalScore(selected.homeTeam)} awayScore={goalScore(selected.awayTeam)} momentum={last?.momentumAfter || 0} lastEvent={last} paused={!playing} />
+                                        </Suspense>
                                     </div>
-                                    <ol className="max-h-48 overflow-auto space-y-2 text-sm text-slate-300">{revealed.slice(-8).map(e => <li key={e.id}><span className="font-mono text-emerald-300">{e.minute}′</span> {e.description}</li>)}</ol>
+                                    <div className="flex flex-wrap items-center gap-3 border-b border-[#172B24]/20 pb-5">
+                                        <button onClick={() => setPlaying(p => !p)} className="fm-button flex items-center gap-2">{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}{playing ? 'Pause replay' : 'Play recorded highlights'}</button>
+                                        <button onClick={() => { setMinute(0); setPlaying(false); }} className="fm-button-secondary min-w-[44px] flex items-center justify-center" aria-label="Restart international replay"><RotateCcw size={16} aria-hidden="true" /></button>
+                                        <span className="font-semibold tabular-nums ml-auto">{minute}′ / {end}′</span>
+                                    </div>
+                                    <ol className="max-h-56 overflow-auto divide-y divide-[#172B24]/15 text-sm">{revealed.slice(-8).map(e => <li key={e.id} className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3 py-3"><span className="font-semibold tabular-nums">{e.minute}′</span><span className="leading-relaxed">{e.description}</span></li>)}</ol>
                                 </>
-                            ) : <p className="text-amber-300 text-sm">This older saved result has no event ledger. The score is preserved; player incidents and replay actions are not invented.</p>}
-                            <div className="grid md:grid-cols-2 gap-3 text-sm text-slate-300">
-                                {(['home', 'away'] as const).map(side => <div key={side} className="rounded border border-slate-700 p-3"><h3 className="font-bold text-white mb-2">{side === 'home' ? selected.homeTeam : selected.awayTeam} — actual participants</h3><p>{selected.participantNames?.[side]?.join(', ') || 'Not recorded in this older save.'}</p></div>)}
+                            ) : <p className="border-l-2 border-[#A47837] pl-4 text-sm leading-relaxed">This older saved result has no event ledger. The score is preserved; player incidents and replay actions are not invented.</p>}
+                            <div className="grid md:grid-cols-2 gap-6 border-t border-[#172B24]/20 pt-5">
+                                {(['home', 'away'] as const).map(side => (
+                                    <section key={side}>
+                                        <h3 className="text-xl font-semibold mb-3">{side === 'home' ? selected.homeTeam : selected.awayTeam} — actual participants</h3>
+                                        <p className="text-sm leading-relaxed">{selected.participantNames?.[side]?.join(', ') || 'Not recorded in this older save.'}</p>
+                                    </section>
+                                ))}
                             </div>
-                            {!!selected.penalties?.length && <div className="rounded border border-slate-700 p-3 text-sm text-slate-300"><h3 className="font-bold text-white mb-2">Recorded penalty sheet</h3><ol className="space-y-1">{selected.penalties.map(p => <li key={p.id}>{p.teamName} · {p.taker} vs {p.goalkeeper || 'keeper not recorded'} · {p.outcome}{p.shootout ? ' · shootout' : ''}{p.decisive ? ' · decisive kick' : ''}</li>)}</ol></div>}
+                            {!!selected.penalties?.length && (
+                                <section className="border-t border-[#172B24]/20 pt-5">
+                                    <h3 className="text-2xl font-semibold mb-3">Recorded penalty sheet</h3>
+                                    <ol className="divide-y divide-[#172B24]/15 text-sm">{selected.penalties.map(p => <li key={p.id} className="py-3 leading-relaxed">{p.teamName} · {p.taker} vs {p.goalkeeper || 'keeper not recorded'} · <strong>{p.outcome}</strong>{p.shootout ? ' · shootout' : ''}{p.decisive ? ' · decisive kick' : ''}</li>)}</ol>
+                                </section>
+                            )}
                         </>
                     )}
-                </>
+                </section>
             )}
-            {!!own.length && <div className="border-t border-slate-700 pt-4 space-y-2"><h3 className="font-bold text-white">{clubName}: relationship memory</h3>{own.slice(-10).reverse().map(i => <p key={i.id} className="text-sm text-slate-300"><span className={i.kind === 'bond' ? 'text-emerald-300' : 'text-amber-300'}>{i.playerA.name} / {i.playerB.name}</span> · {i.kind} · {i.strength}/100 · {i.state} · {i.trigger.stage}</p>)}</div>}
+            {!!own.length && (
+                <section className="fm-panel p-5 sm:p-6">
+                    <h3 className="text-2xl font-semibold border-b border-[#172B24]/20 pb-4">{clubName}: relationship memory</h3>
+                    <div className="divide-y divide-[#172B24]/15">
+                        {own.slice(-10).reverse().map(i => (
+                            <div key={i.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] py-4 text-sm">
+                                <p className="font-semibold">{i.playerA.name} / {i.playerB.name}</p>
+                                <p className="leading-relaxed">{i.kind} · <span className="tabular-nums">{i.strength}/100</span> · {i.state} · {i.trigger.stage}</p>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
         </section>
     );
 };

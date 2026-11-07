@@ -88,130 +88,80 @@ const TacticsBoard: React.FC<TacticsBoardProps> = ({ assignments, formation, onS
     const roleCurrentIndex: Record<string, number> = {};
 
     return (
-        <div className="relative w-full aspect-[3/4] bg-green-800 rounded-lg overflow-hidden border-2 border-green-900/50 shadow-inner select-none">
-            {/* Pitch markings */}
-            <div className="absolute inset-0 opacity-20 pointer-events-none">
-                <div className="absolute inset-x-4 top-0 h-px bg-white"></div>
-                <div className="absolute inset-x-4 bottom-0 h-px bg-white"></div>
-                <div className="absolute inset-y-0 left-4 w-px bg-white"></div>
-                <div className="absolute inset-y-0 right-4 w-px bg-white"></div>
-                <div className="absolute top-1/2 left-4 right-4 h-px bg-white"></div>
-                <div className="absolute top-1/2 left-1/2 w-20 h-20 border border-white rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-                <div className="absolute top-0 left-1/2 w-40 h-20 border border-t-0 border-white -translate-x-1/2"></div>
-                <div className="absolute bottom-0 left-1/2 w-40 h-20 border border-b-0 border-white -translate-x-1/2"></div>
-            </div>
-
-            {/* Title */}
-            <div className="absolute top-2 left-2 text-[10px] font-bold text-white/50 bg-black/20 px-2 py-1 rounded">
-                DRAG OR TAP TO SWAP
-            </div>
-
-            {/* Render Slots */}
-            {currentFormationSlots.map((role, idx) => {
-                const totalInRole = roleCounts[role] || 1;
-                const indexInRole = roleCurrentIndex[role] || 0;
-                roleCurrentIndex[role] = indexInRole + 1;
-
-                const { x, y } = getSlotCoordinates(role, indexInRole, totalInRole);
-                
-                // Find the assigned player for this specific slot index
-                const assignment = assignments.find(a => a.slotIndex === idx);
-                const player = assignment?.player;
-
-                const isSelected = selectedSlotIndex === idx;
-                
-                // Styling
-                let group = 'MID';
-                let colorClass = 'bg-gray-600 border-gray-400';
-                
-                if (player) {
-                    group = getPositionGroup(player.position);
-                    colorClass = 
-                        group === 'GK' ? 'bg-yellow-600 border-yellow-400' :
-                        group === 'DEF' ? 'bg-blue-600 border-blue-400' :
-                        group === 'MID' ? 'bg-green-600 border-green-400' : 'bg-red-600 border-red-400';
-                    
-                    if (assignment?.penaltySeverity === 'high') colorClass = 'bg-red-900 border-red-500 animate-pulse';
-                    else if (assignment?.penaltySeverity === 'low') colorClass = 'bg-orange-600 border-orange-400';
-                }
-
-                if (isSelected) {
-                    colorClass = 'bg-white border-blue-500 ring-4 ring-blue-400/50 text-blue-900 z-50 scale-110';
-                }
-
-                return (
-                    <div
-                        key={idx}
-                        draggable={Boolean(player)}
-                        onDragStart={(e) => {
-                            e.dataTransfer.setData('text/slot-index', String(idx));
-                            e.dataTransfer.effectAllowed = 'move';
-                        }}
-                        onDragOver={(e) => {
-                            if (!onSlotSwap) return;
-                            e.preventDefault();
-                            setDragOverSlotIndex(idx);
-                        }}
-                        onDragLeave={() => {
-                            if (dragOverSlotIndex === idx) setDragOverSlotIndex(null);
-                        }}
-                        onDrop={(e) => {
-                            e.preventDefault();
-                            const from = Number(e.dataTransfer.getData('text/slot-index'));
-                            if (Number.isFinite(from) && onSlotSwap) {
-                                onSlotSwap(from, idx);
-                            }
-                            setDragOverSlotIndex(null);
-                        }}
-                        onDragEnd={() => setDragOverSlotIndex(null)}
-                        onClick={() => onSlotClick(idx)}
-                        className={`absolute cursor-pointer transition-all duration-200 transform hover:scale-110 z-10 ${
-                            dragOverSlotIndex === idx ? 'ring-2 ring-blue-400 rounded-full' : ''
-                        }`}
-                        style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
-                    >
-                        {/* Jersey / Circle */}
-                        <div className={`w-10 h-10 rounded-full border-2 flex flex-col items-center justify-center shadow-lg relative ${colorClass}`} style={{ boxShadow: '0 4px 6px -1px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3)' }}>
-                            <span className="text-[10px] font-black leading-none z-10">{player ? player.rating : role}</span>
-                            {player && (
-                                <span className="text-[8px] font-bold leading-none opacity-80 z-10">{player.position}</span>
-                            )}
-                            {/* 3D Glossy bubble highlight */}
-                            <div className="absolute top-[2px] left-[2px] w-[10px] h-[6px] bg-white/35 rounded-full pointer-events-none" style={{ borderRadius: '50% 50% 40% 40%' }} />
-                        </div>
-
-                        {/* Name Label */}
-                        {player && (
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 flex flex-col items-center">
-                                <div className={`px-1.5 py-0.5 rounded text-[8px] font-bold whitespace-nowrap shadow-md ${isSelected ? 'bg-blue-600 text-white' : 'bg-black/80 text-white'}`}>
-                                    {player.name.split(' ').pop()}
+        <figure className="fm-tactics-diagram m-0">
+            <div className="fm-tactics-board relative w-full aspect-[3/4] overflow-hidden select-none">
+                <svg className="fm-tactics-markings absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 400" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden="true">
+                    <rect x="16" y="16" width="268" height="368" />
+                    <path d="M16 200H284" />
+                    <circle cx="150" cy="200" r="35" />
+                    <circle cx="150" cy="200" r="2" fill="currentColor" stroke="none" />
+                    <path d="M82 16V76H218V16 M116 16V42H184V16 M82 384V324H218V384 M116 384V358H184V384" />
+                    <path d="M125 76Q150 106 175 76 M125 324Q150 294 175 324" />
+                    <path d="M134 16V8H166V16 M134 384V392H166V384" />
+                </svg>
+                {currentFormationSlots.map((role, idx) => {
+                    const totalInRole = roleCounts[role] || 1;
+                    const indexInRole = roleCurrentIndex[role] || 0;
+                    roleCurrentIndex[role] = indexInRole + 1;
+                    const { x, y } = getSlotCoordinates(role, indexInRole, totalInRole);
+                    const assignment = assignments.find(a => a.slotIndex === idx);
+                    const player = assignment?.player;
+                    const isSelected = selectedSlotIndex === idx;
+                    const group = player ? getPositionGroup(player.position).toLowerCase() : 'empty';
+                    return (
+                        <button
+                            key={idx}
+                            type="button"
+                            draggable={Boolean(player)}
+                            onDragStart={(e) => {
+                                e.dataTransfer.setData('text/slot-index', String(idx));
+                                e.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragOver={(e) => {
+                                if (!onSlotSwap) return;
+                                e.preventDefault();
+                                setDragOverSlotIndex(idx);
+                            }}
+                            onDragLeave={() => {
+                                if (dragOverSlotIndex === idx) setDragOverSlotIndex(null);
+                            }}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                const from = Number(e.dataTransfer.getData('text/slot-index'));
+                                if (Number.isFinite(from) && onSlotSwap) onSlotSwap(from, idx);
+                                setDragOverSlotIndex(null);
+                            }}
+                            onDragEnd={() => setDragOverSlotIndex(null)}
+                            onClick={() => onSlotClick(idx)}
+                            aria-label={player ? `${player.name}, ${player.position}, ${player.rating}${assignment?.isOutOfPosition ? `, playing as ${role}` : ''}` : `${role} Needed`}
+                            aria-pressed={isSelected}
+                            className={`fm-tactics-slot absolute cursor-pointer z-10 ${isSelected ? 'is-selected z-20' : ''} ${dragOverSlotIndex === idx ? 'is-drop-target' : ''}`}
+                            style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
+                        >
+                            <div className={`fm-tactics-token w-11 h-11 rounded-full flex flex-col items-center justify-center relative is-${group} ${assignment?.penaltySeverity === 'high' ? 'is-high-penalty' : assignment?.penaltySeverity === 'low' ? 'is-low-penalty' : ''}`}>
+                                <span className="text-sm font-bold leading-none tabular-nums">{player ? player.rating : role}</span>
+                                {player && <span className="text-[9px] font-bold leading-none mt-1">{player.position}</span>}
+                            </div>
+                            {player ? (
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 flex flex-col items-center pointer-events-none">
+                                    <span className="fm-tactics-name px-1 py-0.5 text-[10px] font-semibold whitespace-nowrap">{player.name.split(' ').pop()}</span>
+                                    <div className="flex gap-1 mt-0.5">
+                                        {player.condition < 90 && <span className="fm-tactics-status-tired w-1.5 h-1.5 rounded-full" title="Tired" />}
+                                        {player.effects.some(e => e.type === 'PostTournamentMorale' && e.morale === 'FiredUp') && <span className="fm-tactics-status-positive h-1.5 w-1.5 rounded-full" role="img" aria-label="Morale: fired up" title="Morale: fired up" />}
+                                        {player.effects.some(e => e.type === 'PostTournamentMorale' && e.morale === 'Disappointed') && <span className="fm-tactics-status-muted h-1.5 w-1.5 rounded-full" role="img" aria-label="Morale: disappointed" title="Morale: disappointed" />}
+                                    </div>
                                 </div>
-                                {/* Condition / Status Icons */}
-                                <div className="flex gap-0.5 mt-0.5">
-                                    {player.condition < 90 && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" title="Tired"></span>}
-                                    {player.effects.some(e => e.type === 'PostTournamentMorale' && e.morale === 'FiredUp') && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" role="img" aria-label="Morale: fired up" title="Morale: fired up" />}
-                                    {player.effects.some(e => e.type === 'PostTournamentMorale' && e.morale === 'Disappointed') && <span className="h-1.5 w-1.5 rounded-full bg-slate-400" role="img" aria-label="Morale: disappointed" title="Morale: disappointed" />}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Empty Slot Label */}
-                        {!player && (
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-1.5 py-0.5 bg-gray-800/80 rounded text-[8px] text-gray-300 font-bold">
-                                {role} Needed
-                            </div>
-                        )}
-
-                        {/* Out of position Warning */}
-                        {assignment?.isOutOfPosition && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center border border-white text-[10px] shadow-sm">
-                                !
-                            </div>
-                        )}
-                    </div>
-                );
-            })}
-        </div>
+                            ) : <span className="fm-tactics-name absolute top-full left-1/2 -translate-x-1/2 mt-1 px-1 py-0.5 text-[10px] whitespace-nowrap">{role} Needed</span>}
+                            {assignment?.isOutOfPosition && <span className="fm-tactics-warning absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold">!</span>}
+                        </button>
+                    );
+                })}
+            </div>
+            <figcaption className="fm-tactics-caption flex justify-between items-center gap-3 py-3 text-[10px]">
+                <span className="fm-eyebrow">DRAG OR TAP TO SWAP</span>
+                <span className="font-bold tabular-nums">{formation}</span>
+            </figcaption>
+        </figure>
     );
 };
 

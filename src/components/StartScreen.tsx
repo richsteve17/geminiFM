@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { FootballIcon } from './icons/FootballIcon';
-import { BriefcaseIcon } from './icons/BriefcaseIcon';
-import { GlobeAltIcon } from './icons/GlobeAltIcon';
-import { FolderOpen, Mic, Video, AudioLines } from 'lucide-react';
+import { ArrowUpRight, FolderOpen, Mic, Video, AudioLines, Settings2, ChevronRight } from 'lucide-react';
 import KitCatalog from './KitCatalog';
+import ClubCrest from './ClubCrest';
 import { isPaidAudioEnabled, setPaidAudioEnabled, isPaidVideoEnabled, setPaidVideoEnabled, getPaidVoiceName, setPaidVoiceName } from '../services/geminiService';
 import { BUILD_INFO } from '../buildInfo';
 
@@ -23,250 +21,84 @@ const StartScreen: React.FC<StartScreenProps> = ({ onSelectTeam, onStartUnemploy
     const [paidAudio, setPaidAudio] = useState(isPaidAudioEnabled());
     const [paidVideo, setPaidVideo] = useState(isPaidVideoEnabled());
     const [paidVoice, setPaidVoice] = useState(getPaidVoiceName());
-
-    const handleVoiceChange = (voiceName: string) => {
-        setPaidVoice(voiceName);
-        setPaidVoiceName(voiceName);
-    };
-
-    const togglePaidAudio = () => {
-        const newVal = !paidAudio;
-        setPaidAudio(newVal);
-        setPaidAudioEnabled(newVal);
-    };
-
-    const togglePaidVideo = () => {
-        const newVal = !paidVideo;
-        setPaidVideo(newVal);
-        setPaidVideoEnabled(newVal);
-    };
+    const togglePaidAudio = () => { const next = !paidAudio; setPaidAudio(next); setPaidAudioEnabled(next); };
+    const togglePaidVideo = () => { const next = !paidVideo; setPaidVideo(next); setPaidVideoEnabled(next); };
+    const handleVoiceChange = (voiceName: string) => { setPaidVoice(voiceName); setPaidVoiceName(voiceName); };
 
     return (
-        <div className="relative flex flex-col items-center justify-center min-h-[88vh] px-4 py-8 w-full max-w-7xl mx-auto overflow-hidden rounded-2xl bg-slate-950 border border-slate-800/80 shadow-2xl">
-            
-            {/* --- FUTURISTIC GLOWING STADIUM PITCH BACKDROP --- */}
-            <div className="absolute inset-0 pointer-events-none z-0 opacity-15" 
-                 style={{ 
-                     backgroundImage: 'linear-gradient(rgba(34, 197, 94, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 197, 94, 0.15) 1px, transparent 1px)', 
-                     backgroundSize: '50px 50px',
-                     transform: 'perspective(400px) rotateX(40deg) scale(1.6) translateY(-40px)'
-                 }}>
+        <main className="fm-home">
+            <div className="fm-home-folio">
+                <span className="fm-eyebrow">Single player / {BUILD_INFO.season}</span>
+                <span className="fm-version">v{BUILD_INFO.version} <span aria-hidden="true">/</span> {BUILD_INFO.checkpoint}</span>
             </div>
-            
-            {/* Pitch Center Circle Line Visual */}
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] border-t-2 border-dashed border-emerald-500/20 rounded-t-full pointer-events-none z-0"></div>
-            
-            {/* Glowing Grass Aura */}
-            <div className="absolute bottom-0 inset-x-0 h-64 bg-gradient-to-t from-emerald-950/20 via-transparent to-transparent pointer-events-none z-0 blur-3xl"></div>
-            <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-950/10 rounded-full blur-3xl pointer-events-none z-0"></div>
-
-            {/* --- HEADER TITLE SECTION --- */}
-            <div className="z-10 text-center mb-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                <div className="flex justify-center mb-3">
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-emerald-500/30 rounded-full blur-xl scale-125 opacity-30 group-hover:opacity-50 transition-opacity"></div>
-                        <FootballIcon className="w-20 h-20 text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.5)] animate-spin-slow" />
-                    </div>
-                </div>
-                
-                <h1 className="text-5xl md:text-7xl font-black text-white italic tracking-tighter uppercase drop-shadow-lg mb-1">
-                    MANUS <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500">FM '27</span>
-                </h1>
-                
-                <div className="flex flex-wrap items-center justify-center gap-3 text-[10px] font-mono tracking-widest text-emerald-400 uppercase opacity-90 mb-6">
-                    <span className="px-2 py-0.5 bg-emerald-950/80 border border-emerald-800/80 rounded">v{BUILD_INFO.version} · {BUILD_INFO.checkpoint}</span>
-                    <span>•</span>
-                    <span className="px-2 py-0.5 bg-blue-950/80 border border-blue-800/80 rounded text-blue-400">Server AI Gateway</span>
-                    <span>•</span>
-                    <span className="px-2 py-0.5 bg-amber-950/80 border border-amber-800/80 rounded text-amber-400">{BUILD_INFO.season} Theme Pack</span>
-                </div>
-
-                <p className="text-sm md:text-base text-slate-300 font-light max-w-xl mx-auto leading-relaxed border-t border-b border-slate-800/80 py-3 bg-slate-900/30 backdrop-blur-md rounded-lg shadow-inner">
-                    Experience deep-learning football management. Develop tactics, negotiate contracts, satisfy the board, and write your legend across infinite campaigns.
-                </p>
-            </div>
-            
-            {/* --- CARDS GRID NAVIGATION --- */}
-            <div className={`grid grid-cols-1 gap-5 w-full max-w-5xl mb-10 z-10 px-4 ${hasSave ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
-
-                {/* Load Career Card — only shown when a save exists */}
-                {hasSave && onContinue && (
-                    <button
-                        onClick={onContinue}
-                        className="group relative overflow-hidden bg-slate-900/70 hover:bg-slate-900/90 border-2 border-cyan-600/60 hover:border-cyan-400 rounded-xl p-5 text-left transition-all hover:shadow-[0_0_35px_rgba(6,182,212,0.25)] hover:-translate-y-1 duration-300 md:col-span-2"
-                    >
-                        {/* Pulsing glow dot */}
-                        <span className="absolute top-3 right-3 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
-                        </span>
-                        <div className="relative z-10 flex items-center gap-5">
-                            <FolderOpen size={36} strokeWidth={1.5} className="shrink-0 text-cyan-400" aria-hidden="true" />
-                            <div className="flex-1">
-                                <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-1 block">Saved Career</span>
-                                <h3 className="text-xl font-extrabold text-white mb-1 group-hover:text-cyan-300 transition-colors">LOAD CAREER</h3>
-                                {saveMetadata ? (
-                                    <p className="text-xs text-slate-300 leading-relaxed">
-                                        <span className="font-bold text-white">{saveMetadata.teamName}</span>
-                                        {' · '}Year {saveMetadata.year}, Week {saveMetadata.week}
-                                    </p>
-                                ) : (
-                                    <p className="text-xs text-slate-400 leading-relaxed">Continue your last saved manager career.</p>
-                                )}
-                            </div>
-                            <div className="text-cyan-500 group-hover:translate-x-1 transition-transform text-2xl font-black">→</div>
-                        </div>
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 to-blue-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
-                    </button>
-                )}
-
-                {/* World Cup Card */}
-                <button 
-                    onClick={onStartWorldCup} 
-                    className="group relative overflow-hidden bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800 hover:border-emerald-500/50 rounded-xl p-5 text-left transition-all hover:shadow-[0_0_25px_rgba(52,211,153,0.15)] hover:-translate-y-1 duration-300"
-                >
-                    <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:scale-110 transition-all duration-300">
-                        <GlobeAltIcon className="w-20 h-20 text-emerald-500" />
-                    </div>
-                    <div className="relative z-10">
-                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1.5 block">Tutorial · Earn your RTG start</span>
-                        <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-emerald-300 transition-colors">WORLD CUP</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">Learn management with a nation. Your finish unlocks club opportunities; a World Cup title opens the elite tier.</p>
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
-                </button>
-
-                {/* Club Manager Card */}
-                <button 
-                    onClick={onSelectTeam} 
-                    className="group relative overflow-hidden bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800 hover:border-amber-500/50 rounded-xl p-5 text-left transition-all hover:shadow-[0_0_25px_rgba(245,158,11,0.15)] hover:-translate-y-1 duration-300"
-                >
-                    <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:scale-110 transition-all duration-300">
-                        <FootballIcon className="w-20 h-20 text-amber-500" />
-                    </div>
-                    <div className="relative z-10">
-                        <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest mb-1.5 block">Career Mode</span>
-                        <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-amber-300 transition-colors">CLUB CAREER</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">Choose from your earned starting clubs. Without the World Cup tutorial, only Championship clubs are available.</p>
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-yellow-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
-                </button>
-
-                {/* Unemployed / RTG Card */}
-                <button 
-                    onClick={onStartUnemployed} 
-                    className="group relative overflow-hidden bg-slate-900/40 hover:bg-slate-900/70 border border-slate-800 hover:border-purple-500/50 rounded-xl p-5 text-left transition-all hover:shadow-[0_0_25px_rgba(168,85,247,0.15)] hover:-translate-y-1 duration-300"
-                >
-                    <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-15 group-hover:scale-110 transition-all duration-300">
-                        <BriefcaseIcon className="w-20 h-20 text-purple-500" />
-                    </div>
-                    <div className="relative z-10">
-                        <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1.5 block">Hardcore Mode</span>
-                        <h3 className="text-xl font-extrabold text-white mb-1.5 group-hover:text-purple-300 transition-colors">ROAD TO GLORY</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">Start unemployed and apply for jobs. Your World Cup record determines initial opportunities—not a self-selected reputation.</p>
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300"></div>
-                </button>
-            </div>
-
-            {tutorialSummary && <p className="relative z-10 mb-6 max-w-3xl border border-emerald-900 rounded-lg px-4 py-3 text-sm text-slate-300" role="status">{tutorialSummary}</p>}
-
-            {/* --- GRANULAR MEDIA API CONFIG SWITCHES --- */}
-            <div className="z-10 bg-slate-900/60 border border-slate-800/80 p-4 rounded-xl shadow-lg mb-8 backdrop-blur-md max-w-xl w-full mx-4 flex flex-col gap-3">
-                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center border-b border-slate-800 pb-2">AI API Cost & Settings Control</h4>
-                
-                <div className="flex flex-col sm:flex-row gap-4 justify-between">
-                    {/* Audio Toggle */}
-                    <div className="flex items-center justify-between gap-4 flex-1 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50">
-                        <div className="flex flex-col text-left">
-                            <span className="text-[10px] font-bold text-white uppercase tracking-wider"><Mic size={14} className="inline-block mr-1.5 align-middle" aria-hidden="true" />Paid AI Commentary</span>
-                            <span className="text-[8px] text-slate-500 uppercase mt-0.5">
-                                {paidAudio ? 'Gemini API Voices' : 'Local Browser TTS (Free)'}
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={togglePaidAudio}
-                            aria-label="Paid AI commentary" role="switch" aria-checked={paidAudio}
-                            className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                paidAudio ? 'bg-emerald-500' : 'bg-slate-700'
-                            }`}
-                        >
-                            <span
-                                className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                    paidAudio ? 'translate-x-4' : 'translate-x-0'
-                                }`}
-                            />
+            <section className="fm-home-layout" aria-label="Career setup">
+                <div className="fm-home-careers">
+                    <p className="fm-eyebrow">Manus FM '27</p>
+                    <h1 className="fm-home-title">Football<br />Management</h1>
+                    <p className="fm-home-deck">AI scouting, press conferences, negotiations and player relationships.</p>
+                    {hasSave && onContinue && (
+                        <button type="button" onClick={onContinue} className="fm-resume">
+                            {saveMetadata?.teamName && saveMetadata.teamName !== 'Unemployed' ? <ClubCrest teamName={saveMetadata.teamName} className="h-10 w-10 shrink-0" /> : <FolderOpen size={28} aria-hidden="true" />}
+                            <span><span className="fm-eyebrow">Saved career</span><strong>Load career</strong><span className="fm-resume-meta">{saveMetadata ? `${saveMetadata.teamName} · Year ${saveMetadata.year}, Week ${saveMetadata.week}` : 'Continue your last saved manager career.'}</span></span>
+                            <ArrowUpRight size={22} aria-hidden="true" />
                         </button>
-                    </div>
-
-                    {/* Video Toggle */}
-                    <div className="flex items-center justify-between gap-4 flex-1 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50">
-                        <div className="flex flex-col text-left">
-                            <span className="text-[10px] font-bold text-white uppercase tracking-wider"><Video size={14} className="inline-block mr-1.5 align-middle" aria-hidden="true" />Paid 3D Replay Video</span>
-                            <span className="text-[8px] text-slate-500 uppercase mt-0.5">
-                                {paidVideo ? 'Google Veo Replay Generation' : 'Live 3D Pitch · No Video Generation'}
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={togglePaidVideo}
-                            aria-label="Paid replay video" role="switch" aria-checked={paidVideo}
-                            className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                paidVideo ? 'bg-emerald-500' : 'bg-slate-700'
-                            }`}
-                        >
-                            <span
-                                className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                    paidVideo ? 'translate-x-4' : 'translate-x-0'
-                                }`}
-                            />
+                    )}
+                    <div className="fm-mode-list">
+                        <button type="button" onClick={onStartWorldCup} className="fm-mode fm-mode-tutorial">
+                            <span className="fm-mode-number" aria-hidden="true">01</span>
+                            <span><span className="fm-eyebrow">Tutorial · Earn your RTG start</span><h2>World Cup</h2><p>Learn management with a nation. Your finish unlocks club opportunities; a World Cup title opens the elite tier.</p></span>
+                            <ArrowUpRight size={22} aria-hidden="true" />
+                        </button>
+                        <button type="button" onClick={onSelectTeam} className="fm-mode">
+                            <span className="fm-mode-number" aria-hidden="true">02</span>
+                            <span><span className="fm-eyebrow">Career mode</span><h2>Club career</h2><p>Choose from your earned starting clubs. Without the World Cup tutorial, only Championship clubs are available.</p></span>
+                            <ArrowUpRight size={22} aria-hidden="true" />
+                        </button>
+                        <button type="button" onClick={onStartUnemployed} className="fm-mode">
+                            <span className="fm-mode-number" aria-hidden="true">03</span>
+                            <span><span className="fm-eyebrow">Hardcore mode</span><h2>Road to glory</h2><p>Start unemployed and apply for jobs. Your World Cup record determines initial opportunities—not a self-selected reputation.</p></span>
+                            <ArrowUpRight size={22} aria-hidden="true" />
                         </button>
                     </div>
                 </div>
-                
-                {/* Voice Selection Selector (Only relevant when Paid AI Commentary is Enabled) */}
-                {paidAudio && (
-                    <div className="flex items-center justify-between gap-4 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50 mt-2">
-                        <div className="flex flex-col text-left">
-                            <span className="text-[10px] font-bold text-white uppercase tracking-wider"><AudioLines size={14} className="inline-block mr-1.5 align-middle" aria-hidden="true" />Commentator Voice</span>
-                            <span className="text-[8px] text-slate-500 uppercase mt-0.5">Select Gemini native voice personality</span>
-                        </div>
-                        <select
-                            value={paidVoice}
-                            onChange={(e) => handleVoiceChange(e.target.value)}
-                            className="bg-slate-900 border border-slate-800 text-white rounded text-[10px] font-black uppercase px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 cursor-pointer"
-                        >
-                            <option value="Puck">Puck (Energetic Male)</option>
-                            <option value="Charon">Charon (Deep Male)</option>
-                            <option value="Fenrir">Fenrir (Powerful Male)</option>
-                            <option value="Aoede">Aoede (Clear Female)</option>
-                            <option value="Kore">Kore (Crisp Female)</option>
-                        </select>
+                <aside className="fm-home-feature">
+                    <figure className="fm-stadium">
+                        <img src="/interface/wembley.webp" alt="Wembley Stadium viewed from the stands" fetchPriority="high" />
+                        <figcaption><span>Wembley Stadium</span><span>Venue photograph / 2011</span></figcaption>
+                    </figure>
+                    <div className="fm-home-note">
+                        <span className="fm-eyebrow">World Cup → RTG</span>
+                        <p role="status">{tutorialSummary || 'Your World Cup record determines initial club opportunities.'}</p>
+                        <div className="fm-note-rule" aria-hidden="true" />
+                        <span className="fm-eyebrow">AI staff</span>
+                        <p>Develop tactics, negotiate contracts, satisfy the board.</p>
                     </div>
-                )}
-            </div>
+                    <p className="fm-photo-credit">Photograph: <a href="https://commons.wikimedia.org/wiki/File:Wembley_Stadium.jpg" target="_blank" rel="noopener noreferrer">Wonker</a> / <a href="https://creativecommons.org/licenses/by/2.0/" target="_blank" rel="noopener noreferrer">CC BY 2.0</a>. Downscaled; tonal treatment and responsive crop.</p>
+                </aside>
+            </section>
 
-            {/* --- CURRENT-SEASON CLUB THEME SELECTOR --- */}
-            <div className="z-10 w-full max-w-4xl text-center flex flex-col items-center">
-                <KitCatalog initialTeam={initialTeam} onThemeSelect={onThemeSelect} />
-
-                <details className="mt-2 w-full max-w-4xl text-left border border-slate-800 bg-slate-950/70 rounded-lg shadow-inner group">
-                    <summary className="cursor-pointer list-none px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-widest text-slate-400 hover:text-emerald-300 transition-colors">
-                        <span>Release record · v{BUILD_INFO.version}</span>
-                        <span className="text-slate-600">{BUILD_INFO.checkpoint} · {BUILD_INFO.builtAt.slice(0, 19).replace('T', ' ')} UTC</span>
-                    </summary>
-                    <div className="border-t border-slate-800 px-4 py-3 text-[11px] text-slate-400">
-                        <p className="font-bold text-emerald-400 uppercase tracking-widest mb-2">Current build</p>
-                        <ul className="space-y-1.5 list-disc list-inside leading-relaxed">
-                            {BUILD_INFO.changes.map(change => <li key={change}>{change}</li>)}
-                        </ul>
-                        <p className="mt-3 text-[9px] text-slate-600 uppercase tracking-wider">This record is generated from package version, Git revision, and build timestamp — not runtime theater.</p>
+            <div className="fm-home-settings">
+                <details className="fm-settings-disclosure">
+                    <summary><span><Settings2 size={17} aria-hidden="true" /> AI API cost & settings control</span><ChevronRight size={18} aria-hidden="true" /></summary>
+                    <div className="fm-settings-body">
+                        <div className="fm-setting-row">
+                            <div><strong><Mic size={16} aria-hidden="true" /> Paid AI Commentary</strong><p>{paidAudio ? 'Gemini API Voices' : 'Local Browser TTS (Free)'}</p></div>
+                            <button type="button" className="fm-toggle" onClick={togglePaidAudio} aria-label="Paid AI commentary" role="switch" aria-checked={paidAudio}><span /></button>
+                        </div>
+                        <div className="fm-setting-row">
+                            <div><strong><Video size={16} aria-hidden="true" /> Paid 3D Replay Video</strong><p>{paidVideo ? 'Google Veo Replay Generation' : 'Live 3D Pitch · No Video Generation'}</p></div>
+                            <button type="button" className="fm-toggle" onClick={togglePaidVideo} aria-label="Paid replay video" role="switch" aria-checked={paidVideo}><span /></button>
+                        </div>
+                        {paidAudio && <div className="fm-setting-row"><label htmlFor="commentator-voice"><strong><AudioLines size={16} aria-hidden="true" /> Commentator Voice</strong></label><select id="commentator-voice" className="fm-field" value={paidVoice} onChange={event => handleVoiceChange(event.target.value)}><option value="Puck">Puck (Energetic Male)</option><option value="Charon">Charon (Deep Male)</option><option value="Fenrir">Fenrir (Powerful Male)</option><option value="Aoede">Aoede (Clear Female)</option><option value="Kore">Kore (Crisp Female)</option></select></div>}
                     </div>
                 </details>
+                <details className="fm-settings-disclosure fm-release">
+                    <summary><span>Release record · v{BUILD_INFO.version}</span><ChevronRight size={18} aria-hidden="true" /></summary>
+                    <div className="fm-settings-body"><p className="fm-version">{BUILD_INFO.checkpoint} · {BUILD_INFO.builtAt.slice(0, 19).replace('T', ' ')} UTC</p><ul>{BUILD_INFO.changes.map(change => <li key={change}>{change}</li>)}</ul><p>Generated from package version, Git revision and build timestamp.</p></div>
+                </details>
             </div>
-        </div>
+            <KitCatalog initialTeam={initialTeam} onThemeSelect={onThemeSelect} />
+        </main>
     );
 };
-
 export default StartScreen;

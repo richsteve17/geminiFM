@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Job } from '../types';
 import ClubCrest from './ClubIdentity';
@@ -14,37 +13,35 @@ const JobCentreScreen: React.FC<JobCentreScreenProps> = ({ jobs, onApply, onBack
     const sortedJobs = [...jobs].sort((a, b) => b.prestige - a.prestige);
 
     return (
-        <div className="mt-8 max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Job Centre</h2>
-                <p className="text-lg text-gray-400">The following clubs are looking for a new manager. Do you have what it takes?</p>
-                {careerSummary && <p className="mt-3 text-sm text-emerald-300" role="status">{careerSummary}</p>}
-            </div>
-            <div className="space-y-3">
+        <section className="fm-screen max-w-5xl mx-auto px-4 py-8">
+            <header className="mb-8 border-b border-[#172B24]/25 pb-6">
+                <p className="fm-eyebrow">Office of Recruitment</p>
+                <h2 className="fm-screen-title">Job Centre</h2>
+                <p className="mt-3 max-w-2xl leading-relaxed">The following clubs are looking for a new manager. Do you have what it takes?</p>
+                {careerSummary && <p className="mt-4 border-l-2 border-[#A47837] pl-4 text-sm leading-relaxed" role="status">{careerSummary}</p>}
+            </header>
+            <div className="fm-panel overflow-hidden">
+                <div className="hidden sm:grid grid-cols-[1fr_8rem_8rem] gap-4 border-b border-[#172B24]/20 px-5 py-3 text-sm font-semibold">
+                    <span>Club</span><span>Prestige</span><span className="text-right">Application</span>
+                </div>
                 {sortedJobs.map(job => (
-                    <div key={job.teamName} className="bg-gray-800/50 rounded-lg shadow-lg border border-gray-700 p-4 flex items-center justify-between">
-                        <div className="flex min-w-0 items-center gap-3">
+                    <div key={job.teamName} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_8rem_8rem] items-center gap-4 border-b border-[#172B24]/15 last:border-b-0 px-5 py-5">
+                        <div className="flex min-w-0 items-center gap-4">
                             <ClubCrest name={job.teamName} size="h-10 w-10" />
                             <div className="min-w-0">
-                                <h3 className="truncate text-xl font-bold text-blue-400">{job.teamName}</h3>
-                                <p className="text-sm text-gray-300">Prestige: <span className="font-bold">{job.prestige}</span></p>
+                                <h3 className="text-2xl leading-tight font-semibold break-words">{job.teamName}</h3>
+                                <p className="sm:hidden mt-1 text-sm">Prestige: <span className="font-semibold tabular-nums">{job.prestige}</span></p>
                             </div>
                         </div>
-                        <button
-                            onClick={() => onApply(job.teamName)}
-                            className="py-2 px-5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors duration-200"
-                        >
-                            Apply
-                        </button>
+                        <p className="hidden sm:block font-semibold tabular-nums">{job.prestige}</p>
+                        <button onClick={() => onApply(job.teamName)} className="fm-button justify-self-end">Apply</button>
                     </div>
                 ))}
             </div>
-             <div className="text-center mt-8">
-                 <button onClick={onBack} className="text-gray-400 hover:text-white transition-colors">
-                    &larr; Back to Main Menu
-                </button>
-            </div>
-        </div>
+            <footer className="mt-6">
+                <button onClick={onBack} className="fm-button-secondary">&larr; Back to Main Menu</button>
+            </footer>
+        </section>
     );
 };
 

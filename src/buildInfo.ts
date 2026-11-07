@@ -4,6 +4,9 @@ declare const __MANUS_FM_BUILT_AT__: string;
 
 export const ACTIVE_SEASON = '2026/27';
 export const CURRENT_BUILD_CHANGES = [
+    'Whole-interface football-editorial redesign: paper/ink/forest/brass tokens, local Barlow Condensed and IBM Plex Sans typography, ruled surfaces and compact masthead replace the inherited navy-glass layout.',
+    'Asymmetric career entry with a credited Wembley photograph; permanent club dossier/navigation, readable market and recruitment registers, staff transcripts, press editorial sheets and international reports. All existing entry gates, factual data, consequences and callbacks retained.',
+    'Dark broadcast scorebug and consolidated match controls, a larger pitch at desktop widths, ruled live notes, flat squad/tactical worksheets and integrated stadium audio controls. Phone navigation/disclosures preserved; no simulation, roster, save-schema or paid-AI setting changes.',
     'World Cup is the RTG tutorial. Skip: unemployed/Championship; elimination unlocks lower clubs; a title unlocks elite clubs including Real Madrid. Best completed tutorial rewards persist; existing club careers retain earned mobility.',
     '64 distinct source-backed national pools with 2,015 identified athletes, a 48-nation tutorial and positional squad selection. Snapshot observed 2026-11-07, not official final World Cup rosters; four source pools contain 23–25 players rather than invented fill.',
     'International return relationships use actual scorers, keeper/penalty duels, tournament stakes and participation. Shared national success/failure, persistent chemistry/training effects, grounded AI mediation, separation and repeated-co-selection transfer escalation replace random national-pair feuds.',

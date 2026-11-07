@@ -2308,8 +2308,20 @@ export default function App() {
         setIncomingBids(prev => prev.map(b => b.id === updatedBid.id ? updatedBid : b));
     };
 
-    const worldCupTeams = Object.values(generateWorldCupStructure());
+    const worldCupTeams = React.useMemo(() => Object.values(generateWorldCupStructure()), []);
     const clubTeams = Object.values(allTeams).filter(t => canStartAtClub(t, tutorialCompletion));
+
+    const workspaceTabs = [
+        { id: 'match' as const, label: 'Match centre' },
+        { id: 'tactics' as const, label: 'Squad & tactics' },
+        { id: 'news' as const, label: 'Club inbox' },
+        { id: 'scouting' as const, label: 'Scouting' },
+        { id: 'scouting_market' as const, label: 'Free agency' },
+        { id: 'transfers' as const, label: 'Negotiations' },
+        { id: 'international' as const, label: 'Internationals' },
+        { id: 'honors' as const, label: 'Trophy room' },
+    ];
+    const workspaceTitle = workspaceTabs.find(tab => tab.id === gameplayTab)?.label ?? 'Match centre';
 
     const renderScreen = () => {
         switch (appScreen) {
@@ -2343,10 +2355,10 @@ export default function App() {
                 if (!userTeam) return <div>Loading...</div>;
                 return (
                     <div className="relative">
-                        <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+                        <main className="fm-workspace">
                         {showTutorial && <TutorialOverlay step={tutorialStep} onNext={()=>setTutorialStep(s=>s+1)} onClose={()=>setShowTutorial(false)} isNationalTeam={gameMode==='WorldCup'} />}
                         {showMechanicsGuide && <MechanicsGuide onClose={() => setShowMechanicsGuide(false)} />}
-                        <div className="lg:col-span-3">
+                        <aside className="fm-workspace-aside">
                             <TeamDetails 
                                 team={userTeam} 
                                 gameState={gameState} 
@@ -2356,37 +2368,21 @@ export default function App() {
                                 onNavigateToTab={setGameplayTab}
                                 onResign={handleResign}
                             />
-                        </div>
+                        </aside>
                         
-                        <div className="lg:col-span-9 flex flex-col gap-6">
-                            {/* PC Glassmorphic Navigation Tabs */}
-                            <div className="flex overflow-x-auto border-b border-gray-800 bg-gray-950/60 p-1.5 rounded-lg gap-2 shadow-inner border border-slate-800/40 backdrop-blur-md">
-                                <button onClick={() => setGameplayTab('match')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'match' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <Gamepad2 aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Match Center
-                                </button>
-                                <button onClick={() => setGameplayTab('tactics')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'tactics' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <ClipboardList aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Roster & Tactics
-                                </button>
-                                <button onClick={() => setGameplayTab('news')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'news' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <Newspaper aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Inbox Feed
-                                </button>
-                                <button onClick={() => setGameplayTab('scouting')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'scouting' || gameplayTab === 'scouting_market' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <Search aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Scout Network
-                                </button>
-                                <button onClick={() => setGameplayTab('scouting_market')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all whitespace-nowrap ${gameplayTab === 'scouting_market' ? 'bg-emerald-700 text-white' : 'text-slate-400 hover:bg-slate-900/40'}`}>Free Agency</button>
-                                <button onClick={() => setGameplayTab('transfers')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'transfers' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <Handshake aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Negotiations
-                                </button>
-                                <button onClick={() => setGameplayTab('honors')} className={`flex-1 shrink-0 py-2 px-3 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center justify-center gap-1.5 ${gameplayTab === 'honors' ? 'bg-emerald-900/50 border border-emerald-600/70 text-emerald-200' : 'text-slate-400 hover:text-slate-300 hover:bg-slate-900/40'}`}>
-                                    <Trophy aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0" /> Trophy Room
-                                </button>
+                        <div className="fm-workspace-content">
+                            <div className="fm-workspace-heading">
+                                <div><p className="fm-eyebrow">{gameMode === 'WorldCup' ? 'World Cup tutorial' : userTeam.league}</p><h2>{workspaceTitle}</h2></div>
+                                <p className="fm-workspace-week">Year {currentYear}<br />Week {currentWeek}</p>
                             </div>
+                            <nav className="fm-mobile-tabs" aria-label="Club workspace">
+                                {workspaceTabs.map(tab => <button type="button" key={tab.id} onClick={() => setGameplayTab(tab.id)} aria-current={gameplayTab === tab.id ? 'page' : undefined}>{tab.label}</button>)}
+                            </nav>
 
-                            {gameMode === 'Club' && <button onClick={() => setGameplayTab('international')} className="mb-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-emerald-200 flex items-center gap-2"><Globe2 size={17} aria-hidden="true" /> International duty & returns</button>}
                             {gameplayTab === 'international' && <InternationalBreakScreen tournament={gameMode === 'WorldCup' ? { type: 'World Cup Tutorial', teams, fixtures } : internationalTournament} incidents={relationshipIncidents} clubName={userTeamName!} onOpenInbox={() => setAppScreen(AppScreen.NEWS_FEED)} />}
                             {/* Active Tab Panel */}
                             {gameplayTab === 'tactics' && (
-                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                <div className="fm-section-body">
                                     <TacticsManager 
                                         team={userTeam}
                                         onTacticChange={handleTacticChange}
@@ -2403,8 +2399,8 @@ export default function App() {
                             )}
 
                             {gameplayTab === 'match' && (
-                                <div className="grid grid-cols-1 lg:grid-cols-9 gap-6">
-                                    <div className="lg:col-span-6">
+                                <div className="fm-match-layout">
+                                    <div className="min-w-0">
                                         <MatchView 
                                             fixture={currentFixture} 
                                             weeklyResults={weeklyResults} 
@@ -2426,7 +2422,7 @@ export default function App() {
                                             onMatchSpeedChange={setMatchSpeed}
                                         />
                                     </div>
-                                    <div className="lg:col-span-3">
+                                    <div className="fm-match-sidebar">
                                         <LeagueTableView table={leagueTable} userTeamName={userTeamName} />
                                     </div>
                                 </div>
@@ -2435,19 +2431,19 @@ export default function App() {
                             {gameplayTab === 'news' && <NewsScreen news={news} onRiftDecision={handleRiftDecision} onJobOfferDecision={handleJobOfferDecision} onBack={() => setGameplayTab('match')} />}
 
                             {gameplayTab === 'scouting' && (
-                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                <div className="fm-section-body">
                                     <ScoutingScreen isNationalTeam={gameMode === 'WorldCup'} onScout={async (r, useReal) => { setIsLoading(true); const res = await scoutPlayers(r, useReal); setScoutResults(res); setIsLoading(false); }} scoutResults={scoutResults} isLoading={isLoading} onSignPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setGameplayTab('match')} onGoToTransfers={() => setGameplayTab('scouting_market')} />
                                 </div>
                             )}
 
                             {gameplayTab === 'scouting_market' && (
-                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                <div className="fm-section-body">
                                     <TransfersScreen targets={transferMarket} squadPlayers={userTeam?.players ?? []} onApproachPlayer={(p) => handleStartPlayerTalk(p, 'transfer')} onBack={() => setGameplayTab('scouting')} />
                                 </div>
                             )}
 
                             {gameplayTab === 'transfers' && (
-                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                <div className="fm-section-body">
                                     <TransferCenter
                                         bids={incomingBids}
                                         onAcceptBid={handleAcceptBid}
@@ -2461,9 +2457,9 @@ export default function App() {
                             )}
 
                             {gameplayTab === 'honors' && (
-                                <div className="bg-gray-900/80 rounded-xl border border-gray-800 p-6 backdrop-blur shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                <div className="fm-section-body">
                                     <div className="text-center mb-8">
-                                        <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-widest bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"><Trophy aria-hidden="true" className="inline-block mr-2 align-middle" size={28} strokeWidth={1.75} />Trophy Room & Career Honors</h2>
+                                        <h2 className="fm-screen-title mb-2"><Trophy aria-hidden="true" className="inline-block mr-2 align-middle" size={28} strokeWidth={1.75} />Trophy Room & Career Honors</h2>
                                         <p className="text-gray-400 text-sm">Your permanent historical record of managerial accomplishments.</p>
                                     </div>
 
@@ -2511,7 +2507,7 @@ export default function App() {
                                                 {careerHistory.map((entry, idx) => (
                                                     <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-gray-800/40 rounded border border-gray-800 hover:bg-gray-800/80 transition-colors">
                                                         <div className="flex items-center gap-3">
-                                                            <span className="px-2 py-0.5 bg-yellow-950/80 border border-yellow-800/50 text-yellow-400 text-[10px] font-bold font-mono rounded">YEAR {entry.year}</span>
+                                                            <span className="fm-trophy-year px-2 py-1 text-xs font-bold font-mono rounded">YEAR {entry.year}</span>
                                                             <div>
                                                                 <h4 className="text-sm font-bold text-white">{entry.teamName}</h4>
                                                                 <p className="text-xs text-gray-400">{entry.league} &bull; Position: <span className="font-semibold text-gray-300">{entry.finalPosition}</span></p>
@@ -2520,7 +2516,7 @@ export default function App() {
                                                         {entry.trophies && entry.trophies.length > 0 && (
                                                             <div className="mt-2 sm:mt-0 flex flex-wrap gap-1.5">
                                                                 {entry.trophies.map((t, tIdx) => (
-                                                                    <span key={tIdx} className="px-2 py-0.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-200 text-[10px] font-black uppercase rounded flex items-center gap-1">
+                                                                    <span key={tIdx} className="fm-trophy-tag px-2 py-1 text-xs font-semibold uppercase rounded flex items-center gap-1">
                                                                         <Trophy aria-hidden="true" size={12} strokeWidth={1.75} /> {t}
                                                                     </span>
                                                                 ))}
@@ -2555,7 +2551,7 @@ export default function App() {
                 return (
                     <div className="mt-8 max-w-4xl mx-auto p-6 bg-gray-900/80 rounded-xl border border-gray-800 backdrop-blur shadow-2xl">
                         <div className="text-center mb-8">
-                            <h2 className="text-3xl font-extrabold text-white mb-2 uppercase tracking-widest bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent"><Trophy aria-hidden="true" className="inline-block mr-2 align-middle" size={28} strokeWidth={1.75} />Trophy Room & Career Honors</h2>
+                            <h2 className="fm-screen-title mb-2"><Trophy aria-hidden="true" className="inline-block mr-2 align-middle" size={28} strokeWidth={1.75} />Trophy Room & Career Honors</h2>
                             <p className="text-gray-400 text-sm">Your permanent historical record of managerial accomplishments.</p>
                         </div>
 
@@ -2603,7 +2599,7 @@ export default function App() {
                                     {careerHistory.map((entry, idx) => (
                                         <div key={idx} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-gray-800/30 rounded border border-gray-700/35 hover:bg-gray-800/50 transition-colors">
                                             <div className="flex items-center gap-3">
-                                                <span className="px-2 py-0.5 bg-yellow-950/80 border border-yellow-800/50 text-yellow-400 text-[10px] font-bold font-mono rounded">YEAR {entry.year}</span>
+                                                <span className="fm-trophy-year px-2 py-1 text-xs font-bold font-mono rounded">YEAR {entry.year}</span>
                                                 <div>
                                                     <h4 className="text-sm font-bold text-white">{entry.teamName}</h4>
                                                     <p className="text-xs text-gray-400">{entry.league} &bull; Position: <span className="font-semibold text-gray-300">{entry.finalPosition}</span></p>
@@ -2612,7 +2608,7 @@ export default function App() {
                                             {entry.trophies && entry.trophies.length > 0 && (
                                                 <div className="mt-2 sm:mt-0 flex flex-wrap gap-1.5">
                                                     {entry.trophies.map((t, tIdx) => (
-                                                        <span key={tIdx} className="px-2 py-0.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-200 text-[10px] font-black uppercase rounded flex items-center gap-1">
+                                                        <span key={tIdx} className="fm-trophy-tag px-2 py-1 text-xs font-semibold uppercase rounded flex items-center gap-1">
                                                             <Trophy aria-hidden="true" size={12} strokeWidth={1.75} /> {t}
                                                         </span>
                                                     ))}
@@ -2637,9 +2633,7 @@ export default function App() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-900 text-gray-200 p-4" style={{ 
-            backgroundImage: activeTheme ? `radial-gradient(circle at 50% 0%, ${activeTheme.primary}40 0%, #111827 60%)` : undefined 
-        }}>
+        <div className="fm-app" style={{ '--fm-club-primary': activeTheme?.primary ?? '#1a4435', '--fm-club-secondary': activeTheme?.secondary ?? '#9b702f' } as React.CSSProperties}>
             <Header 
                 onQuit={appScreen !== AppScreen.START_SCREEN ? handleQuit : undefined} 
                 showQuit={appScreen !== AppScreen.START_SCREEN} 

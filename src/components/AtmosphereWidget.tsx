@@ -12,11 +12,11 @@ interface Props {
 }
 
 const statusTone = (status: StadiumAudioPlaybackState) => {
-    if (status.state === 'playing-recorded') return 'text-emerald-300';
-    if (status.state === 'playing-synthetic-preview') return 'text-amber-300';
-    if (status.state === 'error' || status.state === 'unavailable') return 'text-rose-300';
-    if (status.state === 'locked') return 'text-amber-300';
-    return 'text-slate-400';
+    if (status.state === 'playing-recorded') return 'fm-match-live';
+    if (status.state === 'playing-synthetic-preview') return 'fm-atmosphere-status-preview';
+    if (status.state === 'error' || status.state === 'unavailable') return 'fm-match-error';
+    if (status.state === 'locked') return 'fm-atmosphere-status-preview';
+    return 'fm-match-muted';
 };
 
 export default function AtmosphereWidget({ chant, momentum, teamName, onChantFinished }: Props) {
@@ -97,7 +97,7 @@ export default function AtmosphereWidget({ chant, momentum, teamName, onChantFin
         }
     };
 
-    const getBarColor = () => momentum < -3 ? 'bg-red-600' : momentum > 3 ? 'bg-green-500' : 'bg-cyan-500';
+    const getBarColor = () => momentum < -3 ? 'fm-atmosphere-bar-negative' : momentum > 3 ? 'fm-atmosphere-bar-positive' : 'fm-atmosphere-bar-neutral';
     const getMoodText = () => momentum < -5 ? 'HOSTILE' : momentum < -2 ? 'TENSE' : momentum > 5 ? 'BOUNCING' : momentum > 2 ? 'ELECTRIC' : 'STEADY';
     const isPlayingThisChant = (audioStatus.state === 'playing-recorded' || audioStatus.state === 'playing-synthetic-preview')
         && audioStatus.chantId === chant?.id;
@@ -105,57 +105,57 @@ export default function AtmosphereWidget({ chant, momentum, teamName, onChantFin
     if (!teamName) return null;
 
     return (
-        <section className="bg-slate-950 border border-slate-700 p-2 sm:p-3 mb-4 shadow-lg relative overflow-hidden rounded-lg" aria-label="Stadium atmosphere">
-            <div className={`absolute inset-0 opacity-10 ${getBarColor()} transition-colors duration-500`} />
-            <div className="relative z-10 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-4">
-                <div className="hidden sm:flex flex-col items-center min-w-[80px]">
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Home End</span>
-                    <div className="flex items-end space-x-1 h-8">
-                        {bars.map((height, index) => <div key={index} className={`w-1.5 transition-all duration-75 rounded-t ${getBarColor()}`} style={{ height: `${height}%` }} />)}
+        <section className="fm-atmosphere py-3 sm:py-4" aria-label="Stadium atmosphere">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3">
+                    <div className="flex items-end gap-1 h-5" aria-hidden="true">
+                        {bars.map((height, index) => <div key={index} className={`w-1 transition-all duration-75 ${getBarColor()}`} style={{ height: `${height}%` }} />)}
                     </div>
-                    <span className={`text-[10px] font-bold mt-1 ${momentum < -2 ? 'text-red-400' : momentum > 2 ? 'text-green-400' : 'text-slate-400'}`}>{getMoodText()}</span>
+                    <span className="fm-eyebrow text-[10px]">Home End</span>
+                    <span className={`text-xs font-bold ${momentum < -2 ? 'fm-match-event-danger' : momentum > 2 ? 'fm-match-live' : 'fm-match-muted'}`}>{getMoodText()}</span>
                 </div>
-
-                <div className="flex-1 bg-black/30 rounded border border-slate-700/50 p-2 min-h-[90px] sm:min-h-[96px] flex flex-col justify-center items-center text-center relative">
-                    <div className="sm:hidden mb-1 w-full flex items-center justify-between text-[10px] font-bold text-slate-300"><span>{getMoodText()}</span><span>{momentum > 0 ? '+' : ''}{momentum}</span></div>
+                <div className="flex items-center gap-2">
+                    <span className="fm-eyebrow text-[10px]">Momentum</span>
+                    <div className="fm-atmosphere-momentum h-2 w-20 overflow-hidden relative">
+                        <div className={`absolute left-0 h-full transition-all duration-500 ease-out ${momentum > 0 ? 'fm-atmosphere-bar-positive' : 'fm-atmosphere-bar-negative'}`} style={{ width: `${((momentum + 10) / 20) * 100}%` }} />
+                        <div className="absolute left-1/2 h-full w-px bg-white/50" />
+                    </div>
+                    <span className="text-xs font-bold tabular-nums">{momentum > 0 ? '+' : ''}{momentum.toFixed(1)}</span>
+                </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,1fr)] gap-3 sm:gap-6 items-start">
+                <div className="fm-atmosphere-transcript min-w-0">
                     {chant ? (
-                        <div className="animate-in fade-in zoom-in duration-300 w-full text-center">
-                            <p className="text-[9px] sm:text-[10px] text-amber-400 font-mono mb-1 tracking-widest uppercase flex items-center justify-center gap-2">
-                                {chant.audioSource === 'recorded-terrace' ? 'Recorded terrace clip' : 'Songbook cue — recording unavailable'}
-                                {isPlayingThisChant && <span className="animate-pulse text-emerald-400">LIVE</span>}
-                            </p>
-                            <p className="text-[10px] text-slate-300 font-bold">{chant.tune}</p>
-                            {chant.lyrics.length > 0 && <div className="space-y-0.5 mt-1">{chant.lyrics.map((line, index) => <p key={index} className={`font-black italic text-slate-100 ${index === chant.lyrics.length - 1 ? 'text-amber-100 text-xs sm:text-sm' : 'text-[11px] sm:text-xs'}`}>“{line.toUpperCase()}”</p>)}</div>}
-                            <p className="mt-1 text-[9px] text-slate-500 uppercase tracking-wider">{chant.archetypeId.replaceAll('_', ' ')} · {chant.tempoBpm} BPM · {chant.clubName}</p>
-                            {chant.recording && <p className="mt-1 text-[8px] text-slate-600">Source: {chant.recording.source.sourceName} [{chant.recording.source.sourceId}]</p>}
-                        </div>
-                    ) : <div className="py-2 opacity-65"><p className="text-xs text-slate-400 font-bold italic">Waiting for a match cue. Audio only plays supplied recordings after you enable it.</p></div>}
-
-                    <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                        <>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1">
+                                <p className="fm-atmosphere-source-type fm-eyebrow text-[10px]">{chant.audioSource === 'recorded-terrace' ? 'Recorded terrace clip' : 'Songbook cue — recording unavailable'}</p>
+                                {isPlayingThisChant && <span className="fm-match-live text-[10px] font-bold">LIVE</span>}
+                                <p className="text-xs font-bold">{chant.tune}</p>
+                            </div>
+                            {chant.lyrics.length > 0 && <div className="fm-atmosphere-lyrics text-sm italic leading-relaxed">{chant.lyrics.map((line, index) => <p key={index}>“{line.toUpperCase()}”</p>)}</div>}
+                            <p className="fm-match-muted mt-2 text-[10px]">{chant.archetypeId.replaceAll('_', ' ')} · {chant.tempoBpm} BPM · {chant.clubName}</p>
+                            {chant.recording && <p className="fm-match-muted mt-1 text-[10px]">Source: {chant.recording.source.sourceName} [{chant.recording.source.sourceId}]</p>}
+                        </>
+                    ) : <p className="fm-match-muted text-xs italic leading-relaxed">Waiting for a match cue. Audio only plays supplied recordings after you enable it.</p>}
+                </div>
+                <div className="fm-atmosphere-controls">
+                    <div className="flex flex-wrap gap-2">
                         {audioStatus.state === 'locked' ? (
-                            <button type="button" onClick={handleEnableAudio} className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-400">Enable stadium audio</button>
+                            <button type="button" onClick={handleEnableAudio} className="fm-button px-3 text-xs">Enable stadium audio</button>
                         ) : audioStatus.state === 'muted' ? (
-                            <button type="button" onClick={() => stadiumAudio.setMuted(false)} className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white border border-emerald-400">Unmute stadium audio</button>
+                            <button type="button" onClick={() => stadiumAudio.setMuted(false)} className="fm-button px-3 text-xs">Unmute stadium audio</button>
                         ) : (
                             <>
-                                <button type="button" onClick={() => void handlePlayRecording(false)} disabled={!chant || audioStatus.state === 'loading-recorded'} className="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 disabled:opacity-50">Play recording</button>
-                                <button type="button" onClick={() => stadiumAudio.setMuted(true)} className="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600">Mute</button>
+                                <button type="button" onClick={() => void handlePlayRecording(false)} disabled={!chant || audioStatus.state === 'loading-recorded'} className="fm-button-secondary px-3 text-xs">Play recording</button>
+                                <button type="button" onClick={() => stadiumAudio.setMuted(true)} className="fm-button-secondary px-3 text-xs">Mute</button>
                             </>
                         )}
-                        {(audioStatus.state === 'unavailable' || audioStatus.state === 'error') && audioStatus.retryable && chant && (
-                            <button type="button" onClick={() => void handlePlayRecording(true)} className="text-[10px] font-bold px-2 py-1 rounded bg-amber-800 hover:bg-amber-700 text-amber-50 border border-amber-500">Retry recording</button>
-                        )}
-                        {chant?.lyrics.length ? <button type="button" onClick={() => void handleSyntheticPreview()} className="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700">Paid synthetic preview</button> : null}
+                        {(audioStatus.state === 'unavailable' || audioStatus.state === 'error') && audioStatus.retryable && chant && <button type="button" onClick={() => void handlePlayRecording(true)} className="fm-button px-3 text-xs">Retry recording</button>}
+                        {chant?.lyrics.length ? <button type="button" onClick={() => void handleSyntheticPreview()} className="fm-button-secondary px-3 text-xs">Paid synthetic preview</button> : null}
                     </div>
-                    <p className={`mt-1 text-[9px] ${statusTone(audioStatus)}`} aria-live="polite">{audioStatus.message}</p>
-                    {previewError && <p className="mt-1 text-[9px] text-rose-300" role="alert">{previewError}</p>}
-                    <p className="mt-1 text-[8px] text-slate-600">Synthetic preview is spoken TTS, never a claim of an authentic crowd recording.</p>
-                </div>
-
-                <div className="hidden sm:flex flex-col items-center min-w-[80px]">
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Momentum</span>
-                    <div className="h-8 w-3 bg-slate-800 rounded-full overflow-hidden relative border border-slate-600"><div className={`absolute bottom-0 w-full transition-all duration-500 ease-out ${momentum > 0 ? 'bg-green-500' : 'bg-red-500'}`} style={{ height: `${((momentum + 10) / 20) * 100}%` }} /><div className="absolute top-1/2 w-full h-px bg-white/50" /></div>
-                    <span className="text-[10px] font-bold mt-1 text-slate-300">{momentum > 0 ? '+' : ''}{momentum}</span>
+                    <p className={`mt-2 text-[11px] leading-relaxed ${statusTone(audioStatus)}`} aria-live="polite">{audioStatus.message}</p>
+                    {previewError && <p className="fm-match-error mt-1 text-[11px] leading-relaxed" role="alert">{previewError}</p>}
+                    <p className="fm-match-muted mt-1 text-[10px] leading-relaxed">Synthetic preview is spoken TTS, never a claim of an authentic crowd recording.</p>
                 </div>
             </div>
         </section>
